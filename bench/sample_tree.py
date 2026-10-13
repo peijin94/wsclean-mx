@@ -103,6 +103,36 @@ def self_time(path, thread_regex, under=None):
     return selfs
 
 
+def callers(path, thread_regex, target, depth=6):
+    """Samples of the outermost frames matching `target`, grouped by their
+    nearest `depth` ancestors."""
+    tre = re.compile(thread_regex)
+    target_re = re.compile(target)
+    chains = defaultdict(int)
+    stack = []  # (depth, sym)
+    keep = False
+    for thread, d, count, sym in parse(path):
+        if sym == "<thread>":
+            stack = []
+            keep = bool(tre.search(thread))
+            continue
+        if not keep:
+            continue
+        while stack and stack[-1][0] >= d:
+            stack.pop()
+        if target_re.search(sym) and not any(target_re.search(s) for _, s in stack):
+            chain = [short(s) for _, s in stack[-depth:]] + [short(sym)]
+            chains[" > ".join(chain)] += count
+        stack.append((d, sym))
+    return chains
+
+
+def short(sym):
+    sym = re.sub(r"\(.*", "", sym)
+    sym = re.sub(r"<[^<>]*(<[^<>]*>[^<>]*)*>", "<>", sym)
+    return sym[-60:]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("sample")
@@ -111,8 +141,18 @@ def main():
     ap.add_argument("--self", dest="self_thread", metavar="THREAD_REGEX",
                     help="print top self-time symbols for matching threads")
     ap.add_argument("--under", help="with --self: only frames below this symbol regex")
+    ap.add_argument("--callers", metavar="SYMBOL_REGEX",
+                    help="with --self: group matching frames by their ancestors")
+    ap.add_argument("--depth", type=int, default=6)
     ap.add_argument("--top", type=int, default=30)
     args = ap.parse_args()
+
+    if args.callers:
+        chains = callers(args.sample, args.self_thread or ".", args.callers, args.depth)
+        print(f"samples: {sum(chains.values())}")
+        for chain, c in sorted(chains.items(), key=lambda x: -x[1])[:args.top]:
+            print(f"{c:>8}  {chain}")
+        return 0
 
     if args.self_thread:
         selfs = self_time(args.sample, args.self_thread, args.under)

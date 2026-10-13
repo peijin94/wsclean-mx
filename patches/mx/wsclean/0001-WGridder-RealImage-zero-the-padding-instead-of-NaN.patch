@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Tue, 13 Oct 2026 15:39:18 -0400
+Subject: [PATCH] WGridder::RealImage: zero the padding instead of NaN
+
+wgridder_float.cpp and wgridder_double.cpp are compiled with -ffast-math.
+Under it, clang drops std::vector<float>(n, quiet_NaN()) to a plain
+allocation, so the border around the trimmed dirty image holds stale heap
+data. With small inversion that border is resampled into the image, giving
+intermittently corrupted dirty images (2048^2: 4 of 6 runs bad, others
+contaminated at ~3% rms). The resampler zeroes non-finite input, so zero is
+the intended value.
+
+diff --git a/wgridder/wgridder_implementation.h b/wgridder/wgridder_implementation.h
+index 34477e42..756dc6f0 100644
+--- a/wgridder/wgridder_implementation.h
++++ b/wgridder/wgridder_implementation.h
+@@ -308,7 +308,10 @@ template <typename NumT>
+ std::vector<float> WGridder<NumT>::RealImage() {
+   const size_t dx = (width_ - trimmed_width_) / 2;
+   const size_t dy = (height_ - trimmed_height_) / 2;
+-  std::vector<float> image(width_ * height_, std::numeric_limits<float>::quiet_NaN());
++  // This file is compiled with -ffast-math, under which clang drops a NaN fill
++  // and leaves the padding uninitialized. Zero is what the resampler turns
++  // non-finite padding into anyway.
++  std::vector<float> image(width_ * height_, 0.0f);
+   for (size_t i = 0; i < trimmed_width_; ++i)
+     for (size_t j = 0; j < trimmed_height_; ++j)
+       image[(i + dx) + (j + dy) * width_] = image_[i * trimmed_height_ + j];

@@ -1,0 +1,98 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 13 Oct 2026 15:18:24 -0400
+Subject: [PATCH 2/2] Convolve: multithreaded ducc0 FFT instead of FFTW
+ row/column composite
+
+Convolve() ran a row-by-row FFTW r2c plus column c2c through StaticFor,
+with FFTW_ESTIMATE plans created on every call. Homebrew's arm64 FFTW is
+built without NEON, and the composite transposes add memory traffic.
+Use ducc0's multithreaded 2D r2c/c2r instead (same axis order, layout and
+normalisation), with the thread count of the schaapcommon ThreadPool.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+
+diff --git a/src/math/convolution.cc b/src/math/convolution.cc
+index e303174..aa171a4 100644
+--- a/src/math/convolution.cc
++++ b/src/math/convolution.cc
+@@ -10,8 +10,11 @@
+ 
+ #include <fftw3.h>
+ 
+-#include "compositefft.h"
++#include <ducc0/fft/fft.h>
++#include <ducc0/fft/fftnd_impl.h>
++
+ #include "../threading/staticfor.h"
++#include "../threading/threadpool.h"
+ 
+ namespace schaapcommon::math {
+ 
+@@ -116,48 +119,29 @@ void Convolve(float* image, const float* kernel, size_t image_width, size_t imag
+   const size_t image_size = image_width * image_height;
+   const size_t complex_width = image_width / 2 + 1;
+   const size_t complex_size = complex_width * image_height;
+-  float* temp_data = fftwf_alloc_real(image_size);
+-  fftwf_complex* fft_image_data = fftwf_alloc_complex(complex_size);
+-  fftwf_complex* fft_kernel_data = fftwf_alloc_complex(complex_size);
+-
+-  fftwf_plan plan_r2c = fftwf_plan_dft_r2c_1d(image_width, nullptr, nullptr, FFTW_ESTIMATE);
+-  fftwf_plan plan_c2c_forward =
+-      fftwf_plan_dft_1d(image_height, nullptr, nullptr, FFTW_FORWARD, FFTW_ESTIMATE);
+-  fftwf_plan plan_c2c_backward =
+-      fftwf_plan_dft_1d(image_height, nullptr, nullptr, FFTW_BACKWARD, FFTW_ESTIMATE);
+-  fftwf_plan plan_c2r = fftwf_plan_dft_c2r_1d(image_width, nullptr, nullptr, FFTW_ESTIMATE);
+-
+-  schaapcommon::StaticFor<size_t> loop;
+-
+-  FftR2CComposite(plan_r2c, plan_c2c_forward, image_height, image_width, image, fft_image_data,
+-                  loop);
+-
+-  std::copy_n(kernel, image_size, temp_data);
+-  FftR2CComposite(plan_r2c, plan_c2c_forward, image_height, image_width, temp_data, fft_kernel_data,
+-                  loop);
++  const size_t n_threads = ThreadPool::GetInstance().NThreads();
++  aocommon::UVector<std::complex<float>> fft_image_data(complex_size);
++  aocommon::UVector<std::complex<float>> fft_kernel_data(complex_size);
++
++  const ducc0::cfmav<float> image_in(image, {image_height, image_width});
++  const ducc0::cfmav<float> kernel_in(kernel, {image_height, image_width});
++  const ducc0::vfmav<std::complex<float>> image_fft(fft_image_data.data(),
++                                                    {image_height, complex_width});
++  const ducc0::vfmav<std::complex<float>> kernel_fft(fft_kernel_data.data(),
++                                                     {image_height, complex_width});
++  ducc0::r2c(image_in, image_fft, {0, 1}, true, 1.0f, n_threads);
++  ducc0::r2c(kernel_in, kernel_fft, {0, 1}, true, 1.0f, n_threads);
+ 
+   const float fact = 1.0 / image_size;
++  schaapcommon::StaticFor<size_t> loop;
+   loop.Run(0, image_height, [&](size_t y_start, size_t y_end) {
+-    for (size_t y = y_start; y != y_end; ++y) {
+-      for (size_t x = 0; x != complex_width; ++x) {
+-        const size_t i = y * complex_width + x;
+-        reinterpret_cast<std::complex<float>*>(fft_image_data)[i] *=
+-            fact * reinterpret_cast<std::complex<float>*>(fft_kernel_data)[i];
+-      }
++    for (size_t i = y_start * complex_width; i != y_end * complex_width; ++i) {
++      fft_image_data[i] *= fact * fft_kernel_data[i];
+     }
+   });
+ 
+-  FftC2RComposite(plan_c2c_backward, plan_c2r, image_height, image_width, fft_image_data, image,
+-                  loop);
+-
+-  fftwf_free(fft_image_data);
+-  fftwf_free(fft_kernel_data);
+-  fftwf_free(temp_data);
+-
+-  fftwf_destroy_plan(plan_r2c);
+-  fftwf_destroy_plan(plan_c2c_forward);
+-  fftwf_destroy_plan(plan_c2c_backward);
+-  fftwf_destroy_plan(plan_c2r);
++  const ducc0::vfmav<float> image_out(image, {image_height, image_width});
++  ducc0::c2r_mut(image_fft, image_out, {0, 1}, false, 1.0f, n_threads);
+ }
+ 
+ }  // namespace schaapcommon::math

@@ -40,7 +40,10 @@ wsclean-mx/                   git@github.com:peijin94/wsclean-mx.git (origin)
 │   ├── sample_tree.py        inclusive/self time per thread from a sample report
 │   ├── compare_fits.py <dirA> <dirB> [--tier T0|T1|T2]
 │   ├── plot_report.py        figures -> docs/bench/*.png
+│   ├── flake.sh <tag> <v1,..> [args]  N repeats, first noise estimate per run
+│   ├── snapshot.sh <build-dir> <name>  freeze a build as variant bench/bin/<name>
 │   ├── micro/fft_resample.cpp  FFTW vs ducc0 microbenchmark
+│   ├── micro/median_select.cpp  Median/MAD radix select: bitwise check + timing
 │   └── requirements.txt      numpy, astropy, matplotlib (venv at .venv/, via uv)
 ├── docs/bench/*.png          figures posted in the tracking issue
 └── (gitignored) deps/ work/ build-upstream/ build-mx/ bench/out/ bench/bin/ test_data/ .venv/
@@ -103,7 +106,13 @@ submodule, regenerate `patches/build/*/<commit12>/`, rebase `patches/mx/`.
   Hence `-I$DEPS_PREFIX/include` in `CMAKE_CXX_FLAGS`; `check_headers.sh` verifies.
 - MacPorts cmake 3.24 (`/opt/local/bin`) shadows Homebrew cmake; scripts pin `$BREW/bin/cmake`.
 - macOS `/bin/bash` is 3.2: no `mapfile`; zsh doesn't word-split `$VAR` (use bash arrays).
+- `scripts/env.sh` honours an existing `$ROOT`; a stale `ROOT` in the shell
+  silently points `DEPS_PREFIX` elsewhere (old casacore headers). `unset ROOT`.
+- The Homebrew python-casacore wheel links the broken Homebrew casacore 3.4;
+  inspect MSs inside the LINC container (`work/ms_inspect.py`).
 - `bench/run.sh` host RSS for `linc` is the CLI process only, not the VM.
+- Seen once (not reproduced): native run failed right after reordering with
+  "Error opening meta file for ms ..."; the rerun succeeded.
 - First container run after pull is slow (Rosetta translation warm-up): 22.7 s vs ~6 s later.
 - 16 GB RAM caps realistic image sizes at ~8k.
 
@@ -115,6 +124,9 @@ submodule, regenerate `patches/build/*/<commit12>/`, rebase `patches/mx/`.
   maxuvw 322.5 lambda, beam ~10.7', w in [0, 4.55] lambda. No WEIGHT_SPECTRUM.
   ~11.8M gridded visibilities for Stokes I.
 - All bench runs use `-no-update-model-required` (run.sh enforces) so the MS is never written.
+- The MS is `chmod -R a-w` (read-only) after a `-no-reorder` clean run once
+  added MODEL_DATA to it; restore from the tar if it ever changes. wsclean
+  runs fine on it read-only.
 
 ## Key facts about upstream code
 
@@ -159,10 +171,66 @@ workers ~28%).
 | (upstream) | | 12.69 s | 6.71 | 2.75 | |
 | 1. Resampler: multithreaded ducc0 FFT instead of single-threaded FFTW | schaapcommon `math/resampler.cc` | 9.25 s (1.37x) | 4.40 (1.52x) | 1.49 (1.84x) | in patch set |
 | 2. ducc0 `expi()`: vForce `vvsincosf` | schaapcommon ducc0 `wgridder_impl.h` | 9.24 vs 9.80 (p1), median worse | 4.27 vs 4.42 | — | candidate (within noise) |
+| 3. Convolve: multithreaded ducc0 r2c/c2r instead of FFTW row/column composite | schaapcommon `math/convolution.cc` | 2k multiscale niter 5000 -j1: deconv 37.3 -> 17.6 s | | | in patch set |
+| 4. Median/MAD: radix-histogram select instead of full `nth_element` | aocommon `image.h` | micro 4096²: MAD 300 -> 65 ms | | | in patch set |
+| fix. `WGridder::RealImage` padding 0 instead of NaN (bug below) | wsclean `wgridder_implementation.h` | — | | | in patch set |
 
 Accuracy: dirty/psf ~7e-7 rel_rms vs upstream for both; residual/image vary
 6e-7..1.8e-3 between *upstream reruns* (multithreaded clean picks different
-components), mx stays inside that range.
+components), mx stays inside that range. Patch 4 is bitwise identical to
+`nth_element` except the sign of a zero median (`bench/micro/median_select.cpp`).
+
+Baseline for A/B is now `upstream-fix` (pinned upstream + only the RealImage
+fix, `build-reffix/`), since plain upstream is corrupt at 2048² (below).
+Snapshots: `bench/snapshot.sh <build-dir> <name>` (carries its own
+libschaapthreading.dylib). `mx-p3` = patches 1+3+4+fix.
+
+Deep runs, 4096² @ 0.03125°, briggs 0, mgain 0.8, no threshold, default threads,
+min of 2 alternating (`bench/ab.sh`, tags `d4k-*`), upstream-fix vs mx-p3:
+
+| Run | upstream-fix wall | mx-p3 wall | Inversion | Prediction | Deconvolution |
+|-----|------|------|------|------|------|
+| Högbom niter 2000 | 14.85 s | 10.88 s (1.36x) | 1.56x | 1.48x | 1.23x |
+| Högbom niter 5000 | 18.44 s | 14.00 s (1.32x) | 1.56x | 1.74x | 1.13x |
+| multiscale niter 5000 | 88.22 s | 42.95 s (2.05x) | 1.63x | 1.85x | 2.18x |
+
+Högbom: mx within upstream rerun spread (residual 2e-6, same majors, same
+stopping peak, model flux equal to 1e-6). Remaining Högbom deconvolution time
+is the minor loop itself, not Convolve.
+
+Multiscale is chaotic w.r.t. Convolve rounding: a 1-ulp change of the scale
+factor in upstream's own FFTW Convolve (`upstream-fix-ulp`) moves model flux
+0.6282 -> 0.6330 and the residual 3e-3 (LINC vs upstream: 8.6e-4). mx-p3:
+flux 0.638, residual 1.8e-2 vs LINC, residual rms 24.388 vs 24.396 µJy (not
+worse). Convolve itself matches FFTW to 3.5e-7 (`bench/micro/convolve_check.cpp`,
+both 3e-7 from a double reference). Multiscale A/B therefore needs a
+"perturbed upstream" spread, not just reruns.
+
+### Upstream bug: small-inversion padding is uninitialized under clang -ffast-math
+
+- `wgridder_float.cpp`/`wgridder_double.cpp` are compiled with `-ffast-math`
+  (CMakeLists "NaNs are avoided" list). `WGridder::RealImage()` fills the
+  border around the trimmed image with `quiet_NaN()`, relying on the
+  Resampler to zero non-finite pixels. Apple clang folds the NaN fill away:
+  `std::vector<float>(n, NaN)` becomes a bare `operator new` (verified with a
+  minimal test), so the border is stale heap.
+- Effect (small inversion only, i.e. resampled 2352² -> padded size): dirty
+  image = true image + resampled garbage. 2048² -niter 10 -j2: 4/6 runs
+  garbage (6.52 mJy / 1.43 mJy / 29007 KJy noise), the rest "look fine" at
+  25.35 µJy but are 31% rms off. Correct value 24.54 µJy (= LINC,
+  = `-no-small-inversion`, = `MallocScribble=1`). 4k runs happened to get
+  clean pages (match LINC 7.5e-7) but are exposed too.
+- Garbage is deterministic (same heap reuse) -> bitwise identical bad images
+  across runs/builds. GCC keeps the NaN fill, so LINC is unaffected.
+- Fixed by mx patch `wsclean/0001`; 12/12 runs 24.54 µJy, 5e-7 vs LINC.
+  Should go upstream.
+- Related latent fast-math hazards (not on our path): `msgriddermanager.cpp:322`
+  `std::isfinite` on visibilities (folded to true), and the CMake fast-math list
+  names `wsclean/{direct,wstacking}gridder.cpp`, paths that no longer exist.
+- Debug tools that worked: `MallocScribble=1` (fills new allocations with 0xAA
+  -> near-zero float), checksum instrumentation in a scratch copy
+  (`/tmp/wsclean-dbg`). ASan build of wsclean crashes in casacore at startup
+  (`observationinfo.cpp:59`, unrelated), lldb can't attach (no entitlement).
 
 ## Key performance facts (M2)
 

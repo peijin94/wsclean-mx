@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Peijin Zhang <peijin@ustc.edu>
 Date: Tue, 13 Oct 2026 14:48:20 -0400
-Subject: [PATCH] Resampler: multithreaded ducc0 FFT instead of single-threaded
- FFTW
+Subject: [PATCH 1/2] Resampler: multithreaded ducc0 FFT instead of
+ single-threaded FFTW
 
 Resample() ran a full-size 2D r2c + c2r on one thread with FFTW_ESTIMATE
 plans (re-planned per Resampler). For WSClean's small-inversion path

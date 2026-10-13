@@ -1,0 +1,151 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 13 Oct 2026 15:18:24 -0400
+Subject: [PATCH] Median/MAD: radix histogram select instead of full
+ nth_element
+
+MedianWithCopyImplementation() and MadImplementation() ran
+std::nth_element over all finite values (twice each for even counts).
+A histogram over the top 16 bits of an order-preserving integer key
+finds the bucket(s) holding the requested ranks; only the values in
+those buckets are then partially sorted. The selected values are the
+same elements nth_element returns, so results are bitwise identical,
+except possibly the sign of an exactly-zero median (nth_element may
+return either of -0 and +0). The deviations are computed as
+|x - median|, which equals the previous median - x / x - median.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+
+diff --git a/include/aocommon/image.h b/include/aocommon/image.h
+index 0af90f3..93a4a25 100644
+--- a/include/aocommon/image.h
++++ b/include/aocommon/image.h
+@@ -10,7 +10,10 @@
+ #include <cstring>
+ #include <cmath>
+ #include <complex>
++#include <cstdint>
+ #include <memory>
++#include <utility>
++#include <vector>
+ 
+ namespace aocommon {
+ namespace detail {
+@@ -19,6 +22,69 @@ namespace detail {
+  * helper function is used to implement ordering operations like
+  * median that do not have complex implementations.
+  */
++template <typename NumT>
++struct RadixKey;
++template <>
++struct RadixKey<float> {
++  using type = uint32_t;
++};
++template <>
++struct RadixKey<double> {
++  using type = uint64_t;
++};
++
++/**
++ * Maps a floating point value to an unsigned integer with the same ordering.
++ * Negative zero maps to the key of positive zero, because they compare equal.
++ */
++template <typename NumT>
++inline typename RadixKey<NumT>::type ToRadixKey(NumT value) {
++  using Key = typename RadixKey<NumT>::type;
++  constexpr Key kSignBit = Key(1) << (sizeof(Key) * 8 - 1);
++  Key bits;
++  std::memcpy(&bits, &value, sizeof(Key));
++  if (bits == kSignBit) bits = 0;
++  return (bits & kSignBit) ? ~bits : (bits | kSignBit);
++}
++
++/**
++ * Returns the k-th smallest value of @p values and, if @p with_next is true,
++ * also the (k+1)-th smallest; the values are those std::nth_element would
++ * place at these positions. @p values must be finite and is not modified.
++ *
++ * A histogram over the top 16 bits of the order-preserving integer key
++ * locates the bucket(s) containing the requested ranks, after which only the
++ * values in those buckets need to be partially sorted.
++ */
++template <typename NumT>
++inline std::pair<NumT, NumT> SelectAdjacent(const aocommon::UVector<NumT>& values, size_t k,
++                                            bool with_next) {
++  constexpr size_t kDigitBits = 16;
++  constexpr size_t kShift = sizeof(typename RadixKey<NumT>::type) * 8 - kDigitBits;
++  std::vector<size_t> histogram(size_t(1) << kDigitBits, 0);
++  for (const NumT value : values) ++histogram[ToRadixKey(value) >> kShift];
++
++  size_t first_bucket = 0;
++  size_t below = 0;
++  while (below + histogram[first_bucket] <= k) below += histogram[first_bucket++];
++  size_t last_bucket = first_bucket;
++  if (with_next) {
++    size_t up_to_last = below + histogram[last_bucket];
++    while (up_to_last <= k + 1) up_to_last += histogram[++last_bucket];
++  }
++
++  aocommon::UVector<NumT> candidates;
++  for (const NumT value : values) {
++    const size_t bucket = ToRadixKey(value) >> kShift;
++    if (bucket >= first_bucket && bucket <= last_bucket) candidates.push_back(value);
++  }
++  const typename aocommon::UVector<NumT>::iterator kth = candidates.begin() + (k - below);
++  std::nth_element(candidates.begin(), kth, candidates.end());
++  if (!with_next) return {*kth, *kth};
++  std::nth_element(kth, kth + 1, candidates.end());
++  return {*kth, *(kth + 1)};
++}
++
+ template <typename NumT>
+ inline NumT MedianWithCopyImplementation(const NumT* data, size_t size,
+                                          aocommon::UVector<NumT>& copy) {
+@@ -29,14 +95,10 @@ inline NumT MedianWithCopyImplementation(const NumT* data, size_t size,
+   if (copy.empty())
+     return 0.0;
+   else {
+-    bool even = (copy.size() % 2) == 0;
+-    typename aocommon::UVector<NumT>::iterator mid = copy.begin() + (copy.size() - 1) / 2;
+-    std::nth_element(copy.begin(), mid, copy.end());
+-    NumT median = *mid;
+-    if (even) {
+-      std::nth_element(mid, mid + 1, copy.end());
+-      median = (median + *(mid + 1)) * 0.5;
+-    }
++    const bool even = (copy.size() % 2) == 0;
++    const std::pair<NumT, NumT> mid = SelectAdjacent(copy, (copy.size() - 1) / 2, even);
++    NumT median = mid.first;
++    if (even) median = (median + mid.second) * 0.5;
+     return median;
+   }
+ }
+@@ -50,20 +112,14 @@ inline std::pair<NumT, NumT> MadImplementation(const NumT* data, size_t size) {
+   const NumT median = MedianWithCopyImplementation(data, size, copy);
+   if (copy.empty()) return {0.0, 0.0};
+ 
+-  // Replace all values by the difference from the mean
+-  typename aocommon::UVector<NumT>::iterator mid = copy.begin() + (copy.size() - 1) / 2;
+-  for (typename aocommon::UVector<NumT>::iterator i = copy.begin(); i != mid + 1; ++i)
+-    *i = median - *i;
+-  for (typename aocommon::UVector<NumT>::iterator i = mid + 1; i != copy.end(); ++i)
+-    *i = *i - median;
++  // Replace all values by the absolute difference from the median. For finite
++  // values, median - x and x - median are exact negations of each other.
++  for (NumT& value : copy) value = std::abs(value - median);
+ 
+-  std::nth_element(copy.begin(), mid, copy.end());
+-  NumT mad = *mid;
+-  bool even = (copy.size() % 2) == 0;
+-  if (even) {
+-    std::nth_element(mid, mid + 1, copy.end());
+-    mad = (mad + *(mid + 1)) * 0.5;
+-  }
++  const bool even = (copy.size() % 2) == 0;
++  const std::pair<NumT, NumT> mid = SelectAdjacent(copy, (copy.size() - 1) / 2, even);
++  NumT mad = mid.first;
++  if (even) mad = (mad + mid.second) * 0.5;
+   return {median, mad};
+ }
+ }  // namespace detail

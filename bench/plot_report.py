@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -201,6 +202,124 @@ def fig_accuracy():
     return save(fig, "accuracy.png")
 
 
+DEEP_RUNS = [("d4k-n2k", "Högbom, niter 2000"), ("d4k-n5k", "Högbom, niter 5000"),
+             ("d4k-ms5k", "multiscale, niter 5000")]
+
+
+def fig_deep():
+    rows = []
+    for tag, label in DEEP_RUNS:
+        tsv = OUT / f"{tag}-ab.tsv"
+        if not tsv.exists():
+            continue
+        for variant, name in [("upstream-fix", "upstream"), ("mx-p3", "mx")]:
+            s = ab_min(tsv, variant)
+            if s:
+                rows.append((f"{label}\n{name}", with_other(s), tag))
+    if not rows:
+        return None
+    fig, ax = plt.subplots(figsize=(8.5, 4.6))
+    names = [n for n, _, _ in rows]
+    left = [0] * len(rows)
+    for st in STAGES:
+        vals = [s[st] for _, s, _ in rows]
+        ax.barh(names, vals, left=left, color=COLORS[st], label=st)
+        left = [a + b for a, b in zip(left, vals)]
+    base = {tag: s["wall"] for n, s, tag in rows if n.endswith("upstream")}
+    for i, (n, s, tag) in enumerate(rows):
+        txt = f"{s['wall']:.1f} s"
+        if n.endswith("mx") and tag in base:
+            txt += f"  ({base[tag] / s['wall']:.2f}x)"
+        ax.text(s["wall"] + 0.8, i, txt, va="center", fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel("wall time [s] (min of 2 alternating runs)")
+    ax.set_title("4096², briggs 0, mgain 0.8: upstream (+padding fix) vs mx patches 1+3+4")
+    ax.set_xlim(0, max(s["wall"] for _, s, _ in rows) * 1.25)
+    ax.legend(loc="lower right", fontsize=8)
+    fig.tight_layout()
+    return save(fig, "deep.png")
+
+
+def fig_smallinv_bug():
+    base = OUT / "smallinv-bug"
+    panels = [("upstream-garbage", "upstream, unlucky run (own scale)\n(noise est. 6.52 mJy)"),
+              ("upstream-lucky", "upstream, run that looked fine\n(25.35 µJy) minus LINC"),
+              ("upstream-fix", "upstream + padding fix\n(24.54 µJy) minus LINC")]
+    if not all((base / p / "img-dirty.fits").exists() for p, _ in panels + [("linc", "")]):
+        return None
+    from astropy.io import fits
+
+    def load(p):
+        img = fits.getdata(base / p / "img-dirty.fits").squeeze().astype("float64")
+        c = img.shape[0] // 2
+        return img[c - 256:c + 256, c - 256:c + 256]
+
+    def sigma(x):
+        return 1.4826 * float(np.median(np.abs(x - np.median(x))))
+
+    linc = load("linc")
+    lim = 5 * sigma(linc)
+    fig, axes = plt.subplots(1, 4, figsize=(13, 3.6))
+    axes[0].imshow(linc, origin="lower", cmap="gray", vmin=-lim, vmax=lim, interpolation="nearest")
+    axes[0].set_title("LINC dirty image (reference)", fontsize=9)
+    for ax, (p, title) in zip(axes[1:], panels):
+        img = load(p)
+        if p == "upstream-garbage":
+            ax.imshow(img, origin="lower", cmap="gray", vmin=-5 * sigma(img), vmax=5 * sigma(img),
+                      interpolation="nearest")
+        else:
+            ax.imshow(img - linc, origin="lower", cmap="gray", vmin=-lim / 5, vmax=lim / 5,
+                      interpolation="nearest")
+        rel = (img - linc).std() / linc.std()
+        ax.set_title(f"{title}\nrms(diff)/rms(LINC) = {rel:.1e}", fontsize=9)
+    for ax in axes:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.suptitle("2048² dirty image (central 512²), small inversion, -j 2. LINC at ±5σ (MAD); "
+                 "difference panels at ±1σ of LINC", fontsize=10)
+    fig.tight_layout()
+    return save(fig, "smallinv_bug.png")
+
+
+def fig_multiscale():
+    variants = [("LINC (reference)", OUT / "d4k-ms5k-iso" / "linc"),
+                ("upstream", OUT / "d4k-ms5k-r1" / "upstream-fix"),
+                ("upstream rerun", OUT / "d4k-ms5k-r2" / "upstream-fix"),
+                ("upstream, Convolve\nscale +1 ulp", OUT / "d4k-ms5k-iso" / "upstream-fix-ulp"),
+                ("mx patch 1", OUT / "d4k-ms5k-iso" / "mx-p1"),
+                ("mx patches 1+3", OUT / "d4k-ms5k-iso" / "mx-p1c"),
+                ("mx patches 1+3+4", OUT / "d4k-ms5k-r1" / "mx-p3"),
+                ("mx patches 1+3+4 rerun", OUT / "d4k-ms5k-r2" / "mx-p3")]
+    variants = [(n, p) for n, p in variants if (p / "img-model.fits").exists()]
+    if len(variants) < 2:
+        return None
+    from astropy.io import fits
+
+    def load(p, k):
+        return fits.getdata(p / f"img-{k}.fits").squeeze().astype("float64")
+
+    ref_res = load(variants[0][1], "residual")
+    flux = [load(p, "model").sum() for _, p in variants]
+    diff = [max((load(p, "residual") - ref_res).std() / ref_res.std(), 1e-7)
+            for _, p in variants]
+    names = [n for n, _ in variants]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4))
+    a1.barh(names, flux, color="#4C72B0")
+    a1.set_xlim(min(flux) * 0.99, max(flux) * 1.005)
+    a1.set_xlabel("total model flux [Jy]")
+    a2.barh(names, diff, color="#C44E52")
+    a2.set_xscale("log")
+    a2.set_xlabel("rms(residual - LINC residual) / rms(LINC residual)")
+    for a in (a1, a2):
+        a.invert_yaxis()
+    a2.set_yticks([])
+    fig.suptitle("Multiscale clean (4096², niter 5000) is chaotic: a 1-ulp change in upstream's "
+                 "Convolve already moves it 0.8% in flux, 3.5x the LINC-upstream gap",
+                 fontsize=10)
+    fig.tight_layout()
+    return save(fig, "multiscale_sensitivity.png")
+
+
 def save(fig, name):
     DOCS.mkdir(parents=True, exist_ok=True)
     path = DOCS / name
@@ -210,7 +329,8 @@ def save(fig, name):
 
 
 def main():
-    for f in [fig_stages, fig_scaling, fig_profile, fig_accuracy]:
+    for f in [fig_stages, fig_scaling, fig_profile, fig_accuracy, fig_deep, fig_smallinv_bug,
+              fig_multiscale]:
         path = f()
         print(f"{f.__name__}: {path.relative_to(ROOT) if path else 'skipped (no data)'}")
 
