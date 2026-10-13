@@ -206,6 +206,13 @@ worse). Convolve itself matches FFTW to 3.5e-7 (`bench/micro/convolve_check.cpp`
 both 3e-7 from a double reference). Multiscale A/B therefore needs a
 "perturbed upstream" spread, not just reruns.
 
+Full-sky check (1024² at 0.125°, i.e. |l|,|m| <= 1.12; `bench/out/fullsky*`,
+figures `fullsky*.png`): Högbom upstream/mx vs LINC 1.2e-6 restored, same 561
+iterations. Multiscale niter 5000, 3 reruns each: the same binary lands at
+~1e-6, ~5e-5 or ~4e-3 from LINC run to run (every build hit >1 level), so
+threaded multiscale is nondeterministic on its own. Note `-scale` is in
+direction-cosine units: full sky needs size*scale >= 114.6°.
+
 ### Upstream bug: small-inversion padding is uninitialized under clang -ffast-math
 
 - `wgridder_float.cpp`/`wgridder_double.cpp` are compiled with `-ffast-math`
