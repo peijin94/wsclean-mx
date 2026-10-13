@@ -59,7 +59,7 @@ Fresh setup: `git clone --recursive ...`, `scripts/build_deps.sh`,
 - Never run `checkout_patched` on `work/` — it does `checkout -f` + `clean -fdx`.
 - A/B a patch: snapshot `build-mx/wsclean` to `bench/bin/<name>/` before rebuilding,
   then `bench/ab.sh <tag> <name>,mx ...`. Builds are byte-reproducible.
-- Tracking issue: https://github.com/peijin94/wsclean-mx/issues/1 ("wsclean-mx build", WIP). Post updates as dated comments; keep the description current; pin figure links to a commit SHA.
+- Tracking issue: https://github.com/peijin94/wsclean-mx/issues/1 ("wsclean-mx build", WIP). Post updates as dated comments; keep the description current; pin figure links to a commit SHA. Linear: PZ-19 (team Peijin-lab, project "data processing LWA"); update its Progress/Next sections alongside.
 
 ## Pins
 
