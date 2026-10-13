@@ -1,0 +1,12 @@
+/build/
+/build-*/
+_deps/
+*.fits
+*.ms/
+bench/out/
+.DS_Store
+__pycache__/
+.venv/
+/deps/
+/test_data/
+/work/

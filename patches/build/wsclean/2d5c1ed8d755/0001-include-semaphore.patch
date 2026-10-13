@@ -1,0 +1,25 @@
+From 49c715e790b850ad502cd9853e3b14f2a40594d3 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Tue, 13 Oct 2026 14:23:26 -0400
+Subject: [PATCH] Include <semaphore> for std::binary_semaphore (libc++)
+
+---
+ gridding/msgridder.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/gridding/msgridder.h b/gridding/msgridder.h
+index abfaec2e..401e7e6b 100644
+--- a/gridding/msgridder.h
++++ b/gridding/msgridder.h
+@@ -12,6 +12,8 @@
+ 
+ #include <aocommon/uvector.h>
+ 
++#include <semaphore>
++
+ namespace wsclean {
+ 
+ /**
+-- 
+2.43.0
+

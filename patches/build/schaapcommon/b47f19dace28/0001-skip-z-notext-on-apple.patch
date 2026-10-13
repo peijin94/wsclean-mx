@@ -1,0 +1,27 @@
+From d1e7e6e28d91c9f88ce2ba3bb2dbfded95ad2b0e Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Tue, 13 Oct 2026 14:22:04 -0400
+Subject: [PATCH] Skip ELF-only -z notext linker flag on Apple
+
+---
+ src/threading/CMakeLists.txt | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/threading/CMakeLists.txt b/src/threading/CMakeLists.txt
+index 3ab5db3..a8ae0a7 100644
+--- a/src/threading/CMakeLists.txt
++++ b/src/threading/CMakeLists.txt
+@@ -8,7 +8,9 @@ add_library(schaapthreading SHARED ${CMAKE_CURRENT_SOURCE_DIR}/recursivefor.cc
+                                    ${CMAKE_CURRENT_SOURCE_DIR}/threadpool.cc)
+ target_include_directories(schaapthreading
+                            PRIVATE "$<BUILD_INTERFACE:${PUBLIC_HEADER_DIR}>")
+-target_link_options(schaapthreading PRIVATE -Wl,-z,notext)
++if(NOT APPLE)
++  target_link_options(schaapthreading PRIVATE -Wl,-z,notext)
++endif()
+ set_target_properties(schaapthreading PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+                                                  "${CMAKE_BINARY_DIR}")
+ 
+-- 
+2.43.0
+

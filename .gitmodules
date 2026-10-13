@@ -1,0 +1,3 @@
+[submodule "upstream/wsclean"]
+	path = upstream/wsclean
+	url = https://gitlab.com/aroffringa/wsclean.git
