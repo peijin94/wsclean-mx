@@ -320,6 +320,46 @@ def fig_multiscale():
     return save(fig, "multiscale_sensitivity.png")
 
 
+def fig_fullsky():
+    base = OUT / "fullsky"
+    names = [("linc", "LINC"), ("upstream", "upstream"), ("mx-p3", "wsclean-mx")]
+    if not all((base / v / "img-image.fits").exists() for v, _ in names):
+        return None
+    from astropy.io import fits
+
+    def sigma(x):
+        return 1.4826 * float(np.median(np.abs(x - np.median(x))))
+
+    img = {v: np.nan_to_num(fits.getdata(base / v / "img-image.fits").squeeze().astype("float64"))
+           for v, _ in names}
+    ref = img["linc"]
+    vmin, vmax = -3 * sigma(ref), np.percentile(ref, 99.95)
+    pairs = [("upstream", "linc"), ("mx-p3", "linc"), ("mx-p3", "upstream")]
+    diffs = [img[a] - img[b] for a, b in pairs]
+    dlim = 5 * max(sigma(d) for d in diffs)
+    label = dict(names)
+
+    fig, axes = plt.subplots(2, 3, figsize=(13, 9.5), layout="constrained")
+    for ax, (v, title) in zip(axes[0], names):
+        ax.imshow(img[v], origin="lower", cmap="inferno", vmin=vmin, vmax=vmax,
+                  interpolation="nearest")
+        ax.set_title(f"{title} restored image", fontsize=10)
+    for ax, (a, b), d in zip(axes[1], pairs, diffs):
+        im = ax.imshow(d, origin="lower", cmap="RdBu_r", vmin=-dlim, vmax=dlim,
+                       interpolation="nearest")
+        ax.set_title(f"{label[a]} - {label[b]}\nrms(diff)/rms(LINC) = {d.std() / ref.std():.1e}\n"
+                     f"max|diff|/peak = {np.abs(d).max() / ref.max():.1e}", fontsize=9)
+    fig.colorbar(im, ax=axes[1].tolist(), shrink=0.8,
+                 label=f"difference [Jy/beam]  (image noise ≈ {sigma(ref):.1e})")
+    for ax in axes.flat:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.suptitle("Full-sky restored image, 1024² at 0.125° (Högbom, niter 2000, briggs 0).\n"
+                 "Top: same colour scale. Bottom: differences at ±5σ (MAD) of the differences",
+                 fontsize=11)
+    return save(fig, "fullsky.png")
+
+
 def save(fig, name):
     DOCS.mkdir(parents=True, exist_ok=True)
     path = DOCS / name
@@ -330,7 +370,7 @@ def save(fig, name):
 
 def main():
     for f in [fig_stages, fig_scaling, fig_profile, fig_accuracy, fig_deep, fig_smallinv_bug,
-              fig_multiscale]:
+              fig_multiscale, fig_fullsky]:
         path = f()
         print(f"{f.__name__}: {path.relative_to(ROOT) if path else 'skipped (no data)'}")
 
