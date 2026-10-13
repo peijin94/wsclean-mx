@@ -320,8 +320,47 @@ def fig_multiscale():
     return save(fig, "multiscale_sensitivity.png")
 
 
+FULLSKY_MS_RUNS = ["fullsky-ms", "fullsky-ms-r2", "fullsky-ms-r3"]
+
+
 def fig_fullsky():
-    base = OUT / "fullsky"
+    return fullsky("fullsky", "Högbom, niter 2000", "fullsky.png")
+
+
+def fig_fullsky_multiscale():
+    return fullsky("fullsky-ms", "multiscale, niter 5000", "fullsky_multiscale.png")
+
+
+def fig_fullsky_ms_spread():
+    variants = [("upstream", "upstream"), ("upstream-fix", "upstream + fix"),
+                ("mx-p3", "wsclean-mx")]
+    runs = [(t, v, n) for t in FULLSKY_MS_RUNS for v, n in variants
+            if (OUT / t / v / "img-residual.fits").exists()]
+    if not runs or not (OUT / "fullsky-ms" / "linc" / "img-residual.fits").exists():
+        return None
+    from astropy.io import fits
+
+    def load(t, v):
+        return fits.getdata(OUT / t / v / "img-residual.fits").squeeze().astype("float64")
+
+    ref = load("fullsky-ms", "linc")
+    rel = [max((load(t, v) - ref).std() / ref.std(), 1e-7) for t, v, _ in runs]
+    colors = {"upstream": "#8C8C8C", "upstream-fix": "#4C72B0", "mx-p3": "#C44E52"}
+    fig, ax = plt.subplots(figsize=(8, 3.8))
+    ax.barh([f"{n}, run {FULLSKY_MS_RUNS.index(t) + 1}" for t, v, n in runs], rel,
+            color=[colors[v] for _, v, _ in runs])
+    ax.set_xscale("log")
+    ax.invert_yaxis()
+    ax.set_xlabel("rms(residual - LINC residual) / rms(LINC residual)")
+    ax.set_title("Full-sky multiscale (1024², niter 5000), repeated runs: run-to-run spread "
+                 "(1e-6 to 5e-3)\nis the same for every build, so no build is closer to LINC "
+                 "than another", fontsize=10)
+    fig.tight_layout()
+    return save(fig, "fullsky_multiscale_spread.png")
+
+
+def fullsky(tag, clean, out_name):
+    base = OUT / tag
     names = [("linc", "LINC"), ("upstream", "upstream"), ("mx-p3", "wsclean-mx")]
     if not all((base / v / "img-image.fits").exists() for v, _ in names):
         return None
@@ -354,10 +393,10 @@ def fig_fullsky():
     for ax in axes.flat:
         ax.set_xticks([])
         ax.set_yticks([])
-    fig.suptitle("Full-sky restored image, 1024² at 0.125° (Högbom, niter 2000, briggs 0).\n"
+    fig.suptitle(f"Full-sky restored image, 1024² at 0.125° ({clean}, briggs 0).\n"
                  "Top: same colour scale. Bottom: differences at ±5σ (MAD) of the differences",
                  fontsize=11)
-    return save(fig, "fullsky.png")
+    return save(fig, out_name)
 
 
 def save(fig, name):
@@ -370,7 +409,7 @@ def save(fig, name):
 
 def main():
     for f in [fig_stages, fig_scaling, fig_profile, fig_accuracy, fig_deep, fig_smallinv_bug,
-              fig_multiscale, fig_fullsky]:
+              fig_multiscale, fig_fullsky, fig_fullsky_multiscale, fig_fullsky_ms_spread]:
         path = f()
         print(f"{f.__name__}: {path.relative_to(ROOT) if path else 'skipped (no data)'}")
 
