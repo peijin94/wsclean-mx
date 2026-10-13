@@ -21,21 +21,29 @@ wsclean-mx/                   git@github.com:peijin94/wsclean-mx.git (origin)
 ├── patches/
 │   ├── build/<dep>/<commit12>/*.patch   build-only portability fixes (macOS);
 │   │                                    applied to reference AND mx builds
-│   └── mx/*.patch            the wsclean-mx patch set (source of truth)
+│   ├── mx/<repo>/*.patch     the wsclean-mx patch set (source of truth),
+│   │                         repo in {wsclean, aocommon, schaapcommon, radler}
+│   └── candidates/<repo>/    measured but unproven patches, NOT applied
 ├── scripts/
 │   ├── env.sh, lib.sh        shared env (Homebrew cmake, deps prefix) + helpers
 │   ├── build_deps.sh         casacore 3.8.2 -> deps/install
 │   ├── prepare_fetched_deps.sh  aocommon/schaapcommon/radler at pinned commits + build patches
 │   ├── configure_wsclean.sh  the ONE cmake configuration used by both builds
 │   ├── build_upstream.sh     reference -> build-upstream/ (from deps/src/wsclean-ref)
-│   ├── mx_tree.sh            init/export the dev tree work/wsclean-mx
-│   ├── build_mx.sh           work/wsclean-mx -> build-mx/
+│   ├── mx_tree.sh            init/export the dev trees work/<repo>
+│   ├── build_mx.sh           work/<repo> -> build-mx/
 │   └── check_headers.sh      fails if foreign casacore headers were used
 ├── bench/
-│   ├── run.sh <linc|upstream|mx> <tag> [wsclean args]  -> bench/out/<tag>/<variant>/
+│   ├── run.sh <linc|upstream|mx|snapshot> <tag> [wsclean args]  -> bench/out/<tag>/<variant>/
+│   ├── ab.sh <tag> <v1,v2,..> [args]  alternating repeats, min/median per stage
+│   ├── profile.sh <upstream|mx> <tag> [args]  macOS `sample` profile
+│   ├── sample_tree.py        inclusive/self time per thread from a sample report
 │   ├── compare_fits.py <dirA> <dirB> [--tier T0|T1|T2]
-│   └── requirements.txt      numpy, astropy (venv at .venv/, via uv)
-└── (gitignored) deps/ work/ build-upstream/ build-mx/ bench/out/ test_data/ .venv/
+│   ├── plot_report.py        figures -> docs/bench/*.png
+│   ├── micro/fft_resample.cpp  FFTW vs ducc0 microbenchmark
+│   └── requirements.txt      numpy, astropy, matplotlib (venv at .venv/, via uv)
+├── docs/bench/*.png          figures posted in the tracking issue
+└── (gitignored) deps/ work/ build-upstream/ build-mx/ bench/out/ bench/bin/ test_data/ .venv/
 ```
 
 Fresh setup: `git clone --recursive ...`, `scripts/build_deps.sh`,
@@ -45,10 +53,13 @@ Fresh setup: `git clone --recursive ...`, `scripts/build_deps.sh`,
 
 ### Patch-set workflow
 
-- `work/wsclean-mx`: branch `mx` on tag `mx-base` (= pinned upstream + build patches).
-- Develop by committing on `mx`, then `scripts/mx_tree.sh export` -> `patches/mx/`.
-- `scripts/mx_tree.sh init --force` recreates the tree from patches (discards unexported work).
+- `work/<repo>`: branch `mx` on tag `mx-base` (= pinned commit + build patches).
+- Develop by committing on `mx`, then `scripts/mx_tree.sh export [repo]` -> `patches/mx/<repo>/`.
+- `scripts/mx_tree.sh init --force [repo]` recreates trees from patches (discards unexported work).
 - Never run `checkout_patched` on `work/` — it does `checkout -f` + `clean -fdx`.
+- A/B a patch: snapshot `build-mx/wsclean` to `bench/bin/<name>/` before rebuilding,
+  then `bench/ab.sh <tag> <name>,mx ...`. Builds are byte-reproducible.
+- Tracking issue: https://github.com/peijin94/wsclean-mx/issues (title "wsclean-mx build").
 
 ## Pins
 
@@ -137,6 +148,43 @@ auto-threshold 3, default threads (tag `b4k`):
 
 LINC vs native at 4k: all products T2 pass, rel_rms ~7e-7, identical stopping peak.
 
+Upstream thread scaling (4k): -j1 27.7 s, -j2 18.6, -j4 13.9, -j6 14.2, -j8 13.6.
+Cause: serial main-thread work (profile: main thread busy 90% of wall, ducc0
+workers ~28%).
+
+### mx patches (4k clean workload, min of 3 alternating runs, `bench/ab.sh`)
+
+| Patch | Where | Wall | Inversion | Prediction | Status |
+|-------|-------|------|-----------|------------|--------|
+| (upstream) | | 12.69 s | 6.71 | 2.75 | |
+| 1. Resampler: multithreaded ducc0 FFT instead of single-threaded FFTW | schaapcommon `math/resampler.cc` | 9.25 s (1.37x) | 4.40 (1.52x) | 1.49 (1.84x) | in patch set |
+| 2. ducc0 `expi()`: vForce `vvsincosf` | schaapcommon ducc0 `wgridder_impl.h` | 9.24 vs 9.80 (p1), median worse | 4.27 vs 4.42 | — | candidate (within noise) |
+
+Accuracy: dirty/psf ~7e-7 rel_rms vs upstream for both; residual/image vary
+6e-7..1.8e-3 between *upstream reruns* (multithreaded clean picks different
+components), mx stays inside that range.
+
+## Key performance facts (M2)
+
+- Small inversion: 4096 padded 1.2 -> 4916² (= 4·1229, prime factor) image,
+  gridded at 2352². Resampler did r2c 2352² + c2r 4916² single-threaded FFTW:
+  ~0.8–1.2 s serial per call, 4 calls per 1-major-cycle run.
+- **Homebrew FFTW on arm64 is built without NEON** (formula only passes SIMD
+  flags on Intel). A NEON FFTW 3.3.11 is built in `deps/fftw-neon` (single
+  precision, threads) for experiments; not linked by any build yet.
+- Microbench, resampler FFTs (2352->4916): Homebrew FFTW 1 thr 0.67 s, NEON
+  FFTW 1 thr 0.30 s, 8 thr 0.11 s; ducc0 1 thr 0.20 s, 8 thr 0.06 s.
+- ducc0 already uses 128-bit NEON (`DUCC0_USE_NEON`); `-march=native` on M2
+  resolves to `apple-m1` (+v8.6a). Build uses `-O3 -march=native -ffast-math`.
+- ducc0 homegrown SIMD sin/cos are scalar libm per lane (`__sincosf_stret`).
+- Remaining serial work after patch 1: MS reordering ~0.9 s, radler
+  single-threaded run ~1.3 s (FFTW `Convolve` in `CorrectResidualDirty`),
+  weights ~0.2 s, FITS writing ~0.4 s.
+- `<Accelerate/Accelerate.h>` breaks the WSClean build (CoreServices macros);
+  include `<vecLib/vForce.h>` etc. directly.
+- Machine is a fanless MacBook Air (Mac14,2): throttles; use `bench/ab.sh`
+  (alternating, cool-down, min-of-N). Spotlight indexes bench/out.
+
 ## Decisions
 
 - 2026-10-13: Upstream tracked as a pinned git submodule, never edited.
@@ -152,4 +200,6 @@ LINC vs native at 4k: all products T2 pass, rel_rms ~7e-7, identical stopping pe
 
 - Benchmark matrix beyond the single LWA snapshot: need a larger MS (many
   integrations) where gridding dominates, plus 8k runs.
-- Radler/schaapcommon FFT backend (FFTW?) not yet checked.
+- Link mx against NEON FFTW (`deps/fftw-neon`)? Remaining FFTW users are
+  radler `Convolve` and restore; mixing with Homebrew double-precision FFTW is OK
+  (separate symbol prefixes).

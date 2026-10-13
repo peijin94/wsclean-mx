@@ -1,0 +1,223 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Tue, 13 Oct 2026 14:48:20 -0400
+Subject: [PATCH] Resampler: multithreaded ducc0 FFT instead of single-threaded
+ FFTW
+
+Resample() ran a full-size 2D r2c + c2r on one thread with FFTW_ESTIMATE
+plans (re-planned per Resampler). For WSClean's small-inversion path
+(e.g. 2352^2 -> 4916^2 for a 4096 image with padding 1.2) this was ~0.8-1.2 s
+of serial work per call on an M2 while all other cores idled. Homebrew's
+arm64 FFTW is also built without NEON, and 4916 = 4 * 1229 hits FFTW's slow
+prime-size path.
+
+Use ducc0 (already vendored, NEON-vectorised) r2c/c2r_mut with cpu_count
+threads in Resample()/SingleFT(), and 1 thread per task in the queued
+AddTask() path, which already parallelises over images. Same transform
+conventions as the FFTW plans (unnormalised, forward e^-i, last axis halved).
+
+4096^2 LWA test, M2: wall 12.7 s -> 9.25 s, inversion 6.7 -> 4.4 s,
+prediction 2.75 -> 1.49 s. Images agree with upstream to ~7e-7 rel. rms
+(dirty, psf), i.e. float rounding.
+
+diff --git a/include/schaapcommon/math/resampler.h b/include/schaapcommon/math/resampler.h
+index 4aff265..59bf2b0 100644
+--- a/include/schaapcommon/math/resampler.h
++++ b/include/schaapcommon/math/resampler.h
+@@ -12,6 +12,7 @@
+ #include <vector>
+ #include <thread>
+ 
++// Not used here any more, but WSClean's gridders rely on getting it from here.
+ #include <fftw3.h>
+ 
+ namespace schaapcommon::math {
+@@ -96,8 +97,8 @@ class Resampler {
+   }
+ 
+   /**
+-   * Directly perform a single resampling actions. This function does
+-   * not parallelise and blocks until finished.
++   * Directly perform a single resampling action, using up to the cpu_count
++   * given to the constructor for the FFTs. Blocks until finished.
+    * @param input an array of input_width x input_height values. The
+    * input will be destroyed.
+    * @param output array of output_width x output_height values in
+@@ -107,7 +108,7 @@ class Resampler {
+     Task task;
+     task.input = input;
+     task.output = output;
+-    RunSingle(task, false);
++    RunSingle(task, false, cpu_count_);
+   }
+ 
+   /**
+@@ -146,7 +147,7 @@ class Resampler {
+ 
+  private:
+   void RunThread();
+-  void RunSingle(const Task& task, bool skip_window) const;
++  void RunSingle(const Task& task, bool skip_window, size_t n_threads) const;
+   void ApplyWindow(float* data) const;
+   void UnapplyWindow(float* data) const;
+   void MakeWindow(aocommon::UVector<float>& data, size_t width) const;
+@@ -164,9 +165,7 @@ class Resampler {
+   mutable aocommon::UVector<float> window_col_in_;
+   mutable aocommon::UVector<float> window_out_;
+   bool correct_window_;
+-
+-  fftwf_plan in_to_f_plan_;
+-  fftwf_plan f_to_out_plan_;
++  size_t cpu_count_;
+ 
+   aocommon::Lane<Task> tasks_;
+   std::vector<std::thread> threads_;
+diff --git a/src/math/resampler.cc b/src/math/resampler.cc
+index 66b969c..887660e 100644
+--- a/src/math/resampler.cc
++++ b/src/math/resampler.cc
+@@ -2,9 +2,34 @@
+ 
+ #include <complex>
+ 
++#include <ducc0/fft/fft.h>
++#include <ducc0/fft/fftnd_impl.h>
++
+ using aocommon::WindowFunction;
+ namespace schaapcommon::math {
+ 
++namespace {
++
++// Unnormalized 2D real-to-complex forward FFT, same layout and sign convention
++// as fftwf_plan_dft_r2c_2d(height, width, ...).
++void ForwardR2C(const float* input, std::complex<float>* output, size_t width, size_t height,
++                size_t n_threads) {
++  const ducc0::cfmav<float> in(input, {height, width});
++  const ducc0::vfmav<std::complex<float>> out(output, {height, width / 2 + 1});
++  ducc0::r2c(in, out, {0, 1}, true, 1.0f, n_threads);
++}
++
++// Unnormalized 2D complex-to-real backward FFT, same layout and sign convention
++// as fftwf_plan_dft_c2r_2d(height, width, ...). Like FFTW, destroys the input.
++void BackwardC2R(std::complex<float>* input, float* output, size_t width, size_t height,
++                 size_t n_threads) {
++  const ducc0::vfmav<std::complex<float>> in(input, {height, width / 2 + 1});
++  const ducc0::vfmav<float> out(output, {height, width});
++  ducc0::c2r_mut(in, out, {0, 1}, false, 1.0f, n_threads);
++}
++
++}  // namespace
++
+ Resampler::Resampler(size_t input_width, size_t input_height, size_t output_width,
+                      size_t output_height, size_t cpu_count)
+     : input_width_(input_width),
+@@ -16,33 +41,20 @@ Resampler::Resampler(size_t input_width, size_t input_height, size_t output_widt
+       window_function_(WindowFunction::Rectangular),
+       tukey_inset_size_(0.0),
+       correct_window_(false),
+-      tasks_(cpu_count) {
+-  float* input_data =
+-      reinterpret_cast<float*>(fftwf_malloc(fft_width_ * fft_height_ * sizeof(float)));
+-  fftwf_complex* fft_data = reinterpret_cast<fftwf_complex*>(
+-      fftwf_malloc(fft_width_ * fft_height_ * sizeof(fftwf_complex)));
+-  in_to_f_plan_ =
+-      fftwf_plan_dft_r2c_2d(input_height_, input_width_, input_data, fft_data, FFTW_ESTIMATE);
+-  f_to_out_plan_ =
+-      fftwf_plan_dft_c2r_2d(output_height_, output_width_, fft_data, input_data, FFTW_ESTIMATE);
+-  fftwf_free(fft_data);
+-  fftwf_free(input_data);
+-}
++      cpu_count_(std::max<size_t>(cpu_count, 1)),
++      tasks_(cpu_count) {}
+ 
+-Resampler::~Resampler() {
+-  Finish();
+-  fftwf_destroy_plan(in_to_f_plan_);
+-  fftwf_destroy_plan(f_to_out_plan_);
+-}
++Resampler::~Resampler() { Finish(); }
+ 
+ void Resampler::RunThread() {
+   Task task;
+   while (tasks_.read(task)) {
+-    RunSingle(task, false);
++    // Tasks already run in parallel, one per thread.
++    RunSingle(task, false, 1);
+   }
+ }
+ 
+-void Resampler::RunSingle(const Task& task, bool skip_window) const {
++void Resampler::RunSingle(const Task& task, bool skip_window, size_t n_threads) const {
+   float* end_ptr = task.input + input_width_ * input_height_;
+   for (float* i = task.input; i != end_ptr; ++i) {
+     if (!std::isfinite(*i)) *i = 0.0;
+@@ -53,15 +65,15 @@ void Resampler::RunSingle(const Task& task, bool skip_window) const {
+   }
+ 
+   const size_t fft_in_width = input_width_ / 2 + 1;
+-  std::complex<float>* fft_data = reinterpret_cast<std::complex<float>*>(
+-      fftwf_malloc(fft_in_width * input_height_ * sizeof(std::complex<float>)));
+-  fftwf_execute_dft_r2c(in_to_f_plan_, task.input, reinterpret_cast<fftwf_complex*>(fft_data));
++  aocommon::UVector<std::complex<float>> fft_data_vector(fft_in_width * input_height_);
++  std::complex<float>* fft_data = fft_data_vector.data();
++  ForwardR2C(task.input, fft_data, input_width_, input_height_, n_threads);
+ 
+   const size_t fft_out_width = output_width_ / 2 + 1;
+   // TODO this can be done without allocating more mem!
+-  std::complex<float>* new_fft_data = reinterpret_cast<std::complex<float>*>(
+-      fftwf_malloc(fft_out_width * output_height_ * sizeof(std::complex<float>)));
+-  std::uninitialized_fill_n(new_fft_data, fft_out_width * output_height_, std::complex<float>(0));
++  aocommon::UVector<std::complex<float>> new_fft_data_vector(fft_out_width * output_height_,
++                                                             std::complex<float>(0));
++  std::complex<float>* new_fft_data = new_fft_data_vector.data();
+ 
+   const size_t old_mid_x = input_width_ / 2;
+   const size_t new_mid_x = output_width_ / 2;
+@@ -101,12 +113,9 @@ void Resampler::RunSingle(const Task& task, bool skip_window) const {
+     }
+   }
+ 
+-  fftwf_free(fft_data);
++  fft_data_vector = aocommon::UVector<std::complex<float>>();
+ 
+-  fftwf_execute_dft_c2r(f_to_out_plan_, reinterpret_cast<fftwf_complex*>(new_fft_data),
+-                        task.output);
+-
+-  fftwf_free(new_fft_data);
++  BackwardC2R(new_fft_data, task.output, output_width_, output_height_, n_threads);
+ 
+   if (correct_window_ && window_function_ != WindowFunction::Rectangular && !skip_window) {
+     UnapplyWindow(task.output);
+@@ -134,10 +143,10 @@ void Resampler::SingleFT(const float* input, float* real_output, float* imaginar
+   }
+ 
+   const size_t fft_in_width = input_width_ / 2 + 1;
+-  std::complex<float>* fft_data = reinterpret_cast<std::complex<float>*>(
+-      fftwf_malloc(fft_in_width * input_height_ * sizeof(std::complex<float>)));
++  aocommon::UVector<std::complex<float>> fft_data_vector(fft_in_width * input_height_);
++  std::complex<float>* fft_data = fft_data_vector.data();
+ 
+-  fftwf_execute_dft_r2c(in_to_f_plan_, data.data(), reinterpret_cast<fftwf_complex*>(fft_data));
++  ForwardR2C(data.data(), fft_data, input_width_, input_height_, cpu_count_);
+ 
+   const size_t mid_x = input_width_ / 2;
+   const size_t mid_y = input_height_ / 2;
+@@ -166,8 +175,6 @@ void Resampler::SingleFT(const float* input, float* real_output, float* imaginar
+       }
+     }
+   }
+-
+-  fftwf_free(fft_data);
+ }
+ 
+ void Resampler::MakeWindow(aocommon::UVector<float>& data, size_t width) const {
+@@ -220,7 +227,8 @@ void Resampler::ApplyWindow(float* data) const {
+       Task task;
+       task.input = window_image_in.data();
+       task.output = window_out_.data();
+-      RunSingle(task, true);
++      // Windows are only supported with Resample(), so all cpus are ours.
++      RunSingle(task, true, cpu_count_);
+     }
+   }
+   for (size_t y = 0; y != input_height_; ++y) {

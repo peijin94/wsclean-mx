@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Tue, 13 Oct 2026 14:53:09 -0400
+Subject: [PATCH] ducc0 wgridder: vForce vvsincos(f) in expi() on Apple
+
+ducc0's homegrown SIMD sin/cos apply scalar libm per lane, which clang turns
+into __sincosf_stret calls (~4% of busy CPU time in the 4096^2 LWA profile).
+Use Accelerate's vectorised vvsincosf/vvsincos for the phase arrays instead.
+
+Candidate: on the 4096^2 LWA test the gain is within run-to-run noise
+(inversion min 4.42 -> 4.27 s, wall median not improved). Images agree to
+4e-7 rel. rms.
+
+diff --git a/external/ducc0/CMakeLists.txt b/external/ducc0/CMakeLists.txt
+index 9468f9c..afa4870 100644
+--- a/external/ducc0/CMakeLists.txt
++++ b/external/ducc0/CMakeLists.txt
+@@ -14,6 +14,11 @@ target_sources(
+ target_include_directories(${SCHAAPCOMMON_PROJECT_NAME}
+                            PUBLIC ${DUCC0_PATH}/../)
+ 
++if(APPLE)
++  # vForce sincos in the wgridder
++  target_link_libraries(${SCHAAPCOMMON_PROJECT_NAME} "-framework Accelerate")
++endif()
++
+ if(SCHAAPCOMMON_MASTER_PROJECT)
+   install(
+     DIRECTORY ${DUCC0_PATH}
+diff --git a/external/ducc0/wgridder/wgridder_impl.h b/external/ducc0/wgridder/wgridder_impl.h
+index 69eb8d2..c290f16 100644
+--- a/external/ducc0/wgridder/wgridder_impl.h
++++ b/external/ducc0/wgridder/wgridder_impl.h
+@@ -52,6 +52,11 @@
+ #include "ducc0/math/rangeset.h"
+ #include "ducc0/wgridder/wgridder.h"
+ 
++#if defined(__APPLE__)
++// Not <Accelerate/Accelerate.h>: it drags in CoreServices macros.
++#include <vecLib/vForce.h>
++#endif
++
+ namespace ducc0 {
+ 
+ namespace detail_gridder {
+@@ -98,6 +103,24 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
+   auto n=res.size();
+   for (size_t j=0; j<n; ++j)
+     buf[j] = getang(j);
++#if defined(__APPLE__)
++  // The homegrown SIMD sin/cos are scalar libm calls per lane; vForce is
++  // vectorised.
++  if constexpr (is_same<T,float>::value || is_same<T,double>::value)
++    {
++    thread_local vector<T> vsin, vcos;
++    vsin.resize(n);
++    vcos.resize(n);
++    const int ni = int(n);
++    if constexpr (is_same<T,float>::value)
++      vvsincosf(vsin.data(), vcos.data(), buf.data(), &ni);
++    else
++      vvsincos(vsin.data(), vcos.data(), buf.data(), &ni);
++    for (size_t j=0; j<n; ++j)
++      res[j] = complex<T>(vcos[j], vsin[j]);
++    return;
++    }
++#endif
+   size_t i=0;
+   for (; i+vlen-1<n; i+=vlen)
+     {

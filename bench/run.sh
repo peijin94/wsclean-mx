@@ -7,6 +7,7 @@
 # variant: linc     - astronrd/linc container (x86_64, Rosetta, Apple container)
 #          upstream - native arm64 build of the pinned upstream (build-upstream/)
 #          mx       - native arm64 build of wsclean-mx (build-mx/)
+#          <name>   - snapshot binary bench/bin/<name>/wsclean (gitignored)
 #
 # Output goes to bench/out/<tag>/<variant>/ (images, wsclean.log, time.txt).
 # Every variant runs with the repo root as working directory, and the repo is
@@ -33,7 +34,10 @@ case "$variant" in
          -v "$ROOT:$ROOT" -w "$ROOT" "$LINC_IMAGE" wsclean "${args[@]}") ;;
   upstream) cmd=("$ROOT/build-upstream/wsclean" "${args[@]}") ;;
   mx)       cmd=("$ROOT/build-mx/wsclean" "${args[@]}") ;;
-  *) echo "unknown variant: $variant" >&2; exit 2 ;;
+  *)
+    # Snapshot of an earlier mx build, e.g. bench/bin/mx-p1/wsclean.
+    [ -x "$ROOT/bench/bin/$variant/wsclean" ] || { echo "unknown variant: $variant" >&2; exit 2; }
+    cmd=("$ROOT/bench/bin/$variant/wsclean" "${args[@]}") ;;
 esac
 
 printf '%q ' "${cmd[@]}" > "$out/cmd.txt"; echo >> "$out/cmd.txt"

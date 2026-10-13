@@ -10,3 +10,5 @@ __pycache__/
 /deps/
 /test_data/
 /work/
+bench/bin/
+bench/micro/bin/
