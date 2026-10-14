@@ -240,6 +240,46 @@ def fig_deep():
     return save(fig, "deep.png")
 
 
+P6_RUNS = [("p6-n5k", "4096² Högbom\nniter 5000"), ("p6-ms2k", "2048² multiscale\nniter 5000")]
+P6_VARIANTS = [("upstream-fix", "upstream"), ("mx-p3", "mx p1+3+4"), ("mx-p6", "mx p1+3+4+5+6")]
+
+
+def fig_subminor():
+    rows = []
+    for tag, label in P6_RUNS:
+        tsv = OUT / f"{tag}-ab.tsv"
+        if not tsv.exists():
+            continue
+        for variant, name in P6_VARIANTS:
+            s = ab_min(tsv, variant)
+            if s:
+                rows.append((f"{label}, {name}", with_other(s), tag, variant))
+    if not rows:
+        return None
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    names = [n for n, _, _, _ in rows]
+    left = [0] * len(rows)
+    for st in STAGES:
+        vals = [s[st] for _, s, _, _ in rows]
+        ax.barh(names, vals, left=left, color=COLORS[st], label=st)
+        left = [a + b for a, b in zip(left, vals)]
+    base = {tag: s for _, s, tag, v in rows if v == "upstream-fix"}
+    for i, (_, s, tag, v) in enumerate(rows):
+        txt = f"{s['wall']:.1f} s"
+        if v != "upstream-fix" and tag in base:
+            b = base[tag]
+            txt += (f"  (wall {b['wall'] / s['wall']:.2f}x, "
+                    f"deconv {b['deconvolution'] / s['deconvolution']:.1f}x)")
+        ax.text(s["wall"] + 0.5, i, txt, va="center", fontsize=8)
+    ax.invert_yaxis()
+    ax.set_xlabel("wall time [s] (min of 2 alternating runs; multiscale runs were thermally noisy)")
+    ax.set_title("Patches 5+6: multithreaded subminor loop, multiscale FFT reuse")
+    ax.set_xlim(0, max(s["wall"] for _, s, _, _ in rows) * 1.6)
+    ax.legend(loc="lower right", fontsize=8)
+    fig.tight_layout()
+    return save(fig, "subminor.png")
+
+
 def fig_smallinv_bug():
     base = OUT / "smallinv-bug"
     panels = [("upstream-garbage", "upstream, unlucky run (own scale)\n(noise est. 6.52 mJy)"),
@@ -409,7 +449,8 @@ def save(fig, name):
 
 def main():
     for f in [fig_stages, fig_scaling, fig_profile, fig_accuracy, fig_deep, fig_smallinv_bug,
-              fig_multiscale, fig_fullsky, fig_fullsky_multiscale, fig_fullsky_ms_spread]:
+              fig_multiscale, fig_fullsky, fig_fullsky_multiscale, fig_fullsky_ms_spread,
+              fig_subminor]:
         path = f()
         print(f"{f.__name__}: {path.relative_to(ROOT) if path else 'skipped (no data)'}")
 
