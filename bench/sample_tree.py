@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 """Inclusive sample counts from a macOS `sample` report.
 
     bench/sample_tree.py <sample.txt> [--threads] [--pattern REGEX ...]

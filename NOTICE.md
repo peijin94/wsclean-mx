@@ -1,0 +1,69 @@
+# NOTICE
+
+wsclean-mx is a modified version of WSClean and of the libraries it builds
+with. It is distributed under the GNU General Public License, version 3
+(`LICENSE`), the license of WSClean. This file gives the attribution and the
+modification notices required by section 5(a) of the GPLv3.
+
+wsclean-mx: Copyright (C) 2026 Peijin Zhang <peijin@ustc.edu>
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for details.
+
+## Upstream works
+
+| Component | Copyright | License | Source, pinned commit |
+|-----------|-----------|---------|-----------------------|
+| WSClean | André Offringa and contributors | GPL-3.0 | <https://gitlab.com/aroffringa/wsclean> `2d5c1ed8d7559e5178d243661b408baa288681e6` (2026-09-07) |
+| aocommon | ASTRON (Netherlands Institute for Radio Astronomy), André Offringa | GPL-3.0-or-later | <https://gitlab.com/aroffringa/aocommon> `e1b7980e02211ade95eef176a3ac7f9ba3dcc55c` |
+| schaapcommon | ASTRON | GPL-3.0-or-later | <https://git.astron.nl/RD/schaapcommon> `b47f19dace28ad420c0a7c8ab1014b55b75205e9` |
+| ducc0 (bundled in schaapcommon, not modified) | Max-Planck-Society | GPL-2.0-or-later | via schaapcommon |
+| radler | ASTRON | LGPL-3.0-only (`LICENSE.LESSER` with `LICENSE`) | <https://git.astron.nl/RD/radler> `940e9617a4b3210228a849513752f0732df8104a` |
+
+WSClean is included unmodified as the git submodule `upstream/wsclean/`.
+aocommon, schaapcommon and radler are fetched at build time at the commits
+above. casacore (LGPL-3.0, v3.8.2) and the Homebrew libraries are built or
+installed separately and are not part of this repository.
+
+## Licensing of this repository
+
+- `patches/<kind>/<repo>/*.patch` are modifications of the upstream files
+  they change, and are licensed under the license of those files: the radler
+  patches under LGPL-3.0-only, the others under GPL-3.0 (aocommon,
+  schaapcommon: GPL-3.0-or-later).
+- All other files (build scripts, benchmark tools, documentation, figures)
+  are Copyright (C) 2026 Peijin Zhang, licensed under GPL-3.0-or-later.
+  Exceptions are marked in the file headers: `bench/micro/subminor_loop.cpp`
+  adapts radler code and is LGPL-3.0-only; `bench/micro/convolve_check.cpp`
+  and `bench/micro/median_select.cpp` contain schaapcommon and aocommon code.
+- A wsclean-mx binary combines all of the above and is distributed under
+  GPL-3.0.
+
+## Modification notices (GPLv3 section 5(a))
+
+All modifications were made by Peijin Zhang. Each patch file also records
+its author and date in its header.
+
+| Date | Patch | Modified upstream files | Change |
+|------|-------|-------------------------|--------|
+| 2026-10-13 | `patches/build/wsclean/2d5c1ed8d755/0001-include-semaphore.patch` | wsclean `gridding/msgridder.h` | add a missing `#include <semaphore>` (build fix for libc++) |
+| 2026-10-13 | `patches/build/schaapcommon/b47f19dace28/0001-skip-z-notext-on-apple.patch` | schaapcommon `src/threading/CMakeLists.txt` | skip the ELF-only `-Wl,-z,notext` linker flag on Apple |
+| 2026-10-13 | `patches/mx/schaapcommon/0001-Resampler-...patch` | schaapcommon `include/schaapcommon/math/resampler.h`, `src/math/resampler.cc` | multithreaded ducc0 FFT instead of single-threaded FFTW |
+| 2026-10-13 | `patches/mx/schaapcommon/0002-Convolve-...patch` | schaapcommon `src/math/convolution.cc` | multithreaded ducc0 FFT instead of FFTW |
+| 2026-10-13 | `patches/mx/aocommon/0001-Median-MAD-...patch` | aocommon `include/aocommon/image.h` | radix-histogram select for Median/MAD |
+| 2026-10-13 | `patches/mx/wsclean/0001-WGridder-RealImage-...patch` | wsclean `wgridder/wgridder_implementation.h` | pad with 0 instead of NaN (fixes uninitialized padding under `-ffast-math`) |
+| 2026-10-13 | `patches/mx/radler/0001-SubMinorLoop-...patch` | radler `cpp/algorithms/subminor_loop.{h,cc}`, `cpp/image_set.{h,cc}` | multithreaded PSF subtraction and peak search |
+| 2026-10-13 | `patches/mx/radler/0002-Multiscale-...patch` | radler `cpp/algorithms/multiscale/multiscale_transforms.{h,cc}`, `cpp/algorithms/multiscale_algorithm.{h,cc}`, `cpp/algorithms/threaded_deconvolution_tools.{h,cc}` | one residual FFT per peak search, cached scale-kernel FFTs |
+| 2026-10-13 | `patches/mx/schaapcommon/0003-Convolve-...patch` | schaapcommon `include/schaapcommon/math/convolution.h`, `src/math/convolution.cc` | expose the forward transform and convolution with a transformed kernel |
+
+A wsclean-mx binary still reports upstream's version string ("WSClean
+version 3.7"); it is a modified version as described above.
+
+## Distributing binaries
+
+Anyone who conveys a wsclean-mx binary must also make the Corresponding
+Source available to its recipients under the GPLv3 (section 6). That source
+is this repository at the commit used for the build (patches and build
+scripts) together with the upstream sources at the pinned commits listed
+above.

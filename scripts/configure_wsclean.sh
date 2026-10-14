@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # configure_wsclean.sh <src> <build> [extra cmake args...]
 # Identical CMake configuration for the reference and the mx build, so that
 # compiler flags never explain a difference between them.

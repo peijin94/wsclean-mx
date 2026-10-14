@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Sample-profile one native WSClean run with macOS `sample`.
 #
 #   bench/profile.sh <upstream|mx|snapshot> <tag> [wsclean args...]

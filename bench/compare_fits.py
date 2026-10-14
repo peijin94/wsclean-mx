@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 """Compare the FITS products of two bench/run.sh variants, pixel by pixel.
 
     bench/compare_fits.py bench/out/<tag>/<variant-a> bench/out/<tag>/<variant-b>

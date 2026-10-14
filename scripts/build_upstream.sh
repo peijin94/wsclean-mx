@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Build the reference WSClean into build-upstream/: the pinned upstream commit
 # plus build-only patches (patches/build/wsclean/<commit12>/), nothing else.
 # The upstream/wsclean submodule itself is never modified; the reference is

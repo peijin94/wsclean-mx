@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # A/B timing: alternate variants for N repeats (with a cool-down between runs,
 # this is a fanless laptop) and report min / median per stage.
 #

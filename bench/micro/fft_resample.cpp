@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Peijin Zhang
 // Microbenchmark of the two FFTs in schaapcommon::math::Resampler for the
 // 4096 / padding 1.2 / small-inversion case: r2c on the inversion grid and
 // c2r on the padded image grid. Compares FFTW (whichever libfftw3f this is

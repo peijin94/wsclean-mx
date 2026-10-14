@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Peijin Zhang
+// Contains code from aocommon, Copyright (C) ASTRON (Netherlands Institute
+// for Radio Astronomy) and André Offringa, GPL-3.0-or-later.
 // Bitwise check and timing of aocommon's median/MAD against the original
 // std::nth_element implementation.
 //

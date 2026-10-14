@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+// Copyright (C) 2026 Peijin Zhang
+// Adapted from radler's SubMinorLoop, Copyright (C) ASTRON (Netherlands
+// Institute for Radio Astronomy), LGPL-3.0-only.
 // Single-threaded timing of radler's subminor loop body (PSF subtraction over
 // the selected pixels + peak search): upstream's version (copy to scratch, then
 // search) against searching the residual in place, with size_t and 32-bit

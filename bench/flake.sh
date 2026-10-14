@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Repeat one WSClean configuration and flag runs whose first noise estimate is
 # far off, to find intermittent corruption.
 #

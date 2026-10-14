@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Check out the FetchContent dependencies of upstream WSClean at the commits
 # pinned in upstream/wsclean/CMakeLists.txt, and apply build-only patches from
 # patches/build/<dep>/<commit12>/. Prints the -DFETCHCONTENT_SOURCE_DIR_* flags.

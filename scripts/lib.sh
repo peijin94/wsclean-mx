@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Shared helpers. Source, don't execute.
 
 # checkout_patched <name> <git-url-or-path> <commit> <dest> [patch-dir...]

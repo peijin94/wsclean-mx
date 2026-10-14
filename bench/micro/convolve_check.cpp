@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Peijin Zhang
+// Contains code from schaapcommon, Copyright (C) 2022 ASTRON (Netherlands
+// Institute for Radio Astronomy), GPL-3.0-or-later.
 // Compare schaapcommon Convolve: upstream FFTW row/column composite vs the mx
 // ducc0 version, both against a double-precision ducc0 reference.
 //

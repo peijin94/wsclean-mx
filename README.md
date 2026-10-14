@@ -124,5 +124,18 @@ and benchmarks on larger measurement sets where gridding dominates.
 
 ## License
 
-WSClean and its libraries are GPL-3.0; the patches in this repository are
-released under the same license.
+wsclean-mx is a modified version of WSClean and is distributed under the
+[GNU General Public License v3](LICENSE), like WSClean itself. Each patch
+keeps the license of the upstream file it changes: the radler patches are
+LGPL-3.0-only ([LICENSE.LESSER](LICENSE.LESSER) together with
+[LICENSE](LICENSE)), the others GPL-3.0. Original files in this repository
+are GPL-3.0-or-later.
+
+[NOTICE.md](NOTICE.md) has the upstream copyrights and pinned sources, a
+dated list of every modification (GPLv3 section 5), and what to include when
+distributing a binary (section 6: the Corresponding Source is this repository
+at the build commit plus the pinned upstream sources).
+
+Copyright (C) 2026 Peijin Zhang. WSClean is Copyright (C) André Offringa and
+contributors; aocommon, schaapcommon and radler are Copyright (C) ASTRON.
+This program comes with ABSOLUTELY NO WARRANTY.

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # check_headers.sh <build>
 # Fail if any object in the build was compiled against casacore headers other
 # than the ones in deps/install (e.g. /usr/local or Homebrew copies).

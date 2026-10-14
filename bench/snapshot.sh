@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Freeze a build into bench/bin/<name>/ so it can be benchmarked as a variant
 # after the build directory has moved on.
 #

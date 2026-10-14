@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Build wsclean-mx from the work/<repo> dev trees into build-mx/, with the same
 # CMake configuration as the reference build. Missing trees are created from
 # the patch set first.

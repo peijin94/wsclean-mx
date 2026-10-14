@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Manage the wsclean-mx development trees, one per patched repo:
 #
 #   work/<repo>   git clone of <repo> at the commit pinned by upstream

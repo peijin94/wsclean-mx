@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Peijin Zhang
 # Build dependencies that Homebrew cannot provide at the required version into
 # a project-local prefix (deps/install), leaving system packages untouched.
 set -euo pipefail
