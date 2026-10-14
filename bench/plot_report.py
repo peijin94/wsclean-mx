@@ -280,6 +280,61 @@ def fig_subminor():
     return save(fig, "subminor.png")
 
 
+PLATFORM_RUNS = ["ms2k-n3k-r1", "ms2k-n3k-r2"]
+PLATFORM_VARIANTS = [
+    ("mx-p6", "wsclean-mx, M2 (8 threads)"),
+    ("upstream-fix", "upstream + fix, M2 (8 threads)"),
+    ("linc", "LINC 5.2.1, M2 Rosetta (8 threads)"),
+    ("linux-j8", "LINC 5.2.1, Xeon 4214 (-j 8)"),
+    ("linux-j24", "LINC 5.2.1, Xeon 4214 (-j 24)"),
+]
+
+
+def fig_platforms():
+    runs = {v: [OUT / t / v for t in PLATFORM_RUNS if (OUT / t / v / "img-residual.fits").exists()]
+            for v, _ in PLATFORM_VARIANTS}
+    if not all(runs.values()):
+        return None
+    from astropy.io import fits
+
+    def best(dirs):
+        stats = [run_stats(d) for d in dirs]
+        return with_other({k: min(s[k] for s in stats) for k in stats[0]})
+
+    rows = [(name, best(runs[v])) for v, name in PLATFORM_VARIANTS]
+    ref = fits.getdata(runs["linc"][0] / "img-residual.fits").squeeze().astype("float64")
+    spread = [(f"{name}, run {i + 1}" + (" (reference)" if (v, i) == ("linc", 0) else ""),
+               max((fits.getdata(d / "img-residual.fits").squeeze() - ref).std() / ref.std(), 1e-7))
+              for v, name in PLATFORM_VARIANTS for i, d in enumerate(runs[v])]
+
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(14, 5.2), width_ratios=[1.3, 1])
+    names = [n for n, _ in rows]
+    left = [0] * len(rows)
+    for st in STAGES:
+        vals = [s[st] for _, s in rows]
+        a1.barh(names, vals, left=left, color=COLORS[st], label=st)
+        left = [a + b for a, b in zip(left, vals)]
+    mx = rows[0][1]["wall"]
+    for i, (_, s) in enumerate(rows):
+        a1.text(s["wall"] + 0.5, i, f"{s['wall']:.1f} s ({s['wall'] / mx:.1f}x)", va="center",
+                fontsize=8)
+    a1.invert_yaxis()
+    a1.set_xlim(0, max(s["wall"] for _, s in rows) * 1.3)
+    a1.set_xlabel("wall time [s], min of 2 runs (Xeon host shared, load avg 23-33)")
+    a1.legend(loc="upper right", fontsize=8)
+    a1.set_title("Time", fontsize=10)
+    a2.barh([n for n, _ in spread], [r for _, r in spread], color="#C44E52")
+    a2.set_xscale("log")
+    a2.invert_yaxis()
+    a2.tick_params(axis="y", labelsize=7)
+    a2.set_xlabel("rms(residual - LINC M2 run 1 residual) / rms(LINC residual)")
+    a2.set_title("Residual vs LINC (multiscale is run-to-run chaotic)", fontsize=10)
+    fig.suptitle("2048² at 0.0625° (full sky), multiscale, niter 3000, briggs 0, mgain 0.8",
+                 fontsize=11)
+    fig.tight_layout()
+    return save(fig, "platforms_ms2k.png")
+
+
 def fig_smallinv_bug():
     base = OUT / "smallinv-bug"
     panels = [("upstream-garbage", "upstream, unlucky run (own scale)\n(noise est. 6.52 mJy)"),
@@ -450,7 +505,7 @@ def save(fig, name):
 def main():
     for f in [fig_stages, fig_scaling, fig_profile, fig_accuracy, fig_deep, fig_smallinv_bug,
               fig_multiscale, fig_fullsky, fig_fullsky_multiscale, fig_fullsky_ms_spread,
-              fig_subminor]:
+              fig_subminor, fig_platforms]:
         path = f()
         print(f"{f.__name__}: {path.relative_to(ROOT) if path else 'skipped (no data)'}")
 

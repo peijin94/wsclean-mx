@@ -234,6 +234,18 @@ iterations. Multiscale niter 5000, 3 reruns each: the same binary lands at
 threaded multiscale is nondeterministic on its own. Note `-scale` is in
 direction-cosine units: full sky needs size*scale >= 114.6°.
 
+Cross-platform 2048² @ 0.0625° multiscale niter 3000 (`ms2k-n3k-r{1,2}`,
+figure `platforms_ms2k.png`), min of 2. M2 at default threads: mx-p6 12.4 s
+(deconv 4.4), upstream-fix 20.6 s (11.8), LINC Rosetta 43.4 s (17.0). Linux
+native = `astronrd/linc:5.2.1` (same 2d5c1ed8) via docker on inti (2x Xeon
+Silver 4214, 24C/48T, shared, load avg 23-33): -j 8 49.3 s (deconv 31.9),
+-j 24 55.6 s (deconv 40.0; inversion faster 8.2 vs 10.2 s, deconvolution
+slower). All runs 3000 iterations / 3 majors; residual rms 24.64 µJy
+everywhere; residual vs LINC run 1 5e-3..2.6e-2, LINC's own rerun 2.2e-2.
+Dirty: 6e-7 vs LINC for all except inti -j 24 at 2e-5 (both runs).
+inti setup: MS extracted read-only in `/data1/users/pz47/wsclean-bench/`,
+runner `run_linux.sh` there (docker, `--user`, same args + `-j`).
+
 ### Upstream bug: small-inversion padding is uninitialized under clang -ffast-math
 
 - `wgridder_float.cpp`/`wgridder_double.cpp` are compiled with `-ffast-math`
