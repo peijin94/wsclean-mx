@@ -1,0 +1,316 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Tue, 13 Oct 2026 20:14:04 -0400
+Subject: [PATCH 1/2] SubMinorLoop: multithreaded PSF subtraction and peak
+ search
+
+Every subminor iteration subtracted the PSF from all selected pixels and
+then searched them for the next peak, single threaded. Both now run per
+chunk with DynamicFor, the peak search fused into the chunk when the
+integrated image is a copy of one residual image. Chunk peaks are merged in
+order with the same strict comparison, so the selected component is
+identical to the sequential search. Positions are stored as 32-bit pairs,
+halving their memory traffic.
+
+diff --git a/cpp/algorithms/subminor_loop.cc b/cpp/algorithms/subminor_loop.cc
+index 8fc2d75..3d0133a 100644
+--- a/cpp/algorithms/subminor_loop.cc
++++ b/cpp/algorithms/subminor_loop.cc
+@@ -2,13 +2,78 @@
+ 
+ #include "subminor_loop.h"
+ 
++#include <algorithm>
++#include <cmath>
++#include <limits>
++
+ #include <schaapcommon/math/convolution.h>
++#include <schaapcommon/threading/dynamicfor.h>
++#include <schaapcommon/threading/threadpool.h>
+ 
+ #include "algorithms/deconvolution_algorithm.h"
+ 
+ using aocommon::Image;
+ 
+ namespace radler::algorithms {
++namespace {
++struct alignas(64) ChunkPeak {
++  size_t index;
++  float value;
++};
++
++void SubtractPsf(float* image, const float* psf, float psf_factor,
++                 const std::pair<uint32_t, uint32_t>* positions, size_t start,
++                 size_t end, size_t x, size_t y, size_t width, size_t height) {
++#pragma GCC unroll 8
++  for (size_t px = start; px != end; ++px) {
++    const int psf_x = positions[px].first - x + width / 2;
++    const int psf_y = positions[px].second - y + height / 2;
++    if (psf_x >= 0 && psf_x < static_cast<int>(width) && psf_y >= 0 &&
++        psf_y < static_cast<int>(height)) {
++      image[px] -= psf[psf_x + psf_y * width] * psf_factor;
++    }
++  }
++}
++
++/**
++ * Updates @p peak to the first pixel in [start, end) with a value larger than
++ * peak.value and larger than or equal to all other values, like a sequential
++ * scan with a strict comparison would. The maximum is found over independent
++ * lanes first, because a single running maximum is a serial dependency chain.
++ */
++template <bool AllowNegatives, bool HasRmsFactor>
++void FindChunkPeak(const float* image, const float* rms_factor, size_t start,
++                   size_t end, ChunkPeak& peak) {
++  const auto value = [&](size_t px) {
++    const float v = HasRmsFactor ? image[px] * rms_factor[px] : image[px];
++    return AllowNegatives ? std::fabs(v) : v;
++  };
++  constexpr size_t kLanes = 16;
++  float lanes[kLanes];
++  std::fill_n(lanes, kLanes, peak.value);
++  size_t px = start;
++  for (; px + kLanes <= end; px += kLanes) {
++    for (size_t lane = 0; lane != kLanes; ++lane) {
++      const float v = value(px + lane);
++      lanes[lane] = v > lanes[lane] ? v : lanes[lane];
++    }
++  }
++  float best = peak.value;
++  for (size_t lane = 0; lane != kLanes; ++lane) {
++    best = lanes[lane] > best ? lanes[lane] : best;
++  }
++  for (; px != end; ++px) {
++    const float v = value(px);
++    best = v > best ? v : best;
++  }
++  if (best > peak.value) {
++    px = start;
++    while (value(px) != best) ++px;
++    peak.index = px;
++    peak.value = best;
++  }
++}
++}  // namespace
+ 
+ template <bool AllowNegatives>
+ size_t SubMinorModel::GetMaxComponent(Image& scratch, float& max_value) const {
+@@ -88,24 +153,8 @@ std::pair<bool, aocommon::OptionalNumber<float>> SubMinorLoop::Run(
+     imgIndex!=_clarkModel.Model().size(); ++imgIndex) _logReceiver.Debug <<
+     componentValues[imgIndex] << ' '; _logReceiver.Debug << '\n';
+     */
+-    for (size_t imgIndex = 0; imgIndex != _subMinorModel.Residual().Size();
+-         ++imgIndex) {
+-      float* image = _subMinorModel.Residual().Data(imgIndex);
+-      const aocommon::Image& psf =
+-          twiceConvolvedPsfs[_subMinorModel.Residual().PsfIndex(imgIndex)];
+-      float psfFactor = componentValues[imgIndex];
+-      for (size_t px = 0; px != _subMinorModel.size(); ++px) {
+-        int psfX = _subMinorModel.X(px) - x + _width / 2;
+-        int psfY = _subMinorModel.Y(px) - y + _height / 2;
+-        if (psfX >= 0 && psfX < static_cast<int>(_width) && psfY >= 0 &&
+-            psfY < static_cast<int>(_height)) {
+-          image[px] -= psf[psfX + psfY * _width] * psfFactor;
+-        }
+-      }
+-    }
+-
+-    maxComponent = _subMinorModel.GetMaxComponent(scratch, maxValue,
+-                                                  _allowNegativeComponents);
++    maxComponent = subtractComponentAndFindPeak(
++        x, y, componentValues.data(), twiceConvolvedPsfs, scratch, maxValue);
+ 
+     if (_divergenceLimit != 0.0) {
+       diverging = std::fabs(maxValue) > max_value_at_start * _divergenceLimit;
+@@ -116,6 +165,92 @@ std::pair<bool, aocommon::OptionalNumber<float>> SubMinorLoop::Run(
+   return std::make_pair(diverging, aocommon::OptionalNumber<float>(maxValue));
+ }
+ 
++size_t SubMinorLoop::subtractComponentAndFindPeak(
++    size_t x, size_t y, const float* component_values,
++    const std::vector<Image>& twice_convolved_psfs, Image& scratch,
++    float& max_value) {
++  // Below this many pixels per chunk, the thread synchronization costs more
++  // than it saves. Chunks are scheduled dynamically, so that faster cores take
++  // more of them.
++  constexpr size_t kMinChunkSize = 8192;
++  constexpr size_t kChunksPerThread = 4;
++  ImageSet& residual = _subMinorModel.Residual();
++  const size_t n = _subMinorModel.size();
++  const size_t n_threads = schaapcommon::ThreadPool::GetInstance().NThreads();
++  const size_t n_chunks =
++      n_threads == 1 ? 1
++                     : std::clamp<size_t>(n / kMinChunkSize, 1,
++                                          n_threads * kChunksPerThread);
++  // When the integrated image is a copy of one residual image, the peak is
++  // searched per chunk directly in that image, which avoids a serial pass.
++  const size_t copy_index = residual.LinearIntegratedCopyIndex();
++  const bool search_in_chunks = copy_index != residual.Size();
++  const float* rms_factor = _subMinorModel.RmsFactorImage().Empty()
++                                ? nullptr
++                                : _subMinorModel.RmsFactorImage().Data();
++  const auto peak_value = [&](size_t px) {
++    const float* image = residual.Data(copy_index);
++    return rms_factor ? image[px] * rms_factor[px] : image[px];
++  };
++
++  std::vector<ChunkPeak> peaks(n_chunks);
++
++  const auto subtract_chunk = [&](size_t chunk) {
++    const size_t start = n * chunk / n_chunks;
++    const size_t end = n * (chunk + 1) / n_chunks;
++    for (size_t img_index = 0; img_index != residual.Size(); ++img_index) {
++      SubtractPsf(residual.Data(img_index),
++                  twice_convolved_psfs[residual.PsfIndex(img_index)].Data(),
++                  component_values[img_index], _subMinorModel.Positions(),
++                  start, end, x, y, _width, _height);
++    }
++    if (search_in_chunks) {
++      // Same selection as GetMaxComponent(): the first pixel with the largest
++      // (absolute) value. Chunks are merged in order with the same rule.
++      ChunkPeak& peak = peaks[chunk];
++      peak.index = start;
++      peak.value = -std::numeric_limits<float>::infinity();
++      if (chunk == 0) {
++        peak.value = _allowNegativeComponents ? std::fabs(peak_value(start))
++                                              : peak_value(start);
++      }
++      const float* image = residual.Data(copy_index);
++      if (_allowNegativeComponents) {
++        if (rms_factor)
++          FindChunkPeak<true, true>(image, rms_factor, start, end, peak);
++        else
++          FindChunkPeak<true, false>(image, rms_factor, start, end, peak);
++      } else {
++        if (rms_factor)
++          FindChunkPeak<false, true>(image, rms_factor, start, end, peak);
++        else
++          FindChunkPeak<false, false>(image, rms_factor, start, end, peak);
++      }
++    }
++  };
++  if (n_chunks == 1) {
++    subtract_chunk(0);
++  } else {
++    schaapcommon::DynamicFor<size_t> loop;
++    loop.Run(0, n_chunks, subtract_chunk);
++  }
++
++  if (!search_in_chunks) {
++    return _subMinorModel.GetMaxComponent(scratch, max_value,
++                                          _allowNegativeComponents);
++  }
++  size_t max_component = peaks[0].index;
++  float max = peaks[0].value;
++  for (size_t chunk = 1; chunk != n_chunks; ++chunk) {
++    if (peaks[chunk].value > max) {
++      max_component = peaks[chunk].index;
++      max = peaks[chunk].value;
++    }
++  }
++  max_value = peak_value(max_component);
++  return max_component;
++}
++
+ void SubMinorModel::MakeSets(const ImageSet& residual_set) {
+   _residual = std::make_unique<ImageSet>(residual_set, size(), 1);
+   _model = std::make_unique<ImageSet>(residual_set, size(), 1);
+diff --git a/cpp/algorithms/subminor_loop.h b/cpp/algorithms/subminor_loop.h
+index cf3c72e..7b3c3a6 100644
+--- a/cpp/algorithms/subminor_loop.h
++++ b/cpp/algorithms/subminor_loop.h
+@@ -3,6 +3,7 @@
+ #ifndef RADLER_ALGORITHMS_SUB_MINOR_LOOP_H_
+ #define RADLER_ALGORITHMS_SUB_MINOR_LOOP_H_
+ 
++#include <cstdint>
+ #include <cstring>
+ #include <vector>
+ 
+@@ -57,7 +58,7 @@ class SubMinorModel {
+   SubMinorModel& operator=(SubMinorModel&&) = default;
+ 
+   void AddPosition(size_t x, size_t y) {
+-    _positions.push_back(std::make_pair(x, y));
++    _positions.emplace_back(static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+   }
+ 
+   /**
+@@ -77,6 +78,10 @@ class SubMinorModel {
+   size_t X(size_t index) const { return _positions[index].first; }
+   size_t Y(size_t index) const { return _positions[index].second; }
+   size_t FullIndex(size_t index) const { return X(index) + Y(index) * _width; }
++  const aocommon::Image& RmsFactorImage() const { return _rmsFactorImage; }
++  const std::pair<uint32_t, uint32_t>* Positions() const {
++    return _positions.data();
++  }
+   template <bool AllowNegatives>
+   size_t GetMaxComponent(aocommon::Image& scratch, float& max_value) const;
+   size_t GetMaxComponent(aocommon::Image& scratch, float& max_value,
+@@ -88,7 +93,9 @@ class SubMinorModel {
+   }
+ 
+  private:
+-  std::vector<std::pair<size_t, size_t>> _positions;
++  // 32-bit coordinates halve the memory traffic of the subminor loop, which
++  // reads all positions in every iteration.
++  std::vector<std::pair<uint32_t, uint32_t>> _positions;
+   std::unique_ptr<ImageSet> _residual, _model;
+   aocommon::Image _rmsFactorImage;
+   size_t _width;
+@@ -203,6 +210,16 @@ class SubMinorLoop {
+  private:
+   void findPeakPositions(ImageSet& convolvedResidual);
+ 
++  /**
++   * Subtracts the twice convolved psfs, centred on (x, y) and scaled by
++   * @p component_values, from the selected pixels of all residual images.
++   * Returns the new peak like SubMinorModel::GetMaxComponent() does.
++   */
++  size_t subtractComponentAndFindPeak(
++      size_t x, size_t y, const float* component_values,
++      const std::vector<aocommon::Image>& twice_convolved_psfs,
++      aocommon::Image& scratch, float& max_value);
++
+   size_t _width, _height, _paddedWidth, _paddedHeight;
+   float _threshold, _consideredPixelThreshold, _gain;
+   size_t _horizontalBorder, _verticalBorder;
+diff --git a/cpp/image_set.cc b/cpp/image_set.cc
+index 1df0c99..5eba6f8 100644
+--- a/cpp/image_set.cc
++++ b/cpp/image_set.cc
+@@ -419,6 +419,17 @@ void ImageSet::GetSquareIntegratedWithSquaredChannels(Image& dest) const {
+   }
+ }
+ 
++size_t ImageSet::LinearIntegratedCopyIndex() const {
++  if (!square_joined_channels_ &&
++      work_table_->DeconvolutionGroups().size() == 1 &&
++      work_table_->OriginalGroups().front().size() == 1) {
++    const WorkTableEntry& entry =
++        *work_table_->OriginalGroups().front().front();
++    return entry_index_to_image_index_[entry.index];
++  }
++  return Size();
++}
++
+ void ImageSet::GetLinearIntegratedWithNormalChannels(Image& dest) const {
+   const bool use_all_polarizations = linked_polarizations_.empty();
+   if (work_table_->DeconvolutionGroups().size() == 1 &&
+diff --git a/cpp/image_set.h b/cpp/image_set.h
+index 4d50a60..9d7ce6a 100644
+--- a/cpp/image_set.h
++++ b/cpp/image_set.h
+@@ -159,6 +159,12 @@ class ImageSet {
+       GetLinearIntegratedWithNormalChannels(dest);
+   }
+ 
++  /**
++   * If @ref GetLinearIntegrated() reduces to a copy of a single image, returns
++   * the index of that image. Otherwise, returns Size().
++   */
++  size_t LinearIntegratedCopyIndex() const;
++
+   void GetIntegratedPsf(aocommon::Image& dest,
+                         const std::vector<aocommon::Image>& psfs);
+ 

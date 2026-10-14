@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sample-profile one native WSClean run with macOS `sample`.
 #
-#   bench/profile.sh <upstream|mx> <tag> [wsclean args...]
+#   bench/profile.sh <upstream|mx|snapshot> <tag> [wsclean args...]
 #
 # Writes bench/out/<tag>/<variant>-profile/{sample.txt,wsclean.log,top.txt}.
 # top.txt lists the functions with the most samples at the top of the stack
@@ -13,7 +13,9 @@ variant="$1"; tag="$2"; shift 2
 case "$variant" in
   upstream) bin="$ROOT/build-upstream/wsclean" ;;
   mx)       bin="$ROOT/build-mx/wsclean" ;;
-  *) echo "unknown variant: $variant" >&2; exit 2 ;;
+  *)
+    bin="$ROOT/bench/bin/$variant/wsclean"
+    [ -x "$bin" ] || { echo "unknown variant: $variant" >&2; exit 2; } ;;
 esac
 out="$ROOT/bench/out/$tag/$variant-profile"
 rm -rf "$out"; mkdir -p "$out/tmp"

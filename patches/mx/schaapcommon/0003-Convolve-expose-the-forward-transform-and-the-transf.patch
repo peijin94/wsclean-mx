@@ -1,0 +1,131 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Tue, 13 Oct 2026 20:14:04 -0400
+Subject: [PATCH 3/3] Convolve: expose the forward transform and the
+ transformed convolution
+
+ConvolutionFft() and ConvolveTransformed() split Convolve() so that callers
+can transform an image or kernel once and reuse it. Convolve() is built on
+the same functions, so results are unchanged.
+
+diff --git a/include/schaapcommon/math/convolution.h b/include/schaapcommon/math/convolution.h
+index 6312ffa..0b58204 100644
+--- a/include/schaapcommon/math/convolution.h
++++ b/include/schaapcommon/math/convolution.h
+@@ -4,6 +4,7 @@
+ #ifndef SCHAAPCOMMON_FFT_CONVOLUTION_H_
+ #define SCHAAPCOMMON_FFT_CONVOLUTION_H_
+ 
++#include <complex>
+ #include <cstring>
+ 
+ namespace schaapcommon::math {
+@@ -53,6 +54,31 @@ void PrepareConvolutionKernel(float* dest, const float* source, size_t image_wid
+  * called at a sufficiently high level before calling this function.
+  */
+ void Convolve(float* image, const float* kernel, size_t image_width, size_t image_height);
++
++/**
++ * Number of complex values of the transform made by \c ConvolutionFft().
++ */
++inline size_t ConvolutionFftSize(size_t image_width, size_t image_height) {
++  return (image_width / 2 + 1) * image_height;
++}
++
++/**
++ * The forward transform that \c Convolve() applies to both the image and the
++ * kernel. Transforming an image or kernel once and calling
++ * \c ConvolveTransformed() for every combination gives results identical to
++ * \c Convolve(). @p dest should hold \c ConvolutionFftSize() values.
++ */
++void ConvolutionFft(std::complex<float>* dest, const float* image, size_t image_width,
++                    size_t image_height);
++
++/**
++ * Like \c Convolve(), but with the image and the prepared kernel already
++ * transformed by \c ConvolutionFft(). The result is written to @p image;
++ * @p image_fft and @p kernel_fft are not changed.
++ */
++void ConvolveTransformed(float* image, const std::complex<float>* image_fft,
++                         const std::complex<float>* kernel_fft, size_t image_width,
++                         size_t image_height);
+ }  // namespace schaapcommon::math
+ 
+ #endif
+diff --git a/src/math/convolution.cc b/src/math/convolution.cc
+index aa171a4..dd42784 100644
+--- a/src/math/convolution.cc
++++ b/src/math/convolution.cc
+@@ -115,33 +115,55 @@ void PrepareConvolutionKernel(float* dest, const float* source, size_t image_wid
+   });
+ }
+ 
+-void Convolve(float* image, const float* kernel, size_t image_width, size_t image_height) {
++namespace {
++/**
++ * image = inverse transform of (product * kernel_fft / image size). When
++ * @p image_fft is given, product is first set to it; otherwise product holds
++ * the transformed image already. Product is overwritten.
++ */
++void MultiplyAndInverse(float* image, std::complex<float>* product,
++                        const std::complex<float>* image_fft, const std::complex<float>* kernel_fft,
++                        size_t image_width, size_t image_height) {
+   const size_t image_size = image_width * image_height;
+   const size_t complex_width = image_width / 2 + 1;
+-  const size_t complex_size = complex_width * image_height;
+-  const size_t n_threads = ThreadPool::GetInstance().NThreads();
+-  aocommon::UVector<std::complex<float>> fft_image_data(complex_size);
+-  aocommon::UVector<std::complex<float>> fft_kernel_data(complex_size);
+-
+-  const ducc0::cfmav<float> image_in(image, {image_height, image_width});
+-  const ducc0::cfmav<float> kernel_in(kernel, {image_height, image_width});
+-  const ducc0::vfmav<std::complex<float>> image_fft(fft_image_data.data(),
+-                                                    {image_height, complex_width});
+-  const ducc0::vfmav<std::complex<float>> kernel_fft(fft_kernel_data.data(),
+-                                                     {image_height, complex_width});
+-  ducc0::r2c(image_in, image_fft, {0, 1}, true, 1.0f, n_threads);
+-  ducc0::r2c(kernel_in, kernel_fft, {0, 1}, true, 1.0f, n_threads);
+-
+   const float fact = 1.0 / image_size;
+   schaapcommon::StaticFor<size_t> loop;
+   loop.Run(0, image_height, [&](size_t y_start, size_t y_end) {
+     for (size_t i = y_start * complex_width; i != y_end * complex_width; ++i) {
+-      fft_image_data[i] *= fact * fft_kernel_data[i];
++      if (image_fft) product[i] = image_fft[i];
++      product[i] *= fact * kernel_fft[i];
+     }
+   });
+ 
++  const ducc0::vfmav<std::complex<float>> product_fft(product, {image_height, complex_width});
+   const ducc0::vfmav<float> image_out(image, {image_height, image_width});
+-  ducc0::c2r_mut(image_fft, image_out, {0, 1}, false, 1.0f, n_threads);
++  ducc0::c2r_mut(product_fft, image_out, {0, 1}, false, 1.0f, ThreadPool::GetInstance().NThreads());
++}
++}  // namespace
++
++void Convolve(float* image, const float* kernel, size_t image_width, size_t image_height) {
++  const size_t complex_size = ConvolutionFftSize(image_width, image_height);
++  aocommon::UVector<std::complex<float>> fft_image_data(complex_size);
++  aocommon::UVector<std::complex<float>> fft_kernel_data(complex_size);
++  ConvolutionFft(fft_image_data.data(), image, image_width, image_height);
++  ConvolutionFft(fft_kernel_data.data(), kernel, image_width, image_height);
++  MultiplyAndInverse(image, fft_image_data.data(), nullptr, fft_kernel_data.data(), image_width,
++                     image_height);
++}
++
++void ConvolutionFft(std::complex<float>* dest, const float* image, size_t image_width,
++                    size_t image_height) {
++  const size_t complex_width = image_width / 2 + 1;
++  const ducc0::cfmav<float> in(image, {image_height, image_width});
++  const ducc0::vfmav<std::complex<float>> out(dest, {image_height, complex_width});
++  ducc0::r2c(in, out, {0, 1}, true, 1.0f, ThreadPool::GetInstance().NThreads());
++}
++
++void ConvolveTransformed(float* image, const std::complex<float>* image_fft,
++                         const std::complex<float>* kernel_fft, size_t image_width,
++                         size_t image_height) {
++  aocommon::UVector<std::complex<float>> product(ConvolutionFftSize(image_width, image_height));
++  MultiplyAndInverse(image, product.data(), image_fft, kernel_fft, image_width, image_height);
+ }
+ 
+ }  // namespace schaapcommon::math

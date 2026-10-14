@@ -1,0 +1,286 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Tue, 13 Oct 2026 20:14:04 -0400
+Subject: [PATCH 2/2] Multiscale: transform the residual once per peak search,
+ cache kernel FFTs
+
+FindMultiScalePeak() convolved the residual with every scale kernel through
+Convolve(), which transforms both the image and the kernel each time. The
+residual is now transformed once for all scales and the transformed scale
+kernels are cached per image size (bounded to 1 GiB), shared by clones.
+Results are bitwise identical.
+
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.cc b/cpp/algorithms/multiscale/multiscale_transforms.cc
+index 5f3617c..5b6b6bc 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.cc
++++ b/cpp/algorithms/multiscale/multiscale_transforms.cc
+@@ -8,20 +8,68 @@ using aocommon::Image;
+ 
+ namespace radler::algorithms::multiscale {
+ 
+-void MultiScaleTransforms::Transform(std::vector<Image>& images, Image& scratch,
+-                                     float scale) {
+-  size_t kernelSize;
+-  Image shape = MakeShapeFunction(scale, kernelSize);
++std::shared_ptr<const KernelFftCache::Fft> KernelFftCache::Get(
++    size_t width, size_t height, MultiscaleShape shape, float scale,
++    const std::function<Fft()>& make) {
++  const Key key(width, height, shape, scale);
++  {
++    std::lock_guard lock(mutex_);
++    const auto iter = ffts_.find(key);
++    if (iter != ffts_.end()) return iter->second;
++  }
++  auto fft = std::make_shared<const Fft>(make());
++  const size_t bytes = fft->size() * sizeof(std::complex<float>);
++  std::lock_guard lock(mutex_);
++  const auto [iter, inserted] = ffts_.try_emplace(key, fft);
++  if (!inserted) return iter->second;
++  if (bytes_ + bytes > kMaxBytes) {
++    ffts_.erase(iter);
++    return fft;
++  }
++  bytes_ += bytes;
++  return fft;
++}
+ 
+-  scratch = 0.0;
++std::shared_ptr<const KernelFftCache::Fft> MultiScaleTransforms::kernelFft(
++    float scale) {
++  const auto make = [&]() {
++    size_t kernel_size;
++    const Image shape = MakeShapeFunction(scale, kernel_size);
++    Image kernel(_width, _height);
++    kernel = 0.0;
++    schaapcommon::math::PrepareSmallConvolutionKernel(
++        kernel.Data(), _width, _height, shape.Data(), kernel_size);
++    KernelFftCache::Fft fft(
++        schaapcommon::math::ConvolutionFftSize(_width, _height));
++    schaapcommon::math::ConvolutionFft(fft.data(), kernel.Data(), _width,
++                                       _height);
++    return fft;
++  };
++  if (_kernelCache)
++    return _kernelCache->Get(_width, _height, _shape, scale, make);
++  return std::make_shared<const KernelFftCache::Fft>(make());
++}
+ 
+-  schaapcommon::math::PrepareSmallConvolutionKernel(
+-      scratch.Data(), _width, _height, shape.Data(), kernelSize);
++void MultiScaleTransforms::Transform(std::vector<Image>& images,
++                                     Image& /*scratch*/, float scale) {
++  const std::shared_ptr<const KernelFftCache::Fft> kernel = kernelFft(scale);
++  KernelFftCache::Fft image_fft(
++      schaapcommon::math::ConvolutionFftSize(_width, _height));
+   for (Image& image : images) {
+-    schaapcommon::math::Convolve(image.Data(), scratch.Data(), _width, _height);
++    schaapcommon::math::ConvolutionFft(image_fft.data(), image.Data(), _width,
++                                       _height);
++    schaapcommon::math::ConvolveTransformed(image.Data(), image_fft.data(),
++                                            kernel->data(), _width, _height);
+   }
+ }
+ 
++void MultiScaleTransforms::Transform(const std::complex<float>* image_fft,
++                                     Image& dest, float scale) {
++  const std::shared_ptr<const KernelFftCache::Fft> kernel = kernelFft(scale);
++  schaapcommon::math::ConvolveTransformed(dest.Data(), image_fft,
++                                          kernel->data(), _width, _height);
++}
++
+ void MultiScaleTransforms::PrepareTransform(float* kernel, float scale) {
+   size_t kernelSize;
+   Image shape = MakeShapeFunction(scale, kernelSize);
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.h b/cpp/algorithms/multiscale/multiscale_transforms.h
+index 7876ace..86ff569 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.h
++++ b/cpp/algorithms/multiscale/multiscale_transforms.h
+@@ -4,7 +4,13 @@
+ #define RADLER_ALGORITHMS_MULTISCALE_MULTISCALE_TRANSFORMS_H_
+ 
+ #include <cmath>
++#include <complex>
++#include <functional>
+ #include <initializer_list>
++#include <map>
++#include <memory>
++#include <mutex>
++#include <tuple>
+ #include <vector>
+ 
+ #include <aocommon/image.h>
+@@ -14,12 +20,37 @@
+ 
+ namespace radler::algorithms::multiscale {
+ 
++/**
++ * Transformed scale kernels, kept so that they are computed once per scale and
++ * image size instead of in every convolution. Thread safe; the total size is
++ * bounded, kernels that don't fit are not kept.
++ */
++class KernelFftCache {
++ public:
++  using Fft = aocommon::UVector<std::complex<float>>;
++
++  std::shared_ptr<const Fft> Get(size_t width, size_t height,
++                                 MultiscaleShape shape, float scale,
++                                 const std::function<Fft()>& make);
++
++ private:
++  static constexpr size_t kMaxBytes = size_t(1) << 30;
++  using Key = std::tuple<size_t, size_t, MultiscaleShape, float>;
++  std::mutex mutex_;
++  std::map<Key, std::shared_ptr<const Fft>> ffts_;
++  size_t bytes_ = 0;
++};
++
+ class MultiScaleTransforms {
+  public:
+   using Shape = radler::MultiscaleShape;
+ 
+-  MultiScaleTransforms(size_t width, size_t height, Shape shape)
+-      : _width(width), _height(height), _shape(shape) {}
++  MultiScaleTransforms(size_t width, size_t height, Shape shape,
++                       std::shared_ptr<KernelFftCache> kernel_cache = nullptr)
++      : _width(width),
++        _height(height),
++        _shape(shape),
++        _kernelCache(std::move(kernel_cache)) {}
+ 
+   MultiScaleTransforms(const MultiScaleTransforms&) = default;
+   MultiScaleTransforms(MultiScaleTransforms&&) = default;
+@@ -39,6 +70,13 @@ class MultiScaleTransforms {
+   void Transform(std::vector<aocommon::Image>& images, aocommon::Image& scratch,
+                  float scale);
+ 
++  /**
++   * Like Transform(), but for an image that was already transformed with
++   * schaapcommon::math::ConvolutionFft(). The result is written to @p dest.
++   */
++  void Transform(const std::complex<float>* image_fft, aocommon::Image& dest,
++                 float scale);
++
+   size_t Width() const { return _width; }
+   size_t Height() const { return _height; }
+ 
+@@ -109,8 +147,11 @@ class MultiScaleTransforms {
+   }
+ 
+  private:
++  std::shared_ptr<const KernelFftCache::Fft> kernelFft(float scale);
++
+   size_t _width, _height;
+   Shape _shape;
++  std::shared_ptr<KernelFftCache> _kernelCache;
+ 
+   static size_t taperedQuadraticKernelSize(double scaleInPixels) {
+     return size_t(ceil(scaleInPixels * 0.5) * 2.0) + 1;
+diff --git a/cpp/algorithms/multiscale_algorithm.cc b/cpp/algorithms/multiscale_algorithm.cc
+index d178988..510b6df 100644
+--- a/cpp/algorithms/multiscale_algorithm.cc
++++ b/cpp/algorithms/multiscale_algorithm.cc
+@@ -277,7 +277,8 @@ DeconvolutionResult MultiScaleAlgorithm::ExecuteMajorIteration(
+     }
+   }
+ 
+-  multiscale::MultiScaleTransforms msTransforms(width, height, settings_.shape);
++  multiscale::MultiScaleTransforms msTransforms(width, height, settings_.shape,
++                                                kernel_fft_cache_);
+ 
+   if (do_square_channels) {
+     FindSquaredScaleConvolvedMaxima(data_image, integratedScratch, scratch);
+@@ -593,7 +594,8 @@ void MultiScaleAlgorithm::FindActiveScaleConvolvedMaxima(
+     const ImageSet& image_set, Image& integrated_scratch, Image& scratch,
+     bool report_rms, ThreadedDeconvolutionTools& tools) {
+   multiscale::MultiScaleTransforms msTransforms(
+-      image_set.Width(), image_set.Height(), settings_.shape);
++      image_set.Width(), image_set.Height(), settings_.shape,
++      kernel_fft_cache_);
+   image_set.GetLinearIntegrated(integrated_scratch);
+   aocommon::UVector<float> transformScales;
+   aocommon::UVector<size_t> transformIndices;
+@@ -652,8 +654,8 @@ void MultiScaleAlgorithm::FindSquaredScaleConvolvedMaxima(
+   const size_t width = image_set.Width();
+   const size_t height = image_set.Height();
+ 
+-  multiscale::MultiScaleTransforms ms_transforms(width, height,
+-                                                 settings_.shape);
++  multiscale::MultiScaleTransforms ms_transforms(width, height, settings_.shape,
++                                                 kernel_fft_cache_);
+   ImageSet convolved(image_set, image_set.Width(), image_set.Height());
+ 
+   // For each scale, convolve all images first and then get the integrated
+diff --git a/cpp/algorithms/multiscale_algorithm.h b/cpp/algorithms/multiscale_algorithm.h
+index 3ad3457..470b4a6 100644
+--- a/cpp/algorithms/multiscale_algorithm.h
++++ b/cpp/algorithms/multiscale_algorithm.h
+@@ -87,6 +87,9 @@ class MultiScaleAlgorithm final : public DeconvolutionAlgorithm {
+   bool track_components_;
+   std::vector<aocommon::UVector<bool>> scale_masks_;
+   aocommon::cloned_ptr<ComponentList> component_list_;
++  // Shared with clones: entries are keyed on the image size.
++  std::shared_ptr<multiscale::KernelFftCache> kernel_fft_cache_ =
++      std::make_shared<multiscale::KernelFftCache>();
+ 
+   /**
+    * Finds the maximum peak values for each scale in the integrated image,
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.cc b/cpp/algorithms/threaded_deconvolution_tools.cc
+index afc496d..83c5280 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.cc
++++ b/cpp/algorithms/threaded_deconvolution_tools.cc
+@@ -6,6 +6,7 @@
+ 
+ #include <aocommon/image.h>
+ 
++#include <schaapcommon/math/convolution.h>
+ #include <schaapcommon/threading/staticfor.h>
+ #include <schaapcommon/threading/dynamicfor.h>
+ 
+@@ -37,14 +38,23 @@ void ThreadedDeconvolutionTools::FindMultiScalePeak(
+     const Image& rms_factor_image, bool calculate_rms) {
+   const size_t n_scales = scales.size();
+   results.resize(n_scales);
++  if (n_scales == 0) return;
++
++  // The image is transformed once for all scales.
++  aocommon::UVector<std::complex<float>> image_fft(
++      schaapcommon::math::ConvolutionFftSize(image.Width(), image.Height()));
++  schaapcommon::math::ConvolutionFft(image_fft.data(), image.Data(),
++                                     image.Width(), image.Height());
+ 
+   schaapcommon::DynamicFor<size_t> loop;
+   loop.Run(0, n_scales, [&](size_t scale_index) {
+-    Image image_copy(image);
++    Image transformed(image.Width(), image.Height());
++    ms_transforms->Transform(image_fft.data(), transformed,
++                             scales[scale_index]);
+     const bool* selected_mask =
+         scale_masks.empty() ? mask : scale_masks[scale_index].data();
+     results[scale_index] =
+-        FindSingleScalePeak(ms_transforms, image_copy, scales[scale_index],
++        FindSingleScalePeak(ms_transforms, transformed, scales[scale_index],
+                             allow_negative_components, selected_mask,
+                             border_ratio, rms_factor_image, calculate_rms);
+   });
+@@ -56,7 +66,6 @@ ThreadedDeconvolutionTools::FindSingleScalePeak(
+     bool allow_negative_components, const bool* mask, float border_ratio,
+     const Image& rms_factor_image, bool calculate_rms) {
+   Image scratch(ms_transforms->Width(), ms_transforms->Height());
+-  ms_transforms->Transform(image, scratch, scale);
+   const size_t width = ms_transforms->Width();
+   const size_t height = ms_transforms->Height();
+   const size_t border_scale = std::ceil(scale * 0.5);
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.h b/cpp/algorithms/threaded_deconvolution_tools.h
+index 0e03ff0..8a094c8 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.h
++++ b/cpp/algorithms/threaded_deconvolution_tools.h
+@@ -44,6 +44,9 @@ class ThreadedDeconvolutionTools {
+   }
+ 
+  private:
++  /**
++   * Finds the peak in @p image, which is already transformed to @p scale.
++   */
+   ThreadedDeconvolutionTools::PeakData FindSingleScalePeak(
+       multiscale::MultiScaleTransforms* ms_transforms, aocommon::Image& image,
+       float scale, bool allow_negative_components, const bool* mask,

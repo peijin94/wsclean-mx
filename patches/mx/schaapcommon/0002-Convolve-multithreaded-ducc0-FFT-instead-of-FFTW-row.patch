@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Tue, 13 Oct 2026 15:18:24 -0400
-Subject: [PATCH 2/2] Convolve: multithreaded ducc0 FFT instead of FFTW
+Subject: [PATCH 2/3] Convolve: multithreaded ducc0 FFT instead of FFTW
  row/column composite
 
 Convolve() ran a row-by-row FFTW r2c plus column c2c through StaticFor,

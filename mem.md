@@ -174,6 +174,8 @@ workers ~28%).
 | 3. Convolve: multithreaded ducc0 r2c/c2r instead of FFTW row/column composite | schaapcommon `math/convolution.cc` | 2k multiscale niter 5000 -j1: deconv 37.3 -> 17.6 s | | | in patch set |
 | 4. Median/MAD: radix-histogram select instead of full `nth_element` | aocommon `image.h` | micro 4096²: MAD 300 -> 65 ms | | | in patch set |
 | fix. `WGridder::RealImage` padding 0 instead of NaN (bug below) | wsclean `wgridder_implementation.h` | — | | | in patch set |
+| 5. SubMinorLoop: chunked DynamicFor PSF subtraction + per-chunk peak search, 32-bit positions | radler `subminor_loop.cc` (radler/0001) | 4k Högbom niter 5000: deconv 6.2 -> 2.4 s | | | in patch set |
+| 6. Multiscale: residual FFT once per peak search, cached scale-kernel FFTs (<=1 GiB) | radler `threaded_deconvolution_tools.cc`, `multiscale_transforms.cc` + schaapcommon/0003 `ConvolutionFft`/`ConvolveTransformed` | 1k ms -j1: deconv 4.4 -> 3.1 s | | | in patch set |
 
 Accuracy: dirty/psf ~7e-7 rel_rms vs upstream for both; residual/image vary
 6e-7..1.8e-3 between *upstream reruns* (multithreaded clean picks different
@@ -183,7 +185,8 @@ components), mx stays inside that range. Patch 4 is bitwise identical to
 Baseline for A/B is now `upstream-fix` (pinned upstream + only the RealImage
 fix, `build-reffix/`), since plain upstream is corrupt at 2048² (below).
 Snapshots: `bench/snapshot.sh <build-dir> <name>` (carries its own
-libschaapthreading.dylib). `mx-p3` = patches 1+3+4+fix.
+libschaapthreading.dylib). `mx-p3` = patches 1+3+4+fix, `mx-p6` = + 5 + 6.
+`bench/profile.sh` also takes snapshot names.
 
 Deep runs, 4096² @ 0.03125°, briggs 0, mgain 0.8, no threshold, default threads,
 min of 2 alternating (`bench/ab.sh`, tags `d4k-*`), upstream-fix vs mx-p3:
@@ -197,6 +200,24 @@ min of 2 alternating (`bench/ab.sh`, tags `d4k-*`), upstream-fix vs mx-p3:
 Högbom: mx within upstream rerun spread (residual 2e-6, same majors, same
 stopping peak, model flux equal to 1e-6). Remaining Högbom deconvolution time
 is the minor loop itself, not Convolve.
+
+Patches 5+6 (`mx-p6` = p3 + 5 + 6), tag `p6-n5k`, Högbom niter 5000, min of 2:
+upstream-fix 18.40 s (deconv 6.97), mx-p3 13.63 s (6.20), mx-p6 10.33 s
+(2.42) -> 1.78x wall vs upstream-fix.
+- Subminor loop at 4k: 420k selected pixels x 4387 iterations, memory bound
+  (scattered PSF gathers from a 64 MB PSF, ~27 MB/iteration). Static chunks
+  wait for the E-cores; DynamicFor with ~4 chunks/thread fixes that.
+- Peak search must not be a single running max: clang turns it into
+  csel/fcsel, a 5-cycle dependency chain per pixel (3.5x slower than the
+  branchy upstream loop). 16 independent lanes + first-index pass vectorizes.
+  The PSF subtraction loop needs `#pragma GCC unroll 8` to match upstream -j1.
+- Multiscale 2k niter 5000 (`p6-ms2k`, min of 2, machine swapping + hot, so
+  noisy): deconv upstream-fix 17.6 s, mx-p3 7.97 s, mx-p6 5.87 s. A 4k
+  multiscale A/B under 14 GB swap gave unusable numbers; redo when the
+  machine is idle and cool.
+- Exactness: patches 5 and 6 are bitwise identical to mx-p3 at -j1 (Högbom
+  2k, multiscale 1k), and an MX_CHECK run compared every chunked peak against
+  GetMaxComponent() at 1, 12 and 32 chunks (5000/5000 equal).
 
 Multiscale is chaotic w.r.t. Convolve rounding: a 1-ulp change of the scale
 factor in upstream's own FFTW Convolve (`upstream-fix-ulp`) moves model flux
