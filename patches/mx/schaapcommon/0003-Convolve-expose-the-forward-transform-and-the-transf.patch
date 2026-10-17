@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Peijin Zhang <peijin@ustc.edu>
 Date: Tue, 13 Oct 2026 20:14:04 -0400
-Subject: [PATCH 3/3] Convolve: expose the forward transform and the
+Subject: [PATCH 3/4] Convolve: expose the forward transform and the
  transformed convolution
 
 ConvolutionFft() and ConvolveTransformed() split Convolve() so that callers

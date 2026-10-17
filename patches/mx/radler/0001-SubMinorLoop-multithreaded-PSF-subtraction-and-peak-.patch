@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Peijin Zhang <peijin@ustc.edu>
 Date: Tue, 13 Oct 2026 20:14:04 -0400
-Subject: [PATCH 1/2] SubMinorLoop: multithreaded PSF subtraction and peak
+Subject: [PATCH 1/4] SubMinorLoop: multithreaded PSF subtraction and peak
  search
 
 Every subminor iteration subtracted the PSF from all selected pixels and

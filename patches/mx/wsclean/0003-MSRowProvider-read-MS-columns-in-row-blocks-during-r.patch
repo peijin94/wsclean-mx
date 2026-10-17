@@ -1,0 +1,306 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Sat, 17 Oct 2026 17:33:25 -0400
+Subject: [PATCH 3/3] MSRowProvider: read MS columns in row blocks during
+ reordering
+
+Same storage manager buffer thrash as in ContiguousMSReader: reordering
+read UVW, DATA, FLAG and WEIGHT row by row (plus a per-row shape lookup).
+Move ColumnBlock to msproviders/columnblock.h and use it in MSRowProvider
+for UVW, data, flags and weights. Blocks fall back to one row when spectral
+windows or polarizations differ in size, since casacore takes the cell shape
+of a block from its first row. Reordering 2.3x faster; bitwise identical
+results at -j 1.
+
+diff --git a/msproviders/columnblock.h b/msproviders/columnblock.h
+new file mode 100644
+index 00000000..755352d5
+--- /dev/null
++++ b/msproviders/columnblock.h
+@@ -0,0 +1,67 @@
++#ifndef MSPROVIDERS_COLUMN_BLOCK_H_
++#define MSPROVIDERS_COLUMN_BLOCK_H_
++
++#include <algorithm>
++#include <cstddef>
++
++#include <casacore/casa/Arrays/Array.h>
++#include <casacore/ms/MeasurementSets/MeasurementSet.h>
++#include <casacore/tables/Tables/ArrayColumn.h>
++#include <casacore/tables/Tables/RefRows.h>
++#include <casacore/tables/Tables/ScalarColumn.h>
++
++namespace wsclean {
++
++/**
++ * The cells of rows [first, last] of an array column, read with one
++ * getColumnCells() call. Reading the cells of a block of rows per column is
++ * much faster than reading row by row and switching columns, when the columns
++ * are indirect arrays in one file (as in a StandardStMan): every column switch
++ * then refills the storage manager's file buffer.
++ *
++ * All rows of a block must have the same shape: casacore takes the cell shape
++ * from the first row.
++ */
++template <typename T>
++class ColumnBlock {
++ public:
++  void Load(const casacore::ArrayColumn<T>& column, size_t first, size_t last) {
++    column.getColumnCells(casacore::RefRows(first, last), cells_, true);
++    cell_size_ = cells_.nelements() / (last - first + 1);
++    loaded_ = true;
++  }
++  void Reset() { loaded_ = false; }
++  bool Loaded() const { return loaded_; }
++  const T* Cell(size_t index) const { return cells_.data() + index * cell_size_; }
++  size_t CellSize() const { return cell_size_; }
++  casacore::IPosition CellShape() const { return cells_.shape().getFirst(cells_.ndim() - 1); }
++
++ private:
++  casacore::Array<T> cells_;
++  size_t cell_size_ = 0;
++  bool loaded_ = false;
++};
++
++/**
++ * Number of rows per ColumnBlock: about 16 MiB of visibilities, flags and
++ * weights, at most 1024 rows. When rows can have different shapes (several
++ * spectral windows or polarization setups of different size), returns 1.
++ */
++inline size_t ColumnBlockRows(const casacore::MeasurementSet& ms, size_t values_per_row) {
++  constexpr size_t kBlockBytes = 16 * 1024 * 1024;
++  constexpr size_t kMaxBlockRows = 1024;
++  const casacore::ScalarColumn<int> num_chan(ms.spectralWindow(), "NUM_CHAN");
++  const casacore::ScalarColumn<int> num_corr(ms.polarization(), "NUM_CORR");
++  for (casacore::rownr_t row = 1; row < num_chan.nrow(); ++row)
++    if (num_chan(row) != num_chan(0)) return 1;
++  for (casacore::rownr_t row = 1; row < num_corr.nrow(); ++row)
++    if (num_corr(row) != num_corr(0)) return 1;
++  const size_t row_bytes =
++      values_per_row * (sizeof(casacore::Complex) + sizeof(bool) + sizeof(float)) +
++      3 * sizeof(double);
++  return std::clamp<size_t>(kBlockBytes / row_bytes, 1, kMaxBlockRows);
++}
++
++}  // namespace wsclean
++
++#endif
+diff --git a/msproviders/msreaders/contiguousmsreader.cpp b/msproviders/msreaders/contiguousmsreader.cpp
+index 6f0ce73f..64070c3f 100644
+--- a/msproviders/msreaders/contiguousmsreader.cpp
++++ b/msproviders/msreaders/contiguousmsreader.cpp
+@@ -13,11 +13,6 @@ using schaapcommon::reordering::ContainsDataDescId;
+ 
+ namespace wsclean {
+ 
+-namespace {
+-constexpr size_t kBlockBytes = 16 * 1024 * 1024;
+-constexpr size_t kMaxBlockRows = 1024;
+-}  // namespace
+-
+ ContiguousMSReader::ContiguousMSReader(ContiguousMS* contiguousms)
+     : MSReader(contiguousms),
+       _currentInputRow(contiguousms->_startRow - 1),
+@@ -28,11 +23,7 @@ ContiguousMSReader::ContiguousMSReader(ContiguousMS* contiguousms)
+       _isModelRead(false),
+       _isWeightRead(false),
+       _imagingWeightsColumn() {
+-  const size_t row_bytes =
+-      contiguousms->_dataArray.nelements() *
+-          (sizeof(std::complex<float>) + sizeof(bool) + sizeof(float)) +
+-      3 * sizeof(double);
+-  block_rows_ = std::clamp<size_t>(kBlockBytes / row_bytes, 1, kMaxBlockRows);
++  block_rows_ = ColumnBlockRows(*contiguousms->_ms, contiguousms->_dataArray.nelements());
+   interval_ = GetMsInterval(*contiguousms->_ms);
+   if (contiguousms->selection_.HasInterval())
+     _currentInputTimestep = contiguousms->selection_.IntervalStart() - 1;
+diff --git a/msproviders/msreaders/contiguousmsreader.h b/msproviders/msreaders/contiguousmsreader.h
+index 3d6e65aa..134235d7 100644
+--- a/msproviders/msreaders/contiguousmsreader.h
++++ b/msproviders/msreaders/contiguousmsreader.h
+@@ -3,40 +3,12 @@
+ 
+ #include "msreader.h"
+ 
+-#include <casacore/casa/Arrays/Array.h>
+-#include <casacore/tables/Tables/ArrayColumn.h>
+-#include <casacore/tables/Tables/RefRows.h>
++#include "../columnblock.h"
+ 
+ namespace wsclean {
+ 
+ class ContiguousMS;
+ 
+-/**
+- * The cells of rows [first, last] of an array column, read with one
+- * getColumnCells() call. Reading the cells of a block of rows per column is
+- * much faster than reading row by row and switching columns, when the columns
+- * are indirect arrays in one file (as in a StandardStMan): every column switch
+- * then refills the storage manager's file buffer.
+- */
+-template <typename T>
+-class ColumnBlock {
+- public:
+-  void Load(const casacore::ArrayColumn<T>& column, size_t first, size_t last) {
+-    column.getColumnCells(casacore::RefRows(first, last), cells_, true);
+-    cell_size_ = cells_.nelements() / (last - first + 1);
+-    loaded_ = true;
+-  }
+-  void Reset() { loaded_ = false; }
+-  bool Loaded() const { return loaded_; }
+-  const T* Cell(size_t index) const { return cells_.data() + index * cell_size_; }
+-  size_t CellSize() const { return cell_size_; }
+-
+- private:
+-  casacore::Array<T> cells_;
+-  size_t cell_size_ = 0;
+-  bool loaded_ = false;
+-};
+-
+ class ContiguousMSReader final : public MSReader {
+  public:
+   explicit ContiguousMSReader(ContiguousMS* contiguousMS);
+diff --git a/msproviders/rowproviders/directmsrowprovider.cpp b/msproviders/rowproviders/directmsrowprovider.cpp
+index b1cab84c..db0eabfa 100644
+--- a/msproviders/rowproviders/directmsrowprovider.cpp
++++ b/msproviders/rowproviders/directmsrowprovider.cpp
+@@ -11,8 +11,7 @@ void DirectMSRowProvider::ReadData(MSRowProvider::DataArray& data, MSRowProvider
+   w = _currentUVWArray(2);
+   dataDescId = _currentDataDescId;
+   MsColumns& columns = Columns();
+-  columns.data.get(_currentRow, data, true);
+-  columns.flag.get(_currentRow, flags, true);
++  readCurrentData(data, flags);
+   antenna1 = columns.antenna_1(_currentRow);
+   antenna2 = columns.antenna_2(_currentRow);
+   fieldId = columns.field_id(_currentRow);
+diff --git a/msproviders/rowproviders/msrowprovider.cpp b/msproviders/rowproviders/msrowprovider.cpp
+index 51c2cf14..567ea416 100644
+--- a/msproviders/rowproviders/msrowprovider.cpp
++++ b/msproviders/rowproviders/msrowprovider.cpp
+@@ -7,6 +7,8 @@
+ 
+ #include <casacore/ms/MeasurementSets/MeasurementSet.h>
+ 
++#include <algorithm>
++
+ using schaapcommon::reordering::MSSelection;
+ 
+ namespace wsclean {
+@@ -45,6 +47,9 @@ void MSRowProvider::Initialize() {
+         Ms(), casacore::MS::columnName(casacore::MSMainEnums::WEIGHT)));
+   }
+ 
++  block_rows_ = ColumnBlockRows(Ms(), columns.data.shape(BeginRow()).product());
++  _currentUVWArray.resize(3);
++
+   // Determine last timestep
+   _startTimestep = Selection().HasInterval() ? Selection().IntervalStart() : 0;
+   size_t timestep = _startTimestep;
+@@ -60,7 +65,7 @@ void MSRowProvider::Initialize() {
+   _currentRow = BeginRow();
+   _currentTimestep = _startTimestep;
+   _currentTime = columns.time(_currentRow);
+-  _currentUVWArray = columns.uvw(_currentRow);
++  readCurrentUvw();
+   _currentDataDescId = columns.data_description_id(_currentRow);
+ 
+   // If this row is not selected, it is necessary to continue to the first
+@@ -91,7 +96,7 @@ void MSRowProvider::NextRow() {
+         if (require_time_ordering && next_time < _currentTime) ThrowTimeOrderException();
+         _currentTime = next_time;
+       }
+-      _currentUVWArray = columns.uvw(_currentRow);
++      readCurrentUvw();
+       isRowSelected = isCurrentRowSelected(fieldId, a1, a2);
+     }
+   } while (!isRowSelected);
+@@ -103,11 +108,42 @@ bool MSRowProvider::isCurrentRowSelected(int fieldId, int a1, int a2) const {
+          isDataDescIdSelected;
+ }
+ 
++size_t MSRowProvider::blockIndex(size_t row) {
++  if (row < block_start_ || row >= block_end_) {
++    block_start_ = row;
++    block_end_ = std::min(row + block_rows_, EndRow());
++    block_uvw_.Load(Columns().uvw, block_start_, block_end_ - 1);
++    block_data_.Reset();
++    block_flag_.Reset();
++    block_weight_.Reset();
++  }
++  return row - block_start_;
++}
++
++void MSRowProvider::readCurrentUvw() {
++  std::copy_n(block_uvw_.Cell(blockIndex(_currentRow)), 3, _currentUVWArray.data());
++}
++
++void MSRowProvider::readCurrentData(DataArray& data, FlagArray& flags) {
++  const size_t index = blockIndex(_currentRow);
++  MsColumns& columns = Columns();
++  if (!block_data_.Loaded()) block_data_.Load(columns.data, block_start_, block_end_ - 1);
++  data.resize(block_data_.CellShape());
++  std::copy_n(block_data_.Cell(index), block_data_.CellSize(), data.data());
++  if (!block_flag_.Loaded()) block_flag_.Load(columns.flag, block_start_, block_end_ - 1);
++  flags.resize(block_flag_.CellShape());
++  std::copy_n(block_flag_.Cell(index), block_flag_.CellSize(), flags.data());
++}
++
+ void MSRowProvider::getCurrentWeights(WeightArray& weights, const casacore::IPosition& shape) {
+-  if (_msHasWeights)
+-    _weightSpectrumColumn->get(_currentRow, weights, true);
+-  else {
+-    _weightScalarColumn->get(_currentRow, _scratchWeightScalarArray, true);
++  const size_t index = blockIndex(_currentRow);
++  if (!block_weight_.Loaded())
++    block_weight_.Load(_msHasWeights ? *_weightSpectrumColumn : *_weightScalarColumn,
++                       block_start_, block_end_ - 1);
++  WeightArray& cell = _msHasWeights ? weights : _scratchWeightScalarArray;
++  cell.resize(block_weight_.CellShape());
++  std::copy_n(block_weight_.Cell(index), block_weight_.CellSize(), cell.data());
++  if (!_msHasWeights) {
+     weights.resize(shape);
+     ExpandScalarWeights(_scratchWeightScalarArray, weights);
+   }
+diff --git a/msproviders/rowproviders/msrowprovider.h b/msproviders/rowproviders/msrowprovider.h
+index d8c26934..647ed524 100644
+--- a/msproviders/rowproviders/msrowprovider.h
++++ b/msproviders/rowproviders/msrowprovider.h
+@@ -3,6 +3,8 @@
+ 
+ #include "msrowproviderbase.h"
+ 
++#include "../columnblock.h"
++
+ #include <cstring>
+ #include <map>
+ #include <memory>
+@@ -50,6 +52,8 @@ class MSRowProvider : public MsRowProviderBase {
+   std::unique_ptr<casacore::ArrayColumn<casacore::Complex>> _modelColumn;
+ 
+   void getCurrentWeights(WeightArray& weights, const casacore::IPosition& shape);
++  /** Reads the data and flags of the current row. */
++  void readCurrentData(DataArray& data, FlagArray& flags);
+   const aocommon::VectorSet<size_t>& selectedDataDescIds() const { return _selectedDataDescIds; }
+   bool requireModel() const { return _requireModel; }
+ 
+@@ -69,7 +73,19 @@ class MSRowProvider : public MsRowProviderBase {
+ 
+   size_t _startTimestep, _endTimestep;
+ 
++  // Rows [block_start_, block_end_) of the array columns.
++  size_t block_rows_ = 1;
++  size_t block_start_ = 0;
++  size_t block_end_ = 0;
++  ColumnBlock<double> block_uvw_;
++  ColumnBlock<casacore::Complex> block_data_;
++  ColumnBlock<bool> block_flag_;
++  ColumnBlock<float> block_weight_;
++
+   void Initialize();
++  /** Makes the block hold @p row and returns its index in the block. */
++  size_t blockIndex(size_t row);
++  void readCurrentUvw();
+ };
+ 
+ }  // namespace wsclean

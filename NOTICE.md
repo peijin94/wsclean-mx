@@ -18,7 +18,7 @@ FOR A PARTICULAR PURPOSE. See the GNU General Public License for details.
 | WSClean | André Offringa and contributors | GPL-3.0 | <https://gitlab.com/aroffringa/wsclean> `2d5c1ed8d7559e5178d243661b408baa288681e6` (2026-09-07) |
 | aocommon | ASTRON (Netherlands Institute for Radio Astronomy), André Offringa | GPL-3.0-or-later | <https://gitlab.com/aroffringa/aocommon> `e1b7980e02211ade95eef176a3ac7f9ba3dcc55c` |
 | schaapcommon | ASTRON | GPL-3.0-or-later | <https://git.astron.nl/RD/schaapcommon> `b47f19dace28ad420c0a7c8ab1014b55b75205e9` |
-| ducc0 (bundled in schaapcommon, not modified) | Max-Planck-Society | GPL-2.0-or-later | via schaapcommon |
+| ducc0 (bundled in schaapcommon) | Max-Planck-Society | GPL-2.0-or-later | via schaapcommon |
 | radler | ASTRON | LGPL-3.0-only (`LICENSE.LESSER` with `LICENSE`) | <https://git.astron.nl/RD/radler> `940e9617a4b3210228a849513752f0732df8104a` |
 
 WSClean is included unmodified as the git submodule `upstream/wsclean/`.
@@ -31,11 +31,14 @@ installed separately and are not part of this repository.
 - `patches/<kind>/<repo>/*.patch` are modifications of the upstream files
   they change, and are licensed under the license of those files: the radler
   patches under LGPL-3.0-only, the others under GPL-3.0 (aocommon,
-  schaapcommon: GPL-3.0-or-later).
+  schaapcommon: GPL-3.0-or-later). `patches/mx/schaapcommon/0004` changes
+  the ducc0 sources bundled in schaapcommon and is GPL-2.0-or-later, like
+  ducc0.
 - All other files (build scripts, benchmark tools, documentation, figures)
   are Copyright (C) 2026 Peijin Zhang, licensed under GPL-3.0-or-later.
   Exceptions are marked in the file headers: `bench/micro/subminor_loop.cpp`
-  adapts radler code and is LGPL-3.0-only; `bench/micro/convolve_check.cpp`
+  and `bench/micro/peak_simple.cpp` adapt radler code and are LGPL-3.0-only;
+  `bench/micro/convolve_check.cpp`
   and `bench/micro/median_select.cpp` contain schaapcommon and aocommon code.
 - A wsclean-mx binary combines all of the above and is distributed under
   GPL-3.0.
@@ -56,6 +59,11 @@ its author and date in its header.
 | 2026-10-13 | `patches/mx/radler/0001-SubMinorLoop-...patch` | radler `cpp/algorithms/subminor_loop.{h,cc}`, `cpp/image_set.{h,cc}` | multithreaded PSF subtraction and peak search |
 | 2026-10-13 | `patches/mx/radler/0002-Multiscale-...patch` | radler `cpp/algorithms/multiscale/multiscale_transforms.{h,cc}`, `cpp/algorithms/multiscale_algorithm.{h,cc}`, `cpp/algorithms/threaded_deconvolution_tools.{h,cc}` | one residual FFT per peak search, cached scale-kernel FFTs |
 | 2026-10-13 | `patches/mx/schaapcommon/0003-Convolve-...patch` | schaapcommon `include/schaapcommon/math/convolution.h`, `src/math/convolution.cc` | expose the forward transform and convolution with a transformed kernel |
+| 2026-10-17 | `patches/mx/radler/0003-Multiscale-reuse-...patch` | radler `cpp/algorithms/subminor_loop.{h,cc}`, `cpp/algorithms/multiscale_algorithm.{h,cc}`, `cpp/algorithms/threaded_deconvolution_tools.{h,cc}` | reuse the scale-convolved residual from the peak search; cache per-scale PSF kernel transforms |
+| 2026-10-17 | `patches/mx/schaapcommon/0004-ducc0-wgridder-...patch` | ducc0 (in schaapcommon) `external/ducc0/wgridder/wgridder_impl.h` | spin lock per grid row instead of `std::mutex` |
+| 2026-10-17 | `patches/mx/wsclean/0002-ContiguousMSReader-...patch` | wsclean `msproviders/msreaders/contiguousmsreader.{h,cpp}` | read measurement set columns in blocks of rows |
+| 2026-10-17 | `patches/mx/wsclean/0003-MSRowProvider-...patch` | wsclean `msproviders/columnblock.h` (new), `msproviders/msreaders/contiguousmsreader.{h,cpp}`, `msproviders/rowproviders/{msrowprovider,directmsrowprovider}.{h,cpp}` | read measurement set columns in blocks of rows during reordering |
+| 2026-10-17 | `patches/mx/radler/0004-peak_finder-Simple-...patch` | radler `cpp/math/peak_finder.cc` | skip rows that cannot raise the peak (vectorizable row maximum) |
 
 A wsclean-mx binary still reports upstream's version string ("WSClean
 version 3.7"); it is a modified version as described above.

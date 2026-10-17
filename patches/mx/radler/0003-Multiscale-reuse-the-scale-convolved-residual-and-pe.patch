@@ -1,0 +1,362 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Sat, 17 Oct 2026 17:07:11 -0400
+Subject: [PATCH 3/4] Multiscale: reuse the scale-convolved residual and
+ per-scale psf transforms
+
+Per minor iteration, the residual convolved with the selected scale is taken
+from the preceding peak search, which already computed it, and the
+twice-convolved psfs and the transformed psf kernel of CorrectResidualDirty()
+are made once per scale per major iteration. Each reuse is limited to 1 GiB.
+Results are identical; 2048^2 multiscale deconvolution 4.18 -> 3.64 s.
+
+diff --git a/cpp/algorithms/multiscale_algorithm.cc b/cpp/algorithms/multiscale_algorithm.cc
+index 510b6df..f0c8c6f 100644
+--- a/cpp/algorithms/multiscale_algorithm.cc
++++ b/cpp/algorithms/multiscale_algorithm.cc
+@@ -280,11 +280,21 @@ DeconvolutionResult MultiScaleAlgorithm::ExecuteMajorIteration(
+   multiscale::MultiScaleTransforms msTransforms(width, height, settings_.shape,
+                                                 kernel_fft_cache_);
+ 
++  // The psfs don't change during this major iteration, so per scale the
++  // twice-convolved psfs and the transformed psf kernels of
++  // CorrectResidualDirty() are made once. The residual convolved with the
++  // selected scale is taken from the preceding peak search when possible.
++  std::vector<Image> convolvedResiduals;
++  std::vector<std::vector<Image>> twiceConvolvedPsfCache(scale_infos_.size());
++  std::vector<std::vector<aocommon::UVector<std::complex<float>>>>
++      psfKernelFftCache(scale_infos_.size());
++  size_t psfCacheBytes = 0;
++
+   if (do_square_channels) {
+     FindSquaredScaleConvolvedMaxima(data_image, integratedScratch, scratch);
+   } else {
+     FindActiveScaleConvolvedMaxima(data_image, integratedScratch, scratch, true,
+-                                   tools);
++                                   tools, &convolvedResiduals);
+   }
+   DeconvolutionResult result;
+   aocommon::OptionalNumber<size_t> optional_scale_with_peak =
+@@ -334,30 +344,47 @@ DeconvolutionResult MultiScaleAlgorithm::ExecuteMajorIteration(
+          thresholdCountdown > 0 && !diverging) {
+     // Create double-convolved PSFs & individually convolved images for this
+     // scale
+-    std::vector<Image> transformList;
+-    transformList.reserve(data_image.PsfCount() + data_image.Size());
+-    for (size_t i = 0; i != data_image.PsfCount(); ++i) {
+-      transformList.push_back(convolvedPSFs[i][scaleWithPeak]);
+-    }
+-    for (size_t i = 0; i != data_image.Size(); ++i) {
+-      transformList.emplace_back(width, height);
+-      std::copy_n(data_image.Data(i), width * height,
+-                  transformList.back().Data());
+-    }
+-    if (scale_infos_[scaleWithPeak].scale != 0.0) {
+-      msTransforms.Transform(transformList, scratch,
+-                             scale_infos_[scaleWithPeak].scale);
++    const float scaleSize = scale_infos_[scaleWithPeak].scale;
++    std::vector<Image> uncachedPsfs;
++    std::vector<Image>* twiceConvolvedPsfsPtr =
++        &twiceConvolvedPsfCache[scaleWithPeak];
++    if (twiceConvolvedPsfsPtr->empty()) {
++      const size_t bytes =
++          data_image.PsfCount() * width * height * sizeof(float);
++      if (psfCacheBytes + bytes > kMaxCacheBytes) {
++        twiceConvolvedPsfsPtr = &uncachedPsfs;
++      } else {
++        psfCacheBytes += bytes;
++      }
++      for (size_t i = 0; i != data_image.PsfCount(); ++i) {
++        twiceConvolvedPsfsPtr->push_back(convolvedPSFs[i][scaleWithPeak]);
++      }
++      if (scaleSize != 0.0) {
++        msTransforms.Transform(*twiceConvolvedPsfsPtr, scratch, scaleSize);
++      }
+     }
++    const std::vector<Image>& twiceConvolvedPSFs = *twiceConvolvedPsfsPtr;
+ 
+-    std::vector<Image> twiceConvolvedPSFs;
+-    twiceConvolvedPSFs.reserve(data_image.PsfCount());
+-    for (size_t i = 0; i != data_image.PsfCount(); ++i) {
+-      twiceConvolvedPSFs.emplace_back(std::move(transformList[i]));
+-    }
+-    for (size_t i = 0; i != data_image.Size(); ++i) {
++    if (!convolvedResiduals.empty() &&
++        !convolvedResiduals[scaleWithPeak].Empty()) {
+       individualConvolvedImages.SetImage(
+-          i, std::move(transformList[i + data_image.PsfCount()]));
++          0, std::move(convolvedResiduals[scaleWithPeak]));
++    } else {
++      std::vector<Image> transformList;
++      transformList.reserve(data_image.Size());
++      for (size_t i = 0; i != data_image.Size(); ++i) {
++        transformList.emplace_back(width, height);
++        std::copy_n(data_image.Data(i), width * height,
++                    transformList.back().Data());
++      }
++      if (scaleSize != 0.0) {
++        msTransforms.Transform(transformList, scratch, scaleSize);
++      }
++      for (size_t i = 0; i != data_image.Size(); ++i) {
++        individualConvolvedImages.SetImage(i, std::move(transformList[i]));
++      }
+     }
++    convolvedResiduals.clear();
+ 
+     //
+     // The sub-minor iteration loop for this scale
+@@ -439,11 +466,29 @@ DeconvolutionResult MultiScaleAlgorithm::ExecuteMajorIteration(
+            ++imageIndex) {
+         // TODO this can be multi-threaded if each thread has its own
+         // temporaries
+-        const aocommon::Image& psf =
+-            convolvedPSFs[data_image.PsfIndex(imageIndex)][scaleWithPeak];
+-        subLoop.CorrectResidualDirty(scratch.Data(), scratchB.Data(),
+-                                     integratedScratch.Data(), imageIndex,
+-                                     data_image.Data(imageIndex), psf.Data());
++        const size_t psfIndex = data_image.PsfIndex(imageIndex);
++        const aocommon::Image& psf = convolvedPSFs[psfIndex][scaleWithPeak];
++        std::vector<aocommon::UVector<std::complex<float>>>& kernelFfts =
++            psfKernelFftCache[scaleWithPeak];
++        kernelFfts.resize(data_image.PsfCount());
++        aocommon::UVector<std::complex<float>> uncachedKernelFft;
++        const aocommon::UVector<std::complex<float>>* kernelFft =
++            &kernelFfts[psfIndex];
++        if (kernelFft->empty()) {
++          uncachedKernelFft =
++              subLoop.PsfKernelFft(scratch.Data(), scratchB.Data(), psf.Data());
++          const size_t bytes =
++              uncachedKernelFft.size() * sizeof(std::complex<float>);
++          if (psfCacheBytes + bytes > kMaxCacheBytes) {
++            kernelFft = &uncachedKernelFft;
++          } else {
++            psfCacheBytes += bytes;
++            kernelFfts[psfIndex] = std::move(uncachedKernelFft);
++          }
++        }
++        subLoop.CorrectResidualDirty(scratch.Data(), integratedScratch.Data(),
++                                     imageIndex, data_image.Data(imageIndex),
++                                     kernelFft->data());
+ 
+         subLoop.GetFullIndividualModel(imageIndex, scratch.Data());
+         if (imageIndex == 0) {
+@@ -535,7 +580,7 @@ DeconvolutionResult MultiScaleAlgorithm::ExecuteMajorIteration(
+       FindSquaredScaleConvolvedMaxima(data_image, integratedScratch, scratch);
+     } else {
+       FindActiveScaleConvolvedMaxima(data_image, integratedScratch, scratch,
+-                                     false, tools);
++                                     false, tools, &convolvedResiduals);
+     }
+ 
+     optional_scale_with_peak = SelectMaximumScale(scale_infos_);
+@@ -592,7 +637,8 @@ DeconvolutionResult MultiScaleAlgorithm::ExecuteMajorIteration(
+ 
+ void MultiScaleAlgorithm::FindActiveScaleConvolvedMaxima(
+     const ImageSet& image_set, Image& integrated_scratch, Image& scratch,
+-    bool report_rms, ThreadedDeconvolutionTools& tools) {
++    bool report_rms, ThreadedDeconvolutionTools& tools,
++    std::vector<Image>* convolved_residuals) {
+   multiscale::MultiScaleTransforms msTransforms(
+       image_set.Width(), image_set.Height(), settings_.shape,
+       kernel_fft_cache_);
+@@ -621,10 +667,27 @@ void MultiScaleAlgorithm::FindActiveScaleConvolvedMaxima(
+   }
+   std::vector<ThreadedDeconvolutionTools::PeakData> results;
+ 
++  std::vector<Image> transformed;
++  bool keep_transformed = false;
++  if (convolved_residuals) {
++    convolved_residuals->clear();
++    const size_t bytes = transformScales.size() * image_set.Width() *
++                         image_set.Height() * sizeof(float);
++    keep_transformed = image_set.Size() == 1 &&
++                       image_set.LinearIntegratedCopyIndex() == 0 &&
++                       bytes <= kMaxCacheBytes;
++  }
+   tools.FindMultiScalePeak(&msTransforms, integrated_scratch, transformScales,
+                            results, AllowNegativeComponents(), CleanMask(),
+                            transformScaleMasks, CleanBorderRatio(),
+-                           RmsFactorImage(), report_rms);
++                           RmsFactorImage(), report_rms,
++                           keep_transformed ? &transformed : nullptr);
++  if (keep_transformed) {
++    convolved_residuals->resize(scale_infos_.size());
++    for (size_t i = 0; i != transformed.size(); ++i) {
++      (*convolved_residuals)[transformIndices[i]] = std::move(transformed[i]);
++    }
++  }
+ 
+   for (size_t i = 0; i != results.size(); ++i) {
+     ScaleInfo& scaleEntry = scale_infos_[transformIndices[i]];
+diff --git a/cpp/algorithms/multiscale_algorithm.h b/cpp/algorithms/multiscale_algorithm.h
+index 470b4a6..890e55e 100644
+--- a/cpp/algorithms/multiscale_algorithm.h
++++ b/cpp/algorithms/multiscale_algorithm.h
+@@ -90,15 +90,25 @@ class MultiScaleAlgorithm final : public DeconvolutionAlgorithm {
+   // Shared with clones: entries are keyed on the image size.
+   std::shared_ptr<multiscale::KernelFftCache> kernel_fft_cache_ =
+       std::make_shared<multiscale::KernelFftCache>();
++  // Memory limit for each kind of per-major-iteration reuse (convolved
++  // residuals; twice-convolved psfs plus transformed psf kernels).
++  static constexpr size_t kMaxCacheBytes = size_t{1} << 30;
+ 
+   /**
+    * Finds the maximum peak values for each scale in the integrated image,
+    * and modifies the maximum values in the scale_infos_ accordingly.
++   *
++   * If @p convolved_residuals is given and @p image_set holds a single image
++   * that equals its integrated image, it is set per scale index to that image
++   * convolved with the scale, for the scales that were convolved (other
++   * entries are empty). It is left empty when this would exceed the memory
++   * limit.
+    */
+-  void FindActiveScaleConvolvedMaxima(const ImageSet& image_set,
+-                                      aocommon::Image& integrated_scratch,
+-                                      aocommon::Image& scratch, bool report_rms,
+-                                      ThreadedDeconvolutionTools& tools);
++  void FindActiveScaleConvolvedMaxima(
++      const ImageSet& image_set, aocommon::Image& integrated_scratch,
++      aocommon::Image& scratch, bool report_rms,
++      ThreadedDeconvolutionTools& tools,
++      std::vector<aocommon::Image>* convolved_residuals = nullptr);
+ 
+   /**
+    * Same as @ref FindActiveScaleConvolvedMaxima(), but will convolve the data
+diff --git a/cpp/algorithms/subminor_loop.cc b/cpp/algorithms/subminor_loop.cc
+index 3d0133a..0414724 100644
+--- a/cpp/algorithms/subminor_loop.cc
++++ b/cpp/algorithms/subminor_loop.cc
+@@ -330,20 +330,43 @@ void SubMinorLoop::GetFullIndividualModel(size_t image_index,
+ void SubMinorLoop::CorrectResidualDirty(
+     float* scratch_a, float* scratch_b, float* scratch_c, size_t image_index,
+     float* residual, const float* single_convolved_psf) const {
++  const aocommon::UVector<std::complex<float>> kernel_fft =
++      PsfKernelFft(scratch_a, scratch_b, single_convolved_psf);
++  CorrectResidualDirty(scratch_a, scratch_c, image_index, residual,
++                       kernel_fft.data());
++}
++
++aocommon::UVector<std::complex<float>> SubMinorLoop::PsfKernelFft(
++    float* scratch_a, float* scratch_b,
++    const float* single_convolved_psf) const {
+   // Get padded kernel in scratch_b
+   Image::Untrim(scratch_a, _paddedWidth, _paddedHeight, single_convolved_psf,
+                 _width, _height);
+   schaapcommon::math::PrepareConvolutionKernel(scratch_b, scratch_a,
+                                                _paddedWidth, _paddedHeight);
++  aocommon::UVector<std::complex<float>> kernel_fft(
++      schaapcommon::math::ConvolutionFftSize(_paddedWidth, _paddedHeight));
++  schaapcommon::math::ConvolutionFft(kernel_fft.data(), scratch_b,
++                                     _paddedWidth, _paddedHeight);
++  return kernel_fft;
++}
+ 
++void SubMinorLoop::CorrectResidualDirty(
++    float* scratch_a, float* scratch_c, size_t image_index, float* residual,
++    const std::complex<float>* psf_kernel_fft) const {
+   // Get padded model image in scratch_a
+   GetFullIndividualModel(image_index, scratch_c);
+   Image::Untrim(scratch_a, _paddedWidth, _paddedHeight, scratch_c, _width,
+                 _height);
+ 
+   // Convolve and store in scratch_a
+-  schaapcommon::math::Convolve(scratch_a, scratch_b, _paddedWidth,
+-                               _paddedHeight);
++  aocommon::UVector<std::complex<float>> model_fft(
++      schaapcommon::math::ConvolutionFftSize(_paddedWidth, _paddedHeight));
++  schaapcommon::math::ConvolutionFft(model_fft.data(), scratch_a, _paddedWidth,
++                                     _paddedHeight);
++  schaapcommon::math::ConvolveTransformed(scratch_a, model_fft.data(),
++                                          psf_kernel_fft, _paddedWidth,
++                                          _paddedHeight);
+ 
+   // Trim the result into scratch_c
+   Image::Trim(scratch_c, _width, _height, scratch_a, _paddedWidth,
+diff --git a/cpp/algorithms/subminor_loop.h b/cpp/algorithms/subminor_loop.h
+index 7b3c3a6..d6e7bdb 100644
+--- a/cpp/algorithms/subminor_loop.h
++++ b/cpp/algorithms/subminor_loop.h
+@@ -3,6 +3,7 @@
+ #ifndef RADLER_ALGORITHMS_SUB_MINOR_LOOP_H_
+ #define RADLER_ALGORITHMS_SUB_MINOR_LOOP_H_
+ 
++#include <complex>
+ #include <cstdint>
+ #include <cstring>
+ #include <vector>
+@@ -10,6 +11,7 @@
+ #include <aocommon/image.h>
+ #include <aocommon/logger.h>
+ #include <aocommon/optionalnumber.h>
++#include <aocommon/uvector.h>
+ 
+ #include "component_list.h"
+ #include "image_set.h"
+@@ -200,6 +202,24 @@ class SubMinorLoop {
+                             float* residual,
+                             const float* single_convolved_psf) const;
+ 
++  /**
++   * The transformed, padded kernel that CorrectResidualDirty() makes from
++   * @p single_convolved_psf. It only depends on the psf and the padded size,
++   * so it can be reused for every SubMinorLoop with the same padded size.
++   * @p scratch_a and @p scratch_b need to hold the full padded image.
++   */
++  aocommon::UVector<std::complex<float>> PsfKernelFft(
++      float* scratch_a, float* scratch_b,
++      const float* single_convolved_psf) const;
++
++  /**
++   * Like CorrectResidualDirty(), with the kernel from PsfKernelFft(). Gives
++   * the same result.
++   */
++  void CorrectResidualDirty(float* scratch_a, float* scratch_c,
++                            size_t image_index, float* residual,
++                            const std::complex<float>* psf_kernel_fft) const;
++
+   void GetFullIndividualModel(size_t image_index,
+                               float* individualModelImg) const;
+ 
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.cc b/cpp/algorithms/threaded_deconvolution_tools.cc
+index 83c5280..6485bd6 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.cc
++++ b/cpp/algorithms/threaded_deconvolution_tools.cc
+@@ -35,9 +35,14 @@ void ThreadedDeconvolutionTools::FindMultiScalePeak(
+     std::vector<ThreadedDeconvolutionTools::PeakData>& results,
+     bool allow_negative_components, const bool* mask,
+     const std::vector<aocommon::UVector<bool>>& scale_masks, float border_ratio,
+-    const Image& rms_factor_image, bool calculate_rms) {
++    const Image& rms_factor_image, bool calculate_rms,
++    std::vector<Image>* transformed_images) {
+   const size_t n_scales = scales.size();
+   results.resize(n_scales);
++  if (transformed_images) {
++    transformed_images->clear();
++    transformed_images->resize(n_scales);
++  }
+   if (n_scales == 0) return;
+ 
+   // The image is transformed once for all scales.
+@@ -57,6 +62,8 @@ void ThreadedDeconvolutionTools::FindMultiScalePeak(
+         FindSingleScalePeak(ms_transforms, transformed, scales[scale_index],
+                             allow_negative_components, selected_mask,
+                             border_ratio, rms_factor_image, calculate_rms);
++    if (transformed_images)
++      (*transformed_images)[scale_index] = std::move(transformed);
+   });
+ }
+ 
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.h b/cpp/algorithms/threaded_deconvolution_tools.h
+index 8a094c8..d8cff5b 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.h
++++ b/cpp/algorithms/threaded_deconvolution_tools.h
+@@ -35,7 +35,8 @@ class ThreadedDeconvolutionTools {
+       std::vector<PeakData>& results, bool allowNegativeComponents,
+       const bool* mask, const std::vector<aocommon::UVector<bool>>& scaleMasks,
+       float borderRatio, const aocommon::Image& rmsFactorImage,
+-      bool calculateRMS);
++      bool calculateRMS,
++      std::vector<aocommon::Image>* transformed_images = nullptr);
+ 
+   static float RMS(const aocommon::Image& image, size_t n) {
+     float result = 0.0;

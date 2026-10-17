@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peijin Zhang <peijin@ustc.edu>
+Date: Sat, 17 Oct 2026 17:25:15 -0400
+Subject: [PATCH 4/4] ducc0 wgridder: spin lock per grid row instead of
+ std::mutex
+
+x2grid takes ~38 row locks per tile dump. Contended std::mutex on macOS
+parks threads in __psynch_mutexwait; a cache-line aligned atomic spin lock
+with an aarch64 yield hint (falling back to std::this_thread::yield) cuts
+lock time ~5x. Bitwise identical results at -j 1.
+
+diff --git a/external/ducc0/wgridder/wgridder_impl.h b/external/ducc0/wgridder/wgridder_impl.h
+index 69eb8d2..d126e0d 100644
+--- a/external/ducc0/wgridder/wgridder_impl.h
++++ b/external/ducc0/wgridder/wgridder_impl.h
+@@ -35,6 +35,8 @@
+ #include <array>
+ #include <atomic>
+ #include <memory>
++#include <mutex>
++#include <thread>
+ #if ((!defined(DUCC0_NO_SIMD)) && (defined(__AVX__)||defined(__SSE3__)))
+ #include <x86intrin.h>
+ #endif
+@@ -65,6 +67,31 @@ template<typename T> using mysimd = typename simd_select<T,mysimdlen<T>>::type;
+ 
+ template<typename T> T sqr(T val) { return val*val; }
+ 
++// Lock for one grid row in x2grid: held only while a thread adds one row of
++// its tile buffer, too short for a std::mutex, whose contended path sleeps in
++// the kernel. One cache line per lock (128 bytes on Apple M-series).
++struct alignas(128) GridRowLock
++  {
++  std::atomic<bool> locked{false};
++
++  void lock()
++    {
++    for (size_t spins=0; locked.exchange(true, std::memory_order_acquire); )
++      while (locked.load(std::memory_order_relaxed))
++        {
++        if (++spins<1024)
++          {
++#if defined(__aarch64__)
++          __asm__ __volatile__("yield");
++#endif
++          }
++        else
++          std::this_thread::yield();
++        }
++    }
++  void unlock() { locked.store(false, std::memory_order_release); }
++  };
++
+ template<typename T> void quickzero(const vmav<T,2> &arr, size_t nthreads)
+   {
+ #if 0
+@@ -998,7 +1025,7 @@ timers.pop();
+         vmav<Tacc,2> bufr, bufi;
+         Tacc *px0r, *px0i;
+         double w0, xdw;
+-        vector<Mutex> &locks;
++        vector<GridRowLock> &locks;
+ 
+         DUCC0_NOINLINE void dump()
+           {
+@@ -1012,7 +1039,7 @@ timers.pop();
+             {
+             int idxv = idxv0;
+             {
+-            LockGuard lock(locks[idxu]);
++            lock_guard<GridRowLock> lock(locks[idxu]);
+             for (int iv=0; iv<sv; ++iv)
+               {
+               grid(idxu,idxv) += complex<Tcalc>(Tcalc(bufr(iu,iv)), Tcalc(bufi(iu,iv)));
+@@ -1033,7 +1060,7 @@ timers.pop();
+         kbuf buf;
+ 
+         HelperX2g2(const Wgridder *parent_, const vmav<complex<Tcalc>,2> &grid_,
+-          vector<Mutex> &locks_, double w0_=-1, double dw_=-1)
++          vector<GridRowLock> &locks_, double w0_=-1, double dw_=-1)
+           : parent(parent_), tkrn(*parent->krn), grid(grid_),
+             iu0(-1000000), iv0(-1000000),
+             bu0(-1000000), bv0(-1000000),
+@@ -1190,7 +1217,7 @@ timers.pop();
+         if (supp<SUPP) return x2grid_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
+       MR_assert(supp==SUPP, "requested support out of range");
+ 
+-      vector<Mutex> locks(nu);
++      vector<GridRowLock> locks(nu);
+ 
+       execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
+         {

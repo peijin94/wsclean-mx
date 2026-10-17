@@ -337,6 +337,40 @@ def fig_platforms():
     return save(fig, "platforms_ms2k.png")
 
 
+P11_PANELS = [
+    ("p11-final-ms2k-ab.tsv", "2048² multiscale, niter 3000 (cleaning: reorders the MS)"),
+    ("p11-final-inv4k-ab.tsv", "4096² dirty image, niter 0 (reads the MS directly)"),
+]
+P11_VARIANTS = [("upstream-fix", "upstream + fix"), ("mx-p6", "wsclean-mx-p6"),
+                ("mx-p11", "wsclean-mx-p11")]
+
+
+def fig_p11():
+    if not all((OUT / t).exists() for t, _ in P11_PANELS):
+        return None
+    fig, axes = plt.subplots(1, 2, figsize=(13, 3.6))
+    for ax, (tsv, title) in zip(axes, P11_PANELS):
+        rows = [(name, with_other(ab_min(OUT / tsv, v))) for v, name in P11_VARIANTS]
+        names = [n for n, _ in rows]
+        left = [0] * len(rows)
+        for st in STAGES:
+            vals = [s[st] for _, s in rows]
+            ax.barh(names, vals, left=left, color=COLORS[st], label=st)
+            left = [a + b for a, b in zip(left, vals)]
+        base = rows[0][1]["wall"]
+        for i, (_, s) in enumerate(rows):
+            ax.text(s["wall"] + base * 0.01, i, f"{s['wall']:.2f} s ({base / s['wall']:.2f}x)",
+                    va="center", fontsize=8)
+        ax.invert_yaxis()
+        ax.set_xlim(0, base * 1.3)
+        ax.set_xlabel("wall time [s], min of 3 alternating runs, M2 8 threads")
+        ax.set_title(title, fontsize=10)
+    axes[0].legend(loc="lower right", fontsize=8)
+    fig.suptitle("Patches 7-11 (2026-10-17): wsclean-mx-p11 vs p6 vs upstream", fontsize=11)
+    fig.tight_layout()
+    return save(fig, "p11.png")
+
+
 def fig_smallinv_bug():
     base = OUT / "smallinv-bug"
     panels = [("upstream-garbage", "upstream, unlucky run (own scale)\n(noise est. 6.52 mJy)"),
@@ -507,7 +541,7 @@ def save(fig, name):
 def main():
     for f in [fig_stages, fig_scaling, fig_profile, fig_accuracy, fig_deep, fig_smallinv_bug,
               fig_multiscale, fig_fullsky, fig_fullsky_multiscale, fig_fullsky_ms_spread,
-              fig_subminor, fig_platforms]:
+              fig_subminor, fig_platforms, fig_p11]:
         path = f()
         print(f"{f.__name__}: {path.relative_to(ROOT) if path else 'skipped (no data)'}")
 
