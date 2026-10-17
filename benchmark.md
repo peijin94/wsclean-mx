@@ -30,6 +30,17 @@ with all current patches, from commit
 | 5 | SubMinorLoop: multithreaded PSF subtraction and peak search | radler/0001 |
 | 6 | Multiscale: transform the residual once per peak search, cache scale-kernel FFTs | radler/0002, schaapcommon/0003 |
 
+**wsclean-mx-p11** (`mx-p11`) adds patches 7–11, from commit
+[`a6f5381`](https://github.com/peijin94/wsclean-mx/commit/a6f5381cf56180008d592a6edb21f10efb083adc):
+
+| # | Patch | Repo |
+|---|-------|------|
+| 7 | Multiscale: reuse the scale-convolved residual from the peak search, cache per-scale PSF kernel transforms | radler/0003 |
+| 8 | ducc0 wgridder: cache-line spin lock per grid row instead of `std::mutex` | schaapcommon/0004 |
+| 9 | ContiguousMSReader: read measurement set columns in blocks of rows | wsclean/0002 |
+| 10 | MSRowProvider (reordering): read measurement set columns in blocks of rows | wsclean/0003 |
+| 11 | `peak_finder::Simple`: skip rows that cannot raise the peak (vectorized row maximum) | radler/0004 |
+
 Patch 2 (vForce `sincos` in ducc0) measured within noise and is not applied.
 Earlier snapshots in the plots: `mx-p1` = patch 1
 ([`a55c6ff`](https://github.com/peijin94/wsclean-mx/commit/a55c6ffb39e408bf5d2fb87886ce91ad61441c45)),
@@ -82,8 +93,64 @@ use `-j 1`, since multithreaded runs are not deterministic.
 
 ## Results
 
-All results below are from 2026-10-13, WSClean 3.7 (`2d5c1ed8`). Unless
-stated, runs use briggs 0, mgain 0.8 and all threads.
+All results are for WSClean 3.7 (`2d5c1ed8`). Unless stated, runs use
+briggs 0, mgain 0.8 and all threads. Results from 2026-10-17 come first,
+then 2026-10-13.
+
+### Patches 7–11 (2026-10-17)
+
+Commit [`a6f5381`](https://github.com/peijin94/wsclean-mx/commit/a6f5381cf56180008d592a6edb21f10efb083adc).
+M2, 8 threads, min of 3 alternating runs (`bench/ab.sh`, 20 s cooldowns).
+
+![p11](docs/bench/p11.png)
+
+| Run | upstream-fix | mx-p6 | mx-p11 |
+|-----|--------------|-------|--------|
+| 2048² @ 0.0625° multiscale niter 3000, wall | 23.66 s | 14.06 s (1.68×) | **11.37 s (2.08×)** |
+| same, inversion | 5.68 s | 5.15 s | 4.80 s |
+| same, deconvolution | 13.40 s | 4.52 s | **3.30 s (4.06×)** |
+| 4096² @ 0.03125° dirty (niter 0), wall | 4.23 s | 3.54 s (1.19×) | **1.94 s (2.18×)** |
+| same, inversion | 3.94 s | 3.27 s | **1.61 s (2.45×)** |
+
+Each patch is bitwise identical to its predecessor at `-j 1`. Multithreaded
+2048² residual rms: upstream-fix 24.641–24.646, mx-p11 24.636–24.657 µJy;
+mx-p11 vs upstream-fix differs by the same amount as two upstream-fix runs
+(restored image 3.0e-3 vs 2.4e-3 relative rms).
+
+What each patch found and gained (single-patch A/B, min of 3):
+
+- **Patch 7**: per multiscale iteration, the residual was convolved with every
+  scale for the peak search and then again for the subtraction, and the
+  twice-convolved PSF kernel was re-transformed each time. Deconvolution
+  4.18 → 3.64 s at 2048².
+- **Patch 8**: the gridder takes about 38 grid-row locks per tile flush.
+  Contended `std::mutex` parks threads in the kernel on macOS
+  (`__psynch_mutexwait`); the spin lock cut lock samples 3758 → 770.
+  4096² inversion 3.45 → 3.30 s.
+- **Patch 9**: every column of the test MS (DATA, FLAG, WEIGHT, UVW) is an
+  indirect array in one StandardStMan file behind one 64 KB buffer. Reading
+  row by row and switching columns refills the buffer on every access:
+  `bench/micro/ms_read.cpp` reads the MS in 0.90 s row by row vs 0.09 s in
+  1024-row blocks per column. 4096² dirty wall 3.58 → 2.11 s (1.70×). It applies
+  when WSClean reads the MS directly (no deconvolution).
+- **Patch 10**: the same fix for reordering, which cleaning runs use. The
+  reorder pass itself is 2.3× faster (512² niter 0 with `-reorder`: wall 1.85 →
+  1.12 s); about 0.7 s at 2048² multiscale. Blocks fall back to one row when
+  spectral windows differ in size, since casacore takes the cell shape of a
+  block from its first row.
+- **Patch 11**: radler's scalar peak finder does not vectorize, because it
+  tracks the peak index inside the loop (the AVX version is x86 only).
+  A vectorized row maximum skips rows that cannot hold a new peak: 8× faster on
+  a 2048² image (`bench/micro/peak_simple.cpp`, 800 randomized bitwise checks).
+  Deconvolution 4.39 → 3.90 s.
+
+Tried and dropped: replacing ducc0's FFT with Accelerate's
+`vDSP_fft2d_zrip` (`bench/micro/fft2d_vdsp.cpp`). At 2048², ducc0 r2c+c2r takes
+17.9 ms on one thread and 4.7 ms on 8; vDSP takes 51 ms single-threaded.
+
+Remaining profile at 2048² multiscale (main thread): gridding/degridding
+kernels and FFTs, which are already multithreaded, about 0.4 s of reordered
+temporary file I/O, and serial FITS writing.
 
 ### Cross-platform: 2048² multiscale, niter 3000
 

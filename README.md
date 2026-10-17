@@ -5,7 +5,8 @@ WSClean optimized for macOS on Apple Silicon.
 wsclean-mx is a small patch set on top of upstream
 [WSClean](https://gitlab.com/aroffringa/wsclean), pinned to the exact commit
 that ships in the LINC 5.2.1 container (`2d5c1ed8`, WSClean 3.7). It builds
-natively for arm64 and moves serial FFT and deconvolution work onto all cores.
+natively for arm64, moves serial FFT and deconvolution work onto all cores,
+and removes I/O and locking bottlenecks.
 It also fixes an upstream bug that corrupts 2048² images on macOS. Images
 agree with upstream and LINC to within upstream's own run-to-run variation.
 
@@ -14,11 +15,16 @@ On a fanless MacBook Air M2 (16 GB), a full-sky 2048² multiscale clean
 
 | Build | Wall time |
 |-------|-----------|
-| **wsclean-mx** (native arm64) | **12.4 s** |
-| upstream WSClean (native arm64, with the padding fix) | 20.6 s |
-| LINC 5.2.1 container (Apple `container`, Rosetta) | 43.4 s |
-| LINC 5.2.1 on Linux, 2× Xeon Silver 4214, `-j 8` | 49.3 s |
+| **wsclean-mx** (native arm64, patches 1–11) | **11.4 s** |
+| upstream WSClean (native arm64, with the padding fix) | 23.7 s |
+| LINC 5.2.1 container (Apple `container`, Rosetta)\* | 43.4 s |
+| LINC 5.2.1 on Linux, 2× Xeon Silver 4214, `-j 8`\* | 49.3 s |
 
+\*Measured 2026-10-13, when wsclean-mx (patches 1–6) took 12.4 s and
+upstream 20.6 s; the Mac is memory-tight, so sessions differ by ~15%.
+A 4096² dirty image takes 1.9 s with wsclean-mx vs 4.2 s with upstream.
+
+![patches 7-11](docs/bench/p11.png)
 ![2048² multiscale on M2 and Xeon](docs/bench/platforms_ms2k.png)
 
 Full results, plots and methodology: [benchmark.md](benchmark.md). Progress
@@ -36,6 +42,11 @@ The patch set lives in `patches/mx/<repo>/`, one directory per library:
 | wsclean/0001 | `WGridder::RealImage` pads with 0 instead of NaN | fixes corrupt images under Apple clang `-ffast-math` |
 | radler/0001 | SubMinorLoop: multithreaded PSF subtraction and peak search | Högbom deconvolution 6.2 → 2.4 s at 4096² |
 | radler/0002, schaapcommon/0003 | Multiscale: one residual FFT per peak search, cached scale-kernel FFTs | fewer FFTs per multiscale iteration |
+| radler/0003 | Multiscale: reuse the scale-convolved residual, cache per-scale PSF transforms | deconvolution 4.18 → 3.64 s at 2048² |
+| schaapcommon/0004 | ducc0 gridder: spin lock per grid row instead of `std::mutex` | lock time ~5× lower |
+| wsclean/0002 | Read measurement set columns in blocks of rows (direct reads) | 4096² dirty image 1.70× |
+| wsclean/0003 | Same, during reordering (cleaning runs) | reordering 2.3× |
+| radler/0004 | Peak finder: vectorized row maximum skips rows | peak search 8×, deconvolution 1.12× |
 
 The upstream padding bug: `WGridder::RealImage()` fills image padding with
 NaN, but its source file is compiled with `-ffast-math`, and Apple clang
@@ -119,8 +130,9 @@ are judged against upstream's own rerun spread.
 ## Roadmap
 
 The current patches are CPU-only. Planned next steps, described in
-`notes.md`: a Metal GPU gridding backend, Accelerate/vDSP where it helps,
-and benchmarks on larger measurement sets where gridding dominates.
+`notes.md`: a Metal GPU gridding backend and benchmarks on larger
+measurement sets where gridding dominates. Accelerate's vDSP 2D FFT was
+measured and is slower than ducc0's multithreaded FFT, so it is not used.
 
 ## License
 

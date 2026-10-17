@@ -246,6 +246,39 @@ Dirty: 6e-7 vs LINC for all except inti -j 24 at 2e-5 (both runs).
 inti setup: MS extracted read-only in `/data1/users/pz47/wsclean-bench/`,
 runner `run_linux.sh` there (docker, `--user`, same args + `-j`).
 
+Patches 7-11 (2026-10-17, commit a6f5381; snapshots `mx-p7`..`mx-p11`, each
+adds one patch; all bitwise identical to the previous at -j1):
+
+| Patch | Where | Single-patch A/B (min of 3) |
+|-------|-------|-----------------------------|
+| 7. Multiscale: reuse scale-convolved residual from peak search; per-scale twice-convolved PSF + kernel FFT caches | radler/0003 | 2k ms: deconv 4.18 -> 3.64 s, wall 12.71 -> 11.94 |
+| 8. ducc0 x2grid: `alignas(128)` atomic spin lock (aarch64 `yield`, then `this_thread::yield`) per grid row instead of `std::mutex` | schaapcommon/0004 (ducc0 `wgridder_impl.h`) | 4k niter 0: inversion 3.45 -> 3.30; lock samples 3758 -> 770 |
+| 9. ContiguousMSReader: `ColumnBlock` (getColumnCells, <=1024 rows / 16 MiB) for UVW/DATA/FLAG/WEIGHT | wsclean/0002 | 4k niter 0: wall 3.58 -> 2.11 (1.70x) |
+| 10. MSRowProvider/DirectMSRowProvider (reordering): same blocks; `ColumnBlock` moved to `msproviders/columnblock.h` | wsclean/0003 | 512² `-reorder` niter 0: wall 1.85 -> 1.12 (reorder 2.3x) |
+| 11. `peak_finder::Simple`: lane-wise row max, original scan only on rows that raise the peak | radler/0004 | micro 2048²: 4.9 -> 0.6 ms; 2k ms deconv 4.39 -> 3.90 |
+
+- Test MS: every main-table column is a variable-shape indirect array in one
+  StandardStMan file (`table.f0i`, 401 MB) behind a 64 KB FilebufIO buffer.
+  Row-by-row reads across columns refill it every access, and each
+  `ArrayColumn::get` also reads the cell shape from the file
+  (`SSMIndColumn::getShape`). `bench/micro/ms_read.cpp`: 0.90 s/pass row by
+  row vs 0.09 s with 1024-row blocks per column.
+- Cleaning runs reorder (DirectMSRowProvider); only niter 0 runs read through
+  ContiguousMSReader. So patch 9 helps dirty imaging, patch 10 cleaning.
+- `getColumnCells` takes the cell shape from the first row and does not check
+  the others, so `ColumnBlockRows()` returns 1 if SPW NUM_CHAN or
+  POLARIZATION NUM_CORR differ between rows of those tables.
+- vDSP rejected: 2048² r2c+c2r ducc0 17.9 ms (1 thr) / 4.7 ms (8 thr) vs
+  `vDSP_fft2d_zrip` 51 ms single-threaded (`bench/micro/fft2d_vdsp.cpp`).
+- Final (tags `p11-final-ms2k`, `p11-final-inv4k`, min of 3, figure `p11.png`):
+  2k multiscale niter 3000: upstream-fix 23.66 s, mx-p6 14.06 (1.68x),
+  mx-p11 11.37 (2.08x; deconv 13.40 / 4.52 / 3.30). 4k dirty: 4.23 / 3.54 /
+  1.94 s (2.18x). Residual rms upstream-fix 24.641-24.646, mx-p11
+  24.636-24.657 µJy.
+- Remaining main-thread profile (2k ms, mx-p9): waiting on gridder/FFT
+  workers, ~0.4 s reorder temp-file read/write per run, serial FITS writes,
+  `CalculateWeightsImplementation` ~0.16 s.
+
 ### Upstream bug: small-inversion padding is uninitialized under clang -ffast-math
 
 - `wgridder_float.cpp`/`wgridder_double.cpp` are compiled with `-ffast-math`
