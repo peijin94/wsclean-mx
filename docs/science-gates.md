@@ -269,8 +269,8 @@ configuration (`bench/out/throttle-20261018/run_lofar_sweep.sh`).
 | `-mgain 0.6` | mx fails a 0.036 px position tie; perturbed ref passes | — |
 | `-padding 2` | ties at the envelope for all three candidates | — |
 | `-weight briggs -1` | all three fail model MAD rms (mx 9.8e-3 vs 2.9e-3) | — |
-| `-weight natural` | all three fail; mx 6e-3 total flux vs 4e-3 envelope, perturbed ref marginal | 13 refs, 7 mx, 6 perturbed: mx 2nd-moment deviations median 4.2e-4 vs perturbed 4.9e-5; mx reaches the family edge (4.8 % model rms) in 2 of 7 runs, perturbed never |
-| `-niter 10000` | all three fail against a *tight* family (envelope 7e-5) | 6 refs, 5 mx, 4 perturbed: mx restored-flux deviation median 10.7 % vs perturbed 4.2 %; model rms 3.8 % vs 1.2 % |
+| `-weight natural` | all three fail; mx 6e-3 total flux vs 4e-3 envelope, perturbed ref marginal | 13 refs, 10 mx, 12 perturbed: mx model-rms deviation median 2.0e-3 vs perturbed 6.8e-5, and mx reaches the family edge (4.8 %) in 2 of 10 runs while the perturbed does in 0 of 12 |
+| `-niter 10000` | all three fail against a *tight* family (envelope 7e-5) | 6 refs, 5 mx, 4 perturbed: mx restored-flux deviation median 10.7 % vs perturbed 4.2 % — **superseded by the bisect below** |
 
 **Reading.** A first pass with three references cannot be judged on its own — the
 natural and deep configurations are themselves sensitive, and their three-rerun
@@ -280,17 +280,48 @@ families scored the same way:
 
 - **base and `-multiscale-scale-bias`**: mx at the float32 floor; in the scale-bias
   configuration mx is closer to the reference than the one-ulp control is.
-- **`-weight natural` and `-niter 10000`**: mx's deviations are 2–3× larger than
-  the control's, and in the natural case mx lands on the family's edge in two of
-  seven runs while the control never does. The deviations mostly stay inside the
-  reference family's own spread, so the gate verdicts are mixed — but this is a
-  real, reproducible distribution shift, not a boundary artefact, and it is the
-  one open scientific question this sweep produced.
+- **`-niter 10000`**: the apparent 2–3× shift does **not** survive the bisect
+  below — the control lands in the same discrete cleaning basins, so that
+  comparison was basin sampling.
+- **`-weight natural`**: with ten mx and twelve perturbed runs the typical model
+  metric deviation is larger for mx (median 2.0e-3 vs 6.8e-5) and mx enters the
+  alternate basin in 2 of 10 runs against 0 of 12 — suggestive, but far from
+  significant at these counts (one-sided Fisher exact p ≈ 0.19), and the
+  source-level metric is *identical* for both families (median source-flux spread
+  0.0721 in both). Recorded as an open question to be settled with more samples,
+  not as an established difference.
 
-The next step is a patch bisect at `-niter 10000` (the configuration with the
-clearest shift) across the archived snapshots (`mx-p1 … mx-p11`,
-`audit-p12-scratch`, `continue-cpu-fixes`) to localize which part of the stack
-introduces the extra divergence.
+### Patch bisect at `-niter 10000`
+
+Two runs of each archived build (`mx-p1`, `mx-p3`, `mx-p5`, `mx-p7`, `mx-p9`,
+`mx-p11`, `audit-p12-scratch`, `continue-cpu-fixes`) and of the perturbed control,
+scored against six references (`analyze_bisect.py`):
+
+| Build | restored flux | model MAD rms | 2nd moment |
+|---|---|---|---|
+| mx-p1 | 1.6e-2 / 8.8e-3 | 4.6e-4 / 5.8e-3 | 6.6e-4 / 1.5e-4 |
+| mx-p3 | 1.1e-1 / 3.4e-5 | 5.9e-2 / 1.7e-6 | 6.1e-4 / 3e-8 |
+| mx-p5 | 1.1e-1 / 1.1e-1 | 5.9e-2 / 5.9e-2 | 6.1e-4 / 6.1e-4 |
+| mx-p7 | 1.1e-2 / 1.1e-1 | 2.4e-3 / 5.9e-2 | 6.1e-4 / 6.1e-4 |
+| mx-p9 | 1.1e-1 / 1.1e-1 | 5.9e-2 / 5.9e-2 | 6.1e-4 / 6.1e-4 |
+| mx-p11 | 5.6e-2 / 2.9e-2 | 3.4e-2 / 1.3e-2 | 6.6e-4 / 4.1e-4 |
+| audit-p12-scratch | 1.9e-3 / 7.7e-4 | 8.0e-2 / 7.9e-2 | 2.1e-4 / 3.0e-4 |
+| continue-cpu-fixes | 1.8e-2 / 1.1e-1 | 1.5e-2 / 5.9e-2 | 3.0e-5 / 6.1e-4 |
+| **control (1 ulp)** | 4.9e-2 / 3.5e-5 / 3.5e-2 / 5.0e-2 | 2.3e-2 / 1.1e-6 / 1.7e-2 / 6.6e-3 | 5.1e-4 / 1.3e-8 / 6.2e-4 / 1.5e-3 |
+
+Deviations cluster at a handful of discrete values (1.1e-1, 5.9e-2, 6.1e-4 …) that
+recur across unrelated builds — `mx-p3` and `mx-p9` are identical — and the control
+is quantized the same way (its four runs take values 3.5e-5 / 3.5e-2 / 4.9e-2 /
+5.0e-2). At this iteration depth the deconvolution switches between discrete basins
+and every build, from the first patch onward, falls into the same set of outcomes;
+the reference family's own reruns reach 2.5 % (p95) / 2.9 % (max) on restored flux,
+and the control reaches 5.0e-2, so the control's spread brackets most of what the mx
+builds show. **Conclusion: with two runs per build, the deep-configuration
+difference cannot be attributed to any particular patch — the experiment cannot
+separate the builds at this discreteness, and the earlier median comparison was
+sampling which basin each run fell into.** (This does not prove the builds are
+equivalent; it says the deep configuration cannot tell them apart this way.) In the
+base configuration none of this arises: agreement at the float32 floor.
 
 ## Evidence
 

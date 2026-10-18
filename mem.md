@@ -52,6 +52,14 @@ reasoning and long-form design in `notes.md`.
   `--criterion p95` gate (candidate vs the 95th percentile of the family's own
   members): all four mx runs pass both criteria; one perturbed-reference outlier
   out of five fails. Family runs are stored as bench/out/envelope18-ref-r4..r53.
+- Config sweep on 3C196 (one argument changed at a time): base and
+  `-multiscale-scale-bias` reproduce the reference at the float floor; at
+  `-niter 10000` cleaning switches between discrete basins and the 1-ulp control
+  reaches the far basin as often as mx (a patch bisect shows no mx-specific
+  effect); at `-weight natural` mx's typical model-metric deviation is larger
+  (2.0e-3 vs 6.8e-5) with 2/10 vs 0/12 basin entries - suggestive, not yet
+  significant, and the source-level metric is identical. Always compare against
+  the perturbed-reference family before calling a deviation mx-specific.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
   external MS; two average-correction benchmarks are explicitly disabled upstream.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using
