@@ -11,6 +11,11 @@ are recorded separately in [docs/audit-2026-10-17.md](docs/audit-2026-10-17.md).
 That report states failed gates as well as passing ones; it does not replace
 the historical measurements below.
 
+Selection-safe reader, allocation and time-contract repairs are validated in
+[docs/continuation-2026-10-17.md](docs/continuation-2026-10-17.md). Its frozen
+pre/post comparisons measure whether the repairs retain performance; they do
+not attribute the earlier roughly twofold gain to these correctness fixes.
+
 ## What is compared
 
 **wsclean-mx** is WSClean optimized for macOS on Apple Silicon. It is a patch

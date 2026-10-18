@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Sat, 17 Oct 2026 21:49:42 -0400
+Subject: [PATCH] MultiArray: use malloc for fundamental alignment
+
+
+diff --git a/include/aocommon/multiarray.h b/include/aocommon/multiarray.h
+index b6e3232..2bc50b7 100644
+--- a/include/aocommon/multiarray.h
++++ b/include/aocommon/multiarray.h
+@@ -441,7 +441,14 @@ class MultiArray {
+   static std::byte* Allocate(size_t size) {
+     if (size == 0) return nullptr;
+     constexpr size_t alignment = details::MaxAlignment<Types...>();
+-    void* data = std::aligned_alloc(alignment, ByteLength(size));
++    void* data;
++    if constexpr (alignment <= alignof(std::max_align_t)) {
++      // malloc guarantees fundamental alignment. Some aligned_alloc
++      // implementations reject smaller alignments (e.g. float alignment 4).
++      data = std::malloc(ByteLength(size));
++    } else {
++      data = std::aligned_alloc(alignment, ByteLength(size));
++    }
+     if (data == nullptr) throw std::bad_alloc();
+     return reinterpret_cast<std::byte*>(data);
+   }

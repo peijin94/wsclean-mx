@@ -65,6 +65,9 @@ its author and date in its header.
 | 2026-10-17 | `patches/mx/wsclean/0003-MSRowProvider-...patch` | wsclean `msproviders/columnblock.h` (new), `msproviders/msreaders/contiguousmsreader.{h,cpp}`, `msproviders/rowproviders/{msrowprovider,directmsrowprovider}.{h,cpp}` | read measurement set columns in blocks of rows during reordering |
 | 2026-10-17 | `patches/mx/radler/0004-peak_finder-Simple-...patch` | radler `cpp/math/peak_finder.cc` | skip rows that cannot raise the peak (vectorizable row maximum) |
 | 2026-10-17 | `patches/mx/radler/0005-Multiscale-...patch` | radler `cpp/algorithms/threaded_deconvolution_tools.cc` | allocate full-image peak-search scratch only when RMS weighting uses it |
+| 2026-10-17 | `patches/mx/wsclean/0004-ColumnBlock-...patch` | wsclean `msproviders/columnblock.h`, `msproviders/msreaders/contiguousmsreader.cpp`, `msproviders/rowproviders/msrowprovider.{h,cpp}`, `tests/CMakeLists.txt`, `tests/msproviders/tcolumnblockselection.cpp` (new) | selection-safe block fallback, complete selected-cell shape validation and production-reader regression fixtures |
+| 2026-10-17 | `patches/mx/aocommon/0002-MultiArray-...patch` | aocommon `include/aocommon/multiarray.h` | use malloc for fundamental alignment and retain aligned_alloc for extended alignment |
+| 2026-10-17 | `patches/mx/wsclean/0005-InMemoryProvider-...patch` | wsclean `msproviders/{inmemoryprovider,msprovider}.h`, `tests/msproviders/tinmemoryprovider.cpp`, `tests/interface/twsclean.cpp` | return MJD days at the provider boundary; assert provider units and FITS observation date |
 
 A wsclean-mx binary still reports upstream's version string ("WSClean
 version 3.7"); it is a modified version as described above.

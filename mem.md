@@ -6,7 +6,8 @@ reasoning and long-form design in `notes.md`.
 ## Active validation and next work
 
 - Current plan: `docs/development-plan.md`; evidence and limits:
-  `docs/audit-2026-10-17.md`. Read these before the historical measurements below.
+  `docs/audit-2026-10-17.md` and `docs/continuation-2026-10-17.md`.
+  Read the continuation before the historical measurements below.
 - `scripts/test.sh <mx-build>` runs Python harness/FITS tests and linked numerical
   regressions. Full upstream/dependency suites are separate; CTest can list zero
   even when the upstream `unittest` target is available.
@@ -14,9 +15,25 @@ reasoning and long-form design in `notes.md`.
   scratch into the RMS-weighted branch. Allocation behavior is tested; all five
   1024² multiscale products match p11 bitwise at `-j 1`. No reliable wall-time
   gain is claimed from the noisy four-repeat experiment.
-- Full upstream suite after fixture downloads: 126 passed, 7 pre-existing
-  `std::bad_alloc` failures, 4 skipped. Block-read selection of undefined excluded
-  cells and broader multiscale scientific acceptance remain open.
+- The initial seven `std::bad_alloc` failures came from invalid fundamental
+  alignment passed to macOS aligned_alloc, not a diagnosis of exhausted RAM.
+  aocommon/0002 uses malloc for fundamental alignment and keeps extended alignment.
+- wsclean/0004 adds selected-row fallback and complete DATA/FLAG/WEIGHT shape
+  validation. Expected DDID shapes are cached; invalid selected arrays still fail.
+- wsclean/0005 returns MJD days from InMemoryProvider::StartTime; in-memory
+  storage and per-row metadata stay in MS seconds. FITS date is explicitly tested.
+- Native suite counts, real-MS product checks and timing samples are in the
+  continuation report. Broader multiscale scientific acceptance remains open.
+- Dirty-4k follow-up timings were slower in both batches (pooled medians
+  2.875 s baseline / 3.410 s candidate). Cause is not isolated on the busy,
+  swapping host; this is an open performance gate, not a claimed speedup.
+- The older bench/profile.sh still deletes outputs. Use fresh, owned profiling
+  directories until that harness has the common validation/immutability guards.
+- Four native skips are not passes: two BDA cases need an unavailable hard-coded
+  external MS; two average-correction benchmarks are explicitly disabled upstream.
+- ReadMsInMemory remains a separate follow-up: its source opens antenna2 using
+  ANTENNA1 and assumes WEIGHT_SPECTRUM. Do not infer full CLI in-memory support
+  from the passing provider/interface time and allocation tests.
 - Benchmark run/snapshot names are now immutable: use a new tag instead of
   replacing old results. AB order reverses on alternate repeats. Known write
   flags, including `-no-reorder`, are rejected; keep inputs OS-level read-only.

@@ -5,8 +5,10 @@ Apple Silicon optimization of WSClean. Facts, pins and environment live in
 
 **Current plan:** [docs/development-plan.md](docs/development-plan.md), updated
 after the 2026-10-17 code/test audit. The phased design below is historical
-context; its original “next” checklist predates patches 3–12. Fresh evidence
-and open validation failures are in [the audit](docs/audit-2026-10-17.md).
+context; its original “next” checklist predates patches 3–12. Initial evidence
+is in [the audit](docs/audit-2026-10-17.md); reader, allocator and time-contract
+repairs and remaining validation gaps are in
+[the continuation](docs/continuation-2026-10-17.md).
 
 ## 1. Thesis
 

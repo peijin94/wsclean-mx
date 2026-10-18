@@ -1,7 +1,8 @@
 # Next development steps for wsclean-mx
 
-**Reviewed:** 2026-10-17 (EDT), starting at `333cea8` on `main`.
-**Tracking read:** Linear **PZ-19**, “wsclean-mx: Apple Silicon optimized WSClean build,” including all five comments; GitHub issue **#1**, including all nine comments. Both remain open/in progress. No remote issue status was changed.
+**Initial audit:** 2026-10-17 (EDT), starting at `333cea8` on `main`; published as `43c6cae`.
+**Continuation:** [CPU correctness repairs and verification](continuation-2026-10-17.md).
+**Tracking read during the initial audit:** Linear **PZ-19**, “wsclean-mx: Apple Silicon optimized WSClean build,” including all five comments then present; GitHub issue **#1**, including all nine comments then present. Both were open/in progress. This continuation does not change remote issue state.
 
 ## Recommendation
 
@@ -30,11 +31,14 @@ The effective scientific baseline is **upstream plus the zero-padding fix**, not
 |---|---|---|---|
 | P0 — fixed in this pass | T2 accepted nonzero candidate data against an all-zero reference | `bench/compare_fits.py` used zero relative error when reference normalization was zero | Regression-tested fail-closed normalization; also corrected float64 ULP overflow, raw big-endian ULP handling, dtype-aware T0 and invalid inputs |
 | P0 — fixed in this pass | Benchmark runners deleted an existing output path before validating arguments | Previous `bench/run.sh:27` and `bench/snapshot.sh:15`; traversal and unsafe overrides were possible | Reject invalid names, output symlinks/collisions, unavailable variants and known write/output overrides; never replace existing runs |
-| P1 — open | Block reads touch physical rows excluded by a selection | `work/wsclean/msproviders/msreaders/contiguousmsreader.cpp:192–226`, `rowproviders/msrowprovider.cpp:127`, `columnblock.h:28` | Add selected/excluded undefined-`CORRECTED_DATA` fixtures; fall back to selected-row reads without hiding failures in selected cells |
-| P1 — open | Full upstream unit suite is not green | After downloading fixtures: 126 passed, 7 `std::bad_alloc` failures, 4 skipped; same seven failures appeared before the scratch change | Isolate the failures with small reproducers before calling this a release-quality build |
+| P1 — repaired for tested reader paths | Speculative block reads touched excluded invalid cells; fallback also needed full-shape validation | 27 production-reader cases cover excluded/selected cells, shapes, weights, metadata and boundaries | Keep valid reads batched; fall back per column/block; reject malformed selected shapes before extraction; retain the documented ContiguousMS first-cell limitation |
+| P1 — repaired | Seven native allocation failures and the exposed in-memory FITS date bug | Parent native run: 160 passed, 4 skipped, 0 failed; 869917 assertions | Fundamental allocation uses malloc; provider start time converts seconds to MJD days. Keep the four skips explicit rather than claiming all tests ran |
+| P1 — open, investigate first | Dirty-imaging wall time increased after the correctness repairs | Two four-repeat batches: median increases 12.6% and 14.4%; pooled 2.875 → 3.410 s. Busy/swapping host; coarse profiles do not isolate cause | Run a resident production-reader comparison and repeat on a quiet low-swap host; preserve all correctness checks and both timing batches |
 | P1 — open | Full-stack multiscale scientific equivalence is not established by residual RMS alone | Fresh mx-p11 vs upstream restored-image relative RMS is 1.36–1.47%, above this session's upstream-rerun maximum of 0.858%; default T2 also fails for upstream reruns | Define source/flux/position and perturbed-reference gates on broader data; do not silently loosen pixel thresholds |
-| P1 — partly addressed | Tests were disabled and several microbenchmarks copied implementations rather than linking production code | Existing `BUILD_TESTING=OFF`; `ctest -N` enumerated zero tests | New `scripts/test.sh` links production numerical routines and exercises actual block-cache code; add dependency suites and reader-level fixtures next |
+| P1 — partly addressed | Test coverage and build provenance need portable automation | Dedicated native build and real-reader fixtures now pass; test.sh validates source mappings and runs 56 Python tests plus linked gates | Extend dependency/CI coverage; root CTest enumeration remains insufficient |
+| P1 — follow-up, source-level finding | CLI in-memory loader has separate column-contract concerns | `io/readinmemory.cpp` opens antenna2 with ANTENNA1 and requires WEIGHT_SPECTRUM | Add a focused ReadMsInMemory integration repro, then repair metadata/weight selection before recommending this mode broadly |
 | P2 — open | Fixed reference and build provenance are not reproducible from one tracked command | No `build_upstream_fix.sh`; snapshots do not freeze all dynamic dependencies; work trees are reused without patch validation | Add the fixed-reference builder and a manifest of source/patch/binary/compiler/library hashes |
+| P2 — open | Older profiling harness still has destructive output setup | `bench/profile.sh` uses unconditional output removal; it was not used for this continuation's profiles | Apply common argument/output guards and add collision tests before reusing that harness |
 | P2 — open | Cache budgets do not bound total RSS | Shared kernel cache plus per-clone residual/PSF caches, temporary buffers and concurrent cache misses | Measure aggregate peak memory for multiple facets/channels/scales; consider budget coordination and eviction |
 | P2 — open | Numerical/resource edge cases remain | Even-median finite overflow is inherited; subnormal-only peaks retain upstream semantics; nested independent thread pools can contend | Add explicit edge tests and profile concurrency before changing semantics |
 | P3 — open | Plan and issue descriptions lag their comments | `notes.md` still proposed a first FFT patch; PZ-19 description checklist includes work completed in later comments | Treat this document and the latest dated benchmark report as the active plan; update tracking only with verified results |
@@ -47,16 +51,28 @@ The public-API allocation regression failed in all four unweighted cases before 
 
 ## Ordered implementation plan
 
-### 1. Fix selected-row correctness and complete the CPU gate
+### 0. Resolve the dirty-imaging performance gate
 
-- Make tiny real casacore fixtures covering homogeneous shapes, differing SPW/channel counts, differing polarization counts, `WEIGHT` versus `WEIGHT_SPECTRUM`, row-block boundaries, selected ranges, and undefined excluded cells.
-- Exercise both `ContiguousMSReader` and `DirectMSRowProvider`, not just `ColumnBlock`.
-- Preserve row-by-row behavior when a bulk request contains excluded invalid cells. Selected invalid cells must still fail loudly; do not silently substitute zeros.
-- Add `-j 1` full-product comparisons for dirty, Högbom, multiscale, Stokes I/V, and joined-channel cases.
-- Separate new-patch bitwise equivalence from full-stack scientific validation. The scratch patch preserves all five products exactly at `-j 1`; that does not prove equivalence of the earlier FFT-changing stack to upstream.
-- Isolate the seven upstream failures: four `visibility_modifier` H5 cases, two `interface` cases, and `in_memory_provider/read_write`. Do not assume missing data or insufficient RAM once fixtures are present.
+- Keep both four-repeat batches and the pooled view; do not select the faster minimum as proof of no regression.
+- Compare the real production reader in a long-lived process to separate reader cost from startup, FITS I/O and scheduling.
+- Repeat end-to-end on an idle, low-swap host before attributing the slowdown to code or dismissing it as noise.
+- If a reader cost is isolated, optimize validated fast-path caching without weakening selected-cell shape checks.
 
-**Exit criterion:** these reader fixtures and the supported unit suites pass; remaining exclusions have named causes, not a blanket “tests green.”
+**Exit criterion:** an attributable explanation and a stable end-to-end result; no unqualified performance-retention claim until then.
+
+### 1. Complete scientific and observing-mode acceptance
+
+The selected-row, allocator and provider-time repairs now have passing native
+regressions. The continuation records incremental `-j 1` image checks and
+performance measurements separately from full-stack scientific equivalence.
+
+- Define source-flux, position, PSF and polarization gates on broader data, using fixed-upstream reruns and justified perturbations. Do not loosen pixel thresholds after seeing a failure.
+- Reproduce and test the separate `ReadMsInMemory` antenna/weight-column contracts before a CLI in-memory configuration experiment.
+- Extend BDA, calibration, joined-channel and variable-layout coverage beyond the current synthetic fixtures and single real snapshot.
+- Keep four native skips explicit: two BDA cases require an unavailable hard-coded external dataset; two average-correction performance tests are disabled upstream.
+- Treat exactness of each operation-preserving repair as a narrower claim than acceptance of the earlier FFT-changing stack.
+
+**Exit criterion:** predefined science/mode gates pass, and all exclusions have named causes. A green supported native suite alone is not release-wide scientific validation.
 
 ### 2. Make builds and benchmark evidence reproducible
 
@@ -88,8 +104,8 @@ The public-API allocation regression failed in all four unweighted cases before 
 
 ## Artifacts and commands
 
-- Results and limits: `docs/audit-2026-10-17.md`.
-- Raw evidence (local, gitignored): `bench/out/audit-20261017/` and the `audit-20261017-*` run directories.
+- Results and limits: `docs/audit-2026-10-17.md` and `docs/continuation-2026-10-17.md`.
+- Raw evidence (local, gitignored): `bench/out/audit-20261017/`, `bench/out/continue-20261017/` and their immutable run directories.
 - New automated gate: `scripts/test.sh build-test` (or another configured mx build).
 - Upstream suite, separate from the new gate: run `./unittest --report_level=detailed --log_level=message` from `build-test/` after fetching its fixture targets. Root CTest enumeration is not a substitute for this executable, and dependency suites require their own configuration.
 

@@ -16,6 +16,27 @@ BUILD="${1:-$ROOT/build-mx}"
 BUILD="$(cd "$BUILD" && pwd)"
 PYTHON="${PYTHON:-$ROOT/.venv/bin/python}"
 CXX="${CXX:-/usr/bin/c++}"
+# These tests compile work-tree headers/sources and link the selected build's
+# libraries. Reject a reference or unrelated build before mixing those inputs.
+python3 - "$ROOT" "$BUILD/CMakeCache.txt" <<'PY'
+from pathlib import Path
+import sys
+
+root, cache_path = map(Path, sys.argv[1:])
+cache = {}
+for line in cache_path.read_text().splitlines():
+    if line and not line.startswith(("#", "//")) and "=" in line:
+        key, value = line.split("=", 1)
+        cache[key.split(":", 1)[0]] = value
+expected = {"CMAKE_HOME_DIRECTORY": root / "work/wsclean"}
+for component in ("aocommon", "schaapcommon", "radler"):
+    expected["FETCHCONTENT_SOURCE_DIR_" + component.upper()] = root / "work" / component
+for key, path in expected.items():
+    value = cache.get(key)
+    if not value or Path(value).resolve() != path.resolve():
+        print(f"Invalid source mapping: {key}={value!r}; expected {path}", file=sys.stderr)
+        sys.exit(2)
+PY
 "$PYTHON" -m unittest discover -s tests -p 'test_*.py' -v
 # A fresh build is required: an old binary/version string is not provenance.
 "$CMAKE" --build "$BUILD" --target wsclean -j "${JOBS:-2}"
@@ -41,6 +62,13 @@ COMMON=(-std=c++20 -O2 -I"$DEPS_PREFIX/include" -I"$BREW/include"
   -L"$BUILD" -lschaapthreading -L"$BREW/lib" -lfftw3f_threads -lfftw3f \
   -Wl,-rpath,"$BUILD" -o "$OUT/peak_scratch_regression"
 "$OUT/peak_scratch_regression"
+"$CXX" "${COMMON[@]}" tests/multiarray_regression.cpp -o "$OUT/multiarray_regression"
+"$OUT/multiarray_regression"
+"$CXX" "${COMMON[@]}" -I"$ROOT/work/wsclean" tests/inmemory_time_regression.cpp \
+  "$BUILD/libwsclean.a" -L"$DEPS_PREFIX/lib" -lcasa_ms -lcasa_tables -lcasa_casa \
+  -L"$BREW/lib" -lcfitsio -Wl,-rpath,"$DEPS_PREFIX/lib" \
+  -o "$OUT/inmemory_time_regression"
+"$OUT/inmemory_time_regression"
 # The legacy programs below have differential assertions and nonzero failures.
 "$CXX" "${COMMON[@]}" bench/micro/median_select.cpp -o "$OUT/median_select"
 "$OUT/median_select"

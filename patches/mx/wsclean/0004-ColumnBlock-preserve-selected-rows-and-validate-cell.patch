@@ -1,0 +1,1088 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Sat, 17 Oct 2026 21:49:42 -0400
+Subject: [PATCH] ColumnBlock: preserve selected rows and validate cell shapes
+
+
+diff --git a/msproviders/columnblock.h b/msproviders/columnblock.h
+index 755352d5..5df98555 100644
+--- a/msproviders/columnblock.h
++++ b/msproviders/columnblock.h
+@@ -5,6 +5,7 @@
+ #include <cstddef>
+ 
+ #include <casacore/casa/Arrays/Array.h>
++#include <casacore/casa/Exceptions/Error.h>
+ #include <casacore/ms/MeasurementSets/MeasurementSet.h>
+ #include <casacore/tables/Tables/ArrayColumn.h>
+ #include <casacore/tables/Tables/RefRows.h>
+@@ -26,20 +27,48 @@ template <typename T>
+ class ColumnBlock {
+  public:
+   void Load(const casacore::ArrayColumn<T>& column, size_t first, size_t last) {
++    Reset();
+     column.getColumnCells(casacore::RefRows(first, last), cells_, true);
+     cell_size_ = cells_.nelements() / (last - first + 1);
+     loaded_ = true;
+   }
+-  void Reset() { loaded_ = false; }
++  /**
++   * Read the requested physical row, trying a bulk read first. An excluded row
++   * can be undefined or have a different shape, making the bulk read fail.
++   * Remember that failure until Reset(), and let errors in requested rows
++   * propagate from the row-wise read.
++   */
++  const T* ReadCell(const casacore::ArrayColumn<T>& column, size_t first, size_t last, size_t row) {
++    if (!loaded_ && !read_rows_) {
++      try {
++        Load(column, first, last);
++      } catch (const casacore::AipsError&) {
++        read_rows_ = true;
++      }
++    }
++    if (read_rows_) {
++      column.get(row, cells_, true);
++      cell_size_ = cells_.nelements();
++      return cells_.data();
++    }
++    return Cell(row - first);
++  }
++  void Reset() {
++    loaded_ = false;
++    read_rows_ = false;
++  }
+   bool Loaded() const { return loaded_; }
+   const T* Cell(size_t index) const { return cells_.data() + index * cell_size_; }
+   size_t CellSize() const { return cell_size_; }
+-  casacore::IPosition CellShape() const { return cells_.shape().getFirst(cells_.ndim() - 1); }
++  casacore::IPosition CellShape() const {
++    return read_rows_ ? cells_.shape() : cells_.shape().getFirst(cells_.ndim() - 1);
++  }
+ 
+  private:
+   casacore::Array<T> cells_;
+   size_t cell_size_ = 0;
+   bool loaded_ = false;
++  bool read_rows_ = false;
+ };
+ 
+ /**
+diff --git a/msproviders/msreaders/contiguousmsreader.cpp b/msproviders/msreaders/contiguousmsreader.cpp
+index 64070c3f..f7273f81 100644
+--- a/msproviders/msreaders/contiguousmsreader.cpp
++++ b/msproviders/msreaders/contiguousmsreader.cpp
+@@ -104,7 +104,7 @@ size_t ContiguousMSReader::blockIndex(size_t row) {
+     const ContiguousMS& contiguousms = static_cast<const ContiguousMS&>(*ms_provider_);
+     block_start_ = row;
+     block_end_ = std::min(row + block_rows_, contiguousms._endRow);
+-    block_uvw_.Load(contiguousms._uvwColumn, block_start_, block_end_ - 1);
++    block_uvw_.Reset();
+     block_data_.Reset();
+     block_flag_.Reset();
+     block_weight_.Reset();
+@@ -112,7 +112,15 @@ size_t ContiguousMSReader::blockIndex(size_t row) {
+   return row - block_start_;
+ }
+ 
+-const double* ContiguousMSReader::uvw(size_t row) { return block_uvw_.Cell(blockIndex(row)); }
++const double* ContiguousMSReader::uvw(size_t row) {
++  blockIndex(row);
++  const ContiguousMS& contiguousms = static_cast<const ContiguousMS&>(*ms_provider_);
++  const double* values =
++      block_uvw_.ReadCell(contiguousms._uvwColumn, block_start_, block_end_ - 1, row);
++  if (block_uvw_.CellSize() != 3)
++    throw std::runtime_error("UVW column cell must have three values");
++  return values;
++}
+ 
+ void ContiguousMSReader::ReadMeta(MSProvider::MetaData& metadata) {
+   const ContiguousMS& contiguousms = static_cast<const ContiguousMS&>(*ms_provider_);
+@@ -192,12 +200,12 @@ void ContiguousMSReader::WriteImagingWeights(const float* buffer) {
+ void ContiguousMSReader::readData() {
+   ContiguousMS& contiguousms = static_cast<ContiguousMS&>(*ms_provider_);
+   if (!_isDataRead) {
+-    const size_t index = blockIndex(_currentInputRow);
+-    if (!block_data_.Loaded())
+-      block_data_.Load(contiguousms._dataColumn, block_start_, block_end_ - 1);
+-    if (block_data_.CellSize() != contiguousms._dataArray.nelements())
++    blockIndex(_currentInputRow);
++    const std::complex<float>* data = block_data_.ReadCell(contiguousms._dataColumn, block_start_,
++                                                           block_end_ - 1, _currentInputRow);
++    if (!block_data_.CellShape().isEqual(contiguousms._dataArray.shape()))
+       throw std::runtime_error("Data column has rows with different shapes");
+-    std::copy_n(block_data_.Cell(index), block_data_.CellSize(), contiguousms._dataArray.data());
++    std::copy_n(data, block_data_.CellSize(), contiguousms._dataArray.data());
+     _isDataRead = true;
+   }
+ }
+@@ -206,24 +214,23 @@ void ContiguousMSReader::readWeights() {
+   ContiguousMS& contiguousms = static_cast<ContiguousMS&>(*ms_provider_);
+ 
+   if (!_isWeightRead) {
+-    const size_t index = blockIndex(_currentInputRow);
+-    if (!block_flag_.Loaded())
+-      block_flag_.Load(contiguousms._flagColumn, block_start_, block_end_ - 1);
+-    if (block_flag_.CellSize() != contiguousms._flagArray.nelements())
++    blockIndex(_currentInputRow);
++    const bool* flags = block_flag_.ReadCell(contiguousms._flagColumn, block_start_, block_end_ - 1,
++                                             _currentInputRow);
++    if (!block_flag_.CellShape().isEqual(contiguousms._flagArray.shape()))
+       throw std::runtime_error("Flag column has rows with different shapes");
+-    std::copy_n(block_flag_.Cell(index), block_flag_.CellSize(), contiguousms._flagArray.data());
++    std::copy_n(flags, block_flag_.CellSize(), contiguousms._flagArray.data());
+ 
+     casacore::Array<float>& weights = contiguousms._msHasWeightSpectrum
+                                           ? contiguousms._weightSpectrumArray
+                                           : contiguousms._weightScalarArray;
+-    if (!block_weight_.Loaded()) {
+-      block_weight_.Load(contiguousms._msHasWeightSpectrum ? *contiguousms._weightSpectrumColumn
+-                                                           : *contiguousms._weightScalarColumn,
+-                         block_start_, block_end_ - 1);
+-    }
+-    if (block_weight_.CellSize() != weights.nelements())
++    const float* weight_values = block_weight_.ReadCell(
++        contiguousms._msHasWeightSpectrum ? *contiguousms._weightSpectrumColumn
++                                          : *contiguousms._weightScalarColumn,
++        block_start_, block_end_ - 1, _currentInputRow);
++    if (!block_weight_.CellShape().isEqual(weights.shape()))
+       throw std::runtime_error("Weight column has rows with different shapes");
+-    std::copy_n(block_weight_.Cell(index), block_weight_.CellSize(), weights.data());
++    std::copy_n(weight_values, block_weight_.CellSize(), weights.data());
+     if (!contiguousms._msHasWeightSpectrum)
+       ExpandScalarWeights(contiguousms._weightScalarArray, contiguousms._weightSpectrumArray);
+     _isWeightRead = true;
+diff --git a/msproviders/rowproviders/msrowprovider.cpp b/msproviders/rowproviders/msrowprovider.cpp
+index 567ea416..84d7b6d4 100644
+--- a/msproviders/rowproviders/msrowprovider.cpp
++++ b/msproviders/rowproviders/msrowprovider.cpp
+@@ -47,7 +47,26 @@ void MSRowProvider::Initialize() {
+         Ms(), casacore::MS::columnName(casacore::MSMainEnums::WEIGHT)));
+   }
+ 
+-  block_rows_ = ColumnBlockRows(Ms(), columns.data.shape(BeginRow()).product());
++  const casacore::ScalarColumn<int> spectral_window_id(Ms().dataDescription(), "SPECTRAL_WINDOW_ID");
++  const casacore::ScalarColumn<int> polarization_id(Ms().dataDescription(), "POLARIZATION_ID");
++  const casacore::ScalarColumn<int> num_channels(Ms().spectralWindow(), "NUM_CHAN");
++  const casacore::ScalarColumn<int> num_correlations(Ms().polarization(), "NUM_CORR");
++  expected_data_shapes_.resize(Ms().dataDescription().nrow());
++  for (size_t ddid : _selectedDataDescIds) {
++    if (ddid >= expected_data_shapes_.size())
++      throw std::runtime_error("Selected DATA_DESC_ID is outside DATA_DESCRIPTION");
++    const int spw = spectral_window_id(ddid);
++    const int polarization = polarization_id(ddid);
++    if (spw < 0 || size_t(spw) >= num_channels.nrow() || polarization < 0 ||
++        size_t(polarization) >= num_correlations.nrow())
++      throw std::runtime_error("Selected DATA_DESC_ID has invalid spectral window or polarization");
++    const int channels = num_channels(spw);
++    const int correlations = num_correlations(polarization);
++    if (channels <= 0 || correlations <= 0)
++      throw std::runtime_error("Selected DATA_DESC_ID must have positive NUM_CHAN and NUM_CORR");
++    expected_data_shapes_[ddid] = casacore::IPosition(2, correlations, channels);
++  }
++
+   _currentUVWArray.resize(3);
+ 
+   // Determine last timestep
+@@ -74,6 +93,12 @@ void MSRowProvider::Initialize() {
+   const int a2 = columns.antenna_2(_currentRow);
+   const int fieldId = columns.field_id(_currentRow);
+   if (!isCurrentRowSelected(fieldId, a1, a2)) MSRowProvider::NextRow();
++  // An excluded initial row may have no data cell. Size the batch only after
++  // selecting a row, and discard the one-row metadata cache used above.
++  if (!AtEnd()) {
++    block_rows_ = ColumnBlockRows(Ms(), columns.data.shape(_currentRow).product());
++    block_end_ = block_start_;
++  }
+ }
+ 
+ void MSRowProvider::NextRow() {
+@@ -112,7 +137,7 @@ size_t MSRowProvider::blockIndex(size_t row) {
+   if (row < block_start_ || row >= block_end_) {
+     block_start_ = row;
+     block_end_ = std::min(row + block_rows_, EndRow());
+-    block_uvw_.Load(Columns().uvw, block_start_, block_end_ - 1);
++    block_uvw_.Reset();
+     block_data_.Reset();
+     block_flag_.Reset();
+     block_weight_.Reset();
+@@ -121,28 +146,42 @@ size_t MSRowProvider::blockIndex(size_t row) {
+ }
+ 
+ void MSRowProvider::readCurrentUvw() {
+-  std::copy_n(block_uvw_.Cell(blockIndex(_currentRow)), 3, _currentUVWArray.data());
++  blockIndex(_currentRow);
++  const double* values =
++      block_uvw_.ReadCell(Columns().uvw, block_start_, block_end_ - 1, _currentRow);
++  if (block_uvw_.CellSize() != 3) throw std::runtime_error("UVW column cell must have three values");
++  std::copy_n(values, 3, _currentUVWArray.data());
+ }
+ 
+ void MSRowProvider::readCurrentData(DataArray& data, FlagArray& flags) {
+-  const size_t index = blockIndex(_currentRow);
++  blockIndex(_currentRow);
+   MsColumns& columns = Columns();
+-  if (!block_data_.Loaded()) block_data_.Load(columns.data, block_start_, block_end_ - 1);
++  const casacore::Complex* values =
++      block_data_.ReadCell(columns.data, block_start_, block_end_ - 1, _currentRow);
++  if (!block_data_.CellShape().isEqual(expected_data_shapes_[_currentDataDescId]))
++    throw std::runtime_error("DATA column shape does not match DATA_DESC_ID dimensions");
+   data.resize(block_data_.CellShape());
+-  std::copy_n(block_data_.Cell(index), block_data_.CellSize(), data.data());
+-  if (!block_flag_.Loaded()) block_flag_.Load(columns.flag, block_start_, block_end_ - 1);
++  std::copy_n(values, block_data_.CellSize(), data.data());
++  const bool* flag_values =
++      block_flag_.ReadCell(columns.flag, block_start_, block_end_ - 1, _currentRow);
++  if (!block_flag_.CellShape().isEqual(data.shape()))
++    throw std::runtime_error("FLAG column shape does not match DATA");
+   flags.resize(block_flag_.CellShape());
+-  std::copy_n(block_flag_.Cell(index), block_flag_.CellSize(), flags.data());
++  std::copy_n(flag_values, block_flag_.CellSize(), flags.data());
+ }
+ 
+ void MSRowProvider::getCurrentWeights(WeightArray& weights, const casacore::IPosition& shape) {
+-  const size_t index = blockIndex(_currentRow);
+-  if (!block_weight_.Loaded())
+-    block_weight_.Load(_msHasWeights ? *_weightSpectrumColumn : *_weightScalarColumn,
+-                       block_start_, block_end_ - 1);
++  blockIndex(_currentRow);
++  const float* values = block_weight_.ReadCell(
++      _msHasWeights ? *_weightSpectrumColumn : *_weightScalarColumn, block_start_, block_end_ - 1,
++      _currentRow);
++  if (_msHasWeights && !block_weight_.CellShape().isEqual(shape))
++    throw std::runtime_error("WEIGHT_SPECTRUM column shape does not match DATA");
++  if (!_msHasWeights && !block_weight_.CellShape().isEqual(casacore::IPosition(1, shape[0])))
++    throw std::runtime_error("WEIGHT column shape does not match NUM_CORR");
+   WeightArray& cell = _msHasWeights ? weights : _scratchWeightScalarArray;
+   cell.resize(block_weight_.CellShape());
+-  std::copy_n(block_weight_.Cell(index), block_weight_.CellSize(), cell.data());
++  std::copy_n(values, block_weight_.CellSize(), cell.data());
+   if (!_msHasWeights) {
+     weights.resize(shape);
+     ExpandScalarWeights(_scratchWeightScalarArray, weights);
+diff --git a/msproviders/rowproviders/msrowprovider.h b/msproviders/rowproviders/msrowprovider.h
+index 647ed524..784010c9 100644
+--- a/msproviders/rowproviders/msrowprovider.h
++++ b/msproviders/rowproviders/msrowprovider.h
+@@ -70,6 +70,8 @@ class MSRowProvider : public MsRowProviderBase {
+   bool _msHasWeights;
+   bool _requireModel;
+   casacore::Array<float> _scratchWeightScalarArray;
++  // Expected [correlations, channels], cached once for each selected DDID.
++  std::vector<casacore::IPosition> expected_data_shapes_;
+ 
+   size_t _startTimestep, _endTimestep;
+ 
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 8e4a6b0a..024a688a 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -21,6 +21,7 @@ add_executable(
+   model/tbbsmodel.cpp
+   msproviders/tbdamsrowprovider.cpp
+   msproviders/tbdamsrowproviderdata.cpp
++  msproviders/tcolumnblockselection.cpp
+   msproviders/tinmemoryprovider.cpp
+   msproviders/tmsrowproviderbase.cpp
+   msproviders/tnoisemsrowprovider.cpp
+diff --git a/tests/msproviders/tcolumnblockselection.cpp b/tests/msproviders/tcolumnblockselection.cpp
+new file mode 100644
+index 00000000..b60a9520
+--- /dev/null
++++ b/tests/msproviders/tcolumnblockselection.cpp
+@@ -0,0 +1,795 @@
++#include "../../msproviders/contiguousms.h"
++#include "../../msproviders/msreaders/msreader.h"
++#include "../../msproviders/rowproviders/directmsrowprovider.h"
++
++#include <algorithm>
++#include <utility>
++#include <vector>
++
++#include <boost/filesystem.hpp>
++#include <boost/test/unit_test.hpp>
++
++#include <casacore/ms/MeasurementSets/MSColumns.h>
++#include <casacore/tables/Tables/ArrColDesc.h>
++#include <casacore/tables/Tables/SetupNewTab.h>
++
++namespace wsclean {
++namespace {
++using schaapcommon::reordering::ChannelRange;
++using schaapcommon::reordering::MSSelection;
++using schaapcommon::reordering::StorageManagerType;
++
++enum class SelectionMask { kField, kAutocorrelation, kBaselineLength, kDataDescription };
++
++struct FixtureOptions {
++  size_t rows = 3;
++  std::string undefined_column = "CORRECTED_DATA";
++  std::vector<size_t> undefined_rows{1};
++  std::vector<size_t> excluded_rows{1};
++  bool spectral_weights = false;
++  size_t channels = 3;
++  size_t correlations = 1;
++  SelectionMask mask = SelectionMask::kField;
++};
++
++bool Contains(const std::vector<size_t>& rows, size_t row) {
++  return std::find(rows.begin(), rows.end(), row) != rows.end();
++}
++
++casacore::Complex DataValue(size_t row, size_t element) {
++  return {10.0f + row + 0.125f * element, -1.0f - element};
++}
++
++bool FlagValue(size_t row, size_t element) { return (row + element) % 5 == 3; }
++
++struct TemporaryDirectory {
++  TemporaryDirectory()
++      : path(boost::filesystem::current_path() /
++             boost::filesystem::unique_path("wsclean-selection-%%%%-%%%%")) {
++    boost::filesystem::create_directory(path);
++  }
++  ~TemporaryDirectory() { boost::filesystem::remove_all(path); }
++  boost::filesystem::path path;
++};
++
++// A real, isolated disk MS: all required tables are created, with metadata for
++// two fields and configurable channel/correlation shapes.
++class SelectionFixture {
++ private:
++  TemporaryDirectory directory_;
++
++ public:
++  explicit SelectionFixture(FixtureOptions fixture_options = {})
++      : options(std::move(fixture_options)),
++        path((directory_.path / "selection.ms").string()),
++        ms(Create(path, options)) {
++    ms.createDefaultSubtables(casacore::Table::New);
++    ms.addRow(options.rows);
++    ms.antenna().addRow(2);
++    ms.field().addRow(2);
++    ms.spectralWindow().addRow();
++    ms.polarization().addRow();
++    ms.dataDescription().addRow(options.mask == SelectionMask::kDataDescription ? 2 : 1);
++    casacore::MSColumns columns(ms);
++    columns.spectralWindow().numChan().put(0, options.channels);
++    casacore::Vector<double> frequencies(options.channels);
++    for (size_t ch = 0; ch != options.channels; ++ch) frequencies[ch] = 100e6 + ch * 1e6;
++    columns.spectralWindow().chanFreq().put(0, frequencies);
++    columns.spectralWindow().chanWidth().put(0, casacore::Vector<double>(options.channels, 1e6));
++    columns.spectralWindow().refFrequency().put(0, 101e6);
++    columns.polarization().numCorr().put(0, options.correlations);
++    casacore::Vector<int> correlations(options.correlations);
++    for (size_t pol = 0; pol != options.correlations; ++pol) correlations[pol] = 9 + pol;
++    columns.polarization().corrType().put(0, correlations);  // XX, XY, YX, YY
++    casacore::Matrix<int> products(2, options.correlations);
++    for (size_t pol = 0; pol != options.correlations; ++pol) {
++      products(0, pol) = pol / 2;
++      products(1, pol) = pol % 2;
++    }
++    columns.polarization().corrProduct().put(0, products);
++    for (size_t ddid = 0; ddid != ms.dataDescription().nrow(); ++ddid) {
++      columns.dataDescription().spectralWindowId().put(ddid, 0);
++      columns.dataDescription().polarizationId().put(ddid, 0);
++    }
++    for (size_t row = 0; row != options.rows; ++row) {
++      const bool excluded = Contains(options.excluded_rows, row);
++      const casacore::IPosition shape(2, options.correlations, options.channels);
++      columns.antenna1().put(row, 0);
++      columns.antenna2().put(row,
++                             excluded && options.mask == SelectionMask::kAutocorrelation ? 0 : 1);
++      columns.fieldId().put(row, excluded && options.mask == SelectionMask::kField ? 1 : 0);
++      columns.dataDescId().put(row,
++                               excluded && options.mask == SelectionMask::kDataDescription ? 1 : 0);
++      columns.time().put(row, 1000.0 + row);
++      columns.interval().put(row, 1.0);
++      if (!Undefined("UVW", row))
++        columns.uvw().put(row, excluded && options.mask == SelectionMask::kBaselineLength
++                                   ? casacore::Vector<double>(3, 0.0)
++                                   : casacore::Vector<double>{10.0 + row, 20.0, 30.0});
++      casacore::Array<casacore::Complex> data(shape);
++      casacore::Array<bool> flags(shape);
++      casacore::Array<float> weights(shape);
++      for (size_t i = 0; i != data.nelements(); ++i) {
++        data.data()[i] = DataValue(row, i);
++        flags.data()[i] = FlagValue(row, i);
++        weights.data()[i] = WeightValue(row, i);
++      }
++      if (!Undefined("CORRECTED_DATA", row)) columns.correctedData().put(row, data);
++      if (!Undefined("FLAG", row)) columns.flag().put(row, flags);
++      casacore::Vector<float> scalar_weights(options.correlations);
++      for (size_t pol = 0; pol != options.correlations; ++pol)
++        scalar_weights[pol] = WeightValue(row, pol);
++      if (!Undefined("WEIGHT", row)) columns.weight().put(row, scalar_weights);
++      if (options.spectral_weights && !Undefined("WEIGHT_SPECTRUM", row))
++        columns.weightSpectrum().put(row, weights);
++    }
++    ms.flush();
++  }
++
++  float WeightValue(size_t row, size_t element) const {
++    return 2.0f + row +
++           0.25f * (options.spectral_weights ? element : element % options.correlations);
++  }
++
++  bool Undefined(const std::string& column, size_t row) const {
++    return options.undefined_column == column && Contains(options.undefined_rows, row);
++  }
++
++  MSSelection Selection() const {
++    MSSelection selection;
++    if (options.mask == SelectionMask::kBaselineLength) selection.SetMinUVWInM(1.0);
++    return selection;
++  }
++
++  const FixtureOptions options;
++  const std::string path;
++  casacore::MeasurementSet ms;
++
++ private:
++  static casacore::MeasurementSet Create(const std::string& path, const FixtureOptions& options) {
++    casacore::TableDesc description = casacore::MS::requiredTableDesc();
++    description.addColumn(casacore::ArrayColumnDesc<casacore::Complex>("CORRECTED_DATA", 2));
++    if (options.spectral_weights)
++      description.addColumn(casacore::ArrayColumnDesc<float>("WEIGHT_SPECTRUM", 2));
++    if (options.undefined_column == "UVW") description.rwColumnDesc("UVW").setOptions(0);
++    casacore::SetupNewTable setup(path, description, casacore::Table::New);
++    return casacore::MeasurementSet(setup);
++  }
++};
++
++aocommon::VectorMap<ChannelRange> Channels(size_t channels) {
++  aocommon::VectorMap<ChannelRange> result;
++  result.AlwaysEmplace(0, ChannelRange{0, 0, channels});
++  return result;
++}
++void CheckContiguous(SelectionFixture& fixture) {
++  ContiguousMS provider(fixture.path, "CORRECTED_DATA", "MODEL_DATA", StorageManagerType::Default,
++                        fixture.Selection(), Channels(fixture.options.channels),
++                        aocommon::PolarizationEnum::XX, false, false);
++  std::unique_ptr<MSReader> reader = provider.MakeReader();
++  for (size_t row = 0; row != fixture.options.rows; ++row) {
++    if (Contains(fixture.options.excluded_rows, row)) continue;
++    BOOST_TEST_CONTEXT("contiguous row " << row) {
++      BOOST_REQUIRE(reader->CurrentRowAvailable());
++      BOOST_REQUIRE(reader->CurrentRowAvailable());
++      MSProvider::MetaData metadata;
++      reader->ReadMeta(metadata);
++      BOOST_CHECK_EQUAL(metadata.time, 1000.0 + row);
++      BOOST_CHECK_EQUAL(metadata.u_in_m, 10.0 + row);
++      BOOST_CHECK_EQUAL(metadata.v_in_m, 20.0);
++      BOOST_CHECK_EQUAL(metadata.w_in_m, 30.0);
++      BOOST_CHECK_EQUAL(metadata.data_desc_id, 0);
++      BOOST_CHECK_EQUAL(metadata.field_id, 0);
++      BOOST_CHECK_EQUAL(metadata.antenna1, 0);
++      BOOST_CHECK_EQUAL(metadata.antenna2, 1);
++      BOOST_CHECK_EQUAL(metadata.interval, 1.0);
++      std::vector<std::complex<float>> values(fixture.options.channels);
++      std::vector<float> weights(fixture.options.channels);
++      // Alternate the read order and repeat reads to exercise the current-row cache.
++      if (row % 2 == 0) reader->ReadWeights(weights.data());
++      reader->ReadData(values.data());
++      reader->ReadWeights(weights.data());
++      reader->ReadData(values.data());
++      for (size_t ch = 0; ch != values.size(); ++ch) {
++        const size_t i = ch * fixture.options.correlations;
++        BOOST_CHECK_EQUAL(values[ch], DataValue(row, i));
++        BOOST_CHECK_EQUAL(weights[ch], FlagValue(row, i) ? 0.0f : fixture.WeightValue(row, i));
++      }
++      reader->NextInputRow();
++    }
++  }
++  BOOST_CHECK(!reader->CurrentRowAvailable());
++}
++
++void CheckDirect(SelectionFixture& fixture) {
++  DirectMSRowProvider provider(fixture.ms, fixture.Selection(), aocommon::VectorSet<size_t>{0},
++                               "CORRECTED_DATA", "MODEL_DATA", false);
++  for (size_t row = 0; row != fixture.options.rows; ++row) {
++    if (Contains(fixture.options.excluded_rows, row)) continue;
++    BOOST_TEST_CONTEXT("direct row " << row) {
++      BOOST_REQUIRE(!provider.AtEnd());
++      MsRowProviderBase::DataArray data;
++      MsRowProviderBase::FlagArray flags;
++      MsRowProviderBase::WeightArray weights;
++      double u, v, w, time;
++      float interval;
++      uint32_t ddid, antenna1, antenna2, field;
++      provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2, field, time,
++                        interval);
++      BOOST_CHECK_EQUAL(time, 1000.0 + row);
++      BOOST_CHECK_EQUAL(u, 10.0 + row);
++      BOOST_CHECK_EQUAL(v, 20.0);
++      BOOST_CHECK_EQUAL(w, 30.0);
++      BOOST_CHECK_EQUAL(ddid, 0);
++      BOOST_CHECK_EQUAL(field, 0);
++      BOOST_CHECK_EQUAL(antenna1, 0);
++      BOOST_CHECK_EQUAL(antenna2, 1);
++      BOOST_CHECK_EQUAL(interval, 1.0f);
++      const casacore::IPosition shape(2, fixture.options.correlations, fixture.options.channels);
++      BOOST_REQUIRE(data.shape().isEqual(shape));
++      BOOST_REQUIRE(flags.shape().isEqual(shape));
++      BOOST_REQUIRE(weights.shape().isEqual(shape));
++      BOOST_CHECK_EQUAL(provider.GetWriteInfo().row_index, row);
++      for (size_t i = 0; i != data.nelements(); ++i) {
++        BOOST_CHECK_EQUAL(data.data()[i], DataValue(row, i));
++        BOOST_CHECK_EQUAL(flags.data()[i], FlagValue(row, i));
++        BOOST_CHECK_EQUAL(weights.data()[i], fixture.WeightValue(row, i));
++      }
++      provider.NextRow();
++    }
++  }
++  BOOST_CHECK(provider.AtEnd());
++}
++
++void CheckBoth(SelectionFixture& fixture) {
++  CheckContiguous(fixture);
++  CheckDirect(fixture);
++}
++
++void SetCellShape(SelectionFixture& fixture, const std::string& column, size_t row,
++                  const casacore::IPosition& shape) {
++  if (column == "CORRECTED_DATA") {
++    casacore::ArrayColumn<casacore::Complex>(fixture.ms, column)
++        .put(row, casacore::Array<casacore::Complex>(shape, casacore::Complex(99.0f, 0.0f)));
++  } else if (column == "FLAG") {
++    casacore::ArrayColumn<bool>(fixture.ms, column).put(row, casacore::Array<bool>(shape, false));
++  } else {
++    casacore::ArrayColumn<float>(fixture.ms, column).put(row, casacore::Array<float>(shape, 99.0f));
++  }
++}
++
++void CheckSelectedCellThrows(SelectionFixture& fixture, size_t malformed_row,
++                             bool check_contiguous = true) {
++  if (check_contiguous) {
++    ContiguousMS provider(fixture.path, "CORRECTED_DATA", "MODEL_DATA",
++                          StorageManagerType::Default, fixture.Selection(),
++                          Channels(fixture.options.channels), aocommon::PolarizationEnum::XX,
++                          false, false);
++    std::unique_ptr<MSReader> reader = provider.MakeReader();
++    std::vector<std::complex<float>> data(fixture.options.channels);
++    std::vector<float> weights(fixture.options.channels);
++    for (size_t row = 0; row != malformed_row; ++row) {
++      if (Contains(fixture.options.excluded_rows, row)) continue;
++      BOOST_REQUIRE(reader->CurrentRowAvailable());
++      reader->ReadData(data.data());
++      BOOST_CHECK_EQUAL(data[0], DataValue(row, 0));
++      reader->NextInputRow();
++    }
++    BOOST_REQUIRE(reader->CurrentRowAvailable());
++    BOOST_CHECK_THROW(reader->ReadData(data.data()), std::runtime_error);
++    BOOST_CHECK_THROW(reader->ReadWeights(weights.data()), std::runtime_error);
++  }
++  DirectMSRowProvider provider(fixture.ms, fixture.Selection(), aocommon::VectorSet<size_t>{0},
++                               "CORRECTED_DATA", "MODEL_DATA", false);
++  MsRowProviderBase::DataArray data;
++  MsRowProviderBase::FlagArray flags;
++  MsRowProviderBase::WeightArray weights;
++  double u, v, w, time;
++  float interval;
++  uint32_t ddid, antenna1, antenna2, field;
++  for (size_t row = 0; row != malformed_row; ++row) {
++    if (Contains(fixture.options.excluded_rows, row)) continue;
++    BOOST_REQUIRE(!provider.AtEnd());
++    provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2, field, time,
++                      interval);
++    BOOST_CHECK_EQUAL(data.data()[0], DataValue(row, 0));
++    provider.NextRow();
++  }
++  BOOST_REQUIRE(!provider.AtEnd());
++  // Never pass potentially malformed arrays to downstream extraction.
++  for (size_t repeat = 0; repeat != 2; ++repeat)
++    BOOST_CHECK_THROW(provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2,
++                                        field, time, interval),
++                      std::runtime_error);
++}
++}  // namespace
++
++BOOST_AUTO_TEST_SUITE(column_block_selection)
++
++BOOST_AUTO_TEST_CASE(contiguous_excludes_undefined_data) {
++  SelectionFixture fixture;
++  const casacore::ArrayColumn<casacore::Complex> data(fixture.ms, "CORRECTED_DATA");
++  BOOST_REQUIRE(data.isDefined(0));
++  BOOST_REQUIRE(!data.isDefined(1));
++  BOOST_REQUIRE(data.isDefined(2));
++  CheckContiguous(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(direct_excludes_undefined_data) {
++  SelectionFixture fixture;
++  CheckDirect(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(direct_excludes_undefined_initial_data) {
++  SelectionFixture fixture(FixtureOptions{.undefined_rows = {0}, .excluded_rows = {0}});
++  CheckDirect(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(direct_with_no_selected_data_rows) {
++  SelectionFixture fixture(FixtureOptions{.undefined_rows = {0, 1, 2},
++                                          .excluded_rows = {0, 1, 2}});
++  CheckDirect(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(excludes_undefined_flags) {
++  SelectionFixture fixture(FixtureOptions{.undefined_column = "FLAG"});
++  BOOST_REQUIRE(!casacore::ArrayColumn<bool>(fixture.ms, "FLAG").isDefined(1));
++  CheckBoth(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(selected_short_flags_throw) {
++  SelectionFixture fixture;
++  SetCellShape(fixture, "FLAG", 2, casacore::IPosition(2, 1, 1));
++  CheckSelectedCellThrows(fixture, 2);
++}
++
++BOOST_AUTO_TEST_CASE(selected_data_shape_must_match_ddid) {
++  for (bool spectral_weights : {false, true}) {
++    for (const casacore::IPosition& shape :
++         {casacore::IPosition(2, 1, 2), casacore::IPosition(2, 1, 5),
++          casacore::IPosition(2, 2, 3)}) {
++      BOOST_TEST_CONTEXT("DATA shape " << shape << ", spectral " << spectral_weights) {
++        SelectionFixture fixture(FixtureOptions{.spectral_weights = spectral_weights});
++        // Matching auxiliary cells isolate DATA versus DDID validation.
++        SetCellShape(fixture, "CORRECTED_DATA", 2, shape);
++        SetCellShape(fixture, "FLAG", 2, shape);
++        if (spectral_weights) SetCellShape(fixture, "WEIGHT_SPECTRUM", 2, shape);
++        CheckSelectedCellThrows(fixture, 2);
++      }
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(selected_short_spectral_weights_throw) {
++  SelectionFixture fixture(FixtureOptions{.spectral_weights = true});
++  SetCellShape(fixture, "WEIGHT_SPECTRUM", 2, casacore::IPosition(2, 1, 1));
++  CheckSelectedCellThrows(fixture, 2);
++}
++
++BOOST_AUTO_TEST_CASE(selected_scalar_weight_length_must_match_correlations) {
++  for (size_t correlations : {1u, 4u}) {
++    for (size_t length : {1u, 3u, 5u}) {
++      if (length == correlations) continue;
++      BOOST_TEST_CONTEXT("scalar weights " << length << ", correlations " << correlations) {
++        SelectionFixture fixture(FixtureOptions{.correlations = correlations});
++        // Nonempty malformed weights keep the pre-fix expansion safe.
++        SetCellShape(fixture, "WEIGHT", 2, casacore::IPosition(1, length));
++        CheckSelectedCellThrows(fixture, 2);
++      }
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(selected_equal_size_transposed_cells_throw) {
++  for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT_SPECTRUM"}) {
++    BOOST_TEST_CONTEXT("transposed selected column " << column) {
++      SelectionFixture fixture(FixtureOptions{.spectral_weights = column == "WEIGHT_SPECTRUM"});
++      SetCellShape(fixture, column, 2, casacore::IPosition(2, 3, 1));
++      CheckSelectedCellThrows(fixture, 2);
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(selected_malformed_initial_cells_throw) {
++  for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT", "WEIGHT_SPECTRUM"}) {
++    BOOST_TEST_CONTEXT("first selected column " << column) {
++      SelectionFixture fixture(FixtureOptions{.undefined_column = "",
++                                              .spectral_weights = column == "WEIGHT_SPECTRUM"});
++      const casacore::IPosition shape = column == "WEIGHT" ? casacore::IPosition(1, 2)
++                                                          : casacore::IPosition(2, 1, 2);
++      SetCellShape(fixture, column, 0, shape);
++      if (column == "CORRECTED_DATA") SetCellShape(fixture, "FLAG", 0, shape);
++      // ContiguousMS sizes its arrays from the first physical DATA cell;
++      // validating that constructor against DDID metadata is outside this fix.
++      CheckSelectedCellThrows(fixture, 0, column != "CORRECTED_DATA");
++    }
++  }
++  SelectionFixture fixture(FixtureOptions{.undefined_rows = {0}, .excluded_rows = {0}});
++  SetCellShape(fixture, "FLAG", 1, casacore::IPosition(2, 1, 1));
++  CheckSelectedCellThrows(fixture, 1, false);
++}
++
++BOOST_AUTO_TEST_CASE(excludes_malformed_initial_and_all_cells) {
++  for (const std::vector<size_t>& excluded_rows :
++       {std::vector<size_t>{0}, std::vector<size_t>{0, 1, 2}}) {
++    for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT", "WEIGHT_SPECTRUM"}) {
++      BOOST_TEST_CONTEXT("excluded column " << column << ", rows " << excluded_rows.size()) {
++        SelectionFixture fixture(FixtureOptions{.undefined_column = "",
++                                                .excluded_rows = excluded_rows,
++                                                .spectral_weights = column == "WEIGHT_SPECTRUM"});
++        for (size_t row : excluded_rows)
++          SetCellShape(fixture, column, row, column == "WEIGHT" ? casacore::IPosition(1, 2)
++                                                                : casacore::IPosition(2, 3, 1));
++        if (column == "CORRECTED_DATA") {
++          // Preserve ContiguousMS's first-physical-DATA-cell constraint.
++          CheckDirect(fixture);
++        } else {
++          CheckBoth(fixture);
++        }
++      }
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(direct_rejects_invalid_selected_ddid_metadata) {
++  for (const std::string column :
++       {"NUM_CHAN", "NUM_CORR", "SPECTRAL_WINDOW_ID", "POLARIZATION_ID"}) {
++    const bool is_dimension = column == "NUM_CHAN" || column == "NUM_CORR";
++    for (int value : {-1, 0, 1}) {
++      if (is_dimension ? value == 1 : value == 0) continue;
++      BOOST_TEST_CONTEXT("selected metadata " << column << " = " << value) {
++        SelectionFixture fixture;
++        casacore::MSColumns columns(fixture.ms);
++        if (column == "NUM_CHAN") columns.spectralWindow().numChan().put(0, value);
++        if (column == "NUM_CORR") columns.polarization().numCorr().put(0, value);
++        if (column == "SPECTRAL_WINDOW_ID")
++          columns.dataDescription().spectralWindowId().put(0, value);
++        if (column == "POLARIZATION_ID")
++          columns.dataDescription().polarizationId().put(0, value);
++        BOOST_CHECK_THROW((void)DirectMSRowProvider(fixture.ms, fixture.Selection(),
++                                                    aocommon::VectorSet<size_t>{0},
++                                                    "CORRECTED_DATA", "MODEL_DATA", false),
++                          std::runtime_error);
++      }
++    }
++  }
++  SelectionFixture fixture;
++  casacore::MSColumns(fixture.ms).dataDescId().put(2, 1);
++  BOOST_CHECK_THROW((void)DirectMSRowProvider(fixture.ms, fixture.Selection(),
++                                              aocommon::VectorSet<size_t>{0, 1},
++                                              "CORRECTED_DATA", "MODEL_DATA", false),
++                    std::runtime_error);
++}
++
++BOOST_AUTO_TEST_CASE(direct_ignores_excluded_invalid_ddid_metadata) {
++  SelectionFixture fixture(FixtureOptions{.mask = SelectionMask::kDataDescription});
++  casacore::MSColumns columns(fixture.ms);
++  columns.dataDescription().spectralWindowId().put(1, -1);
++  columns.dataDescription().polarizationId().put(1, 1);
++  CheckDirect(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(excludes_undefined_scalar_weights) {
++  SelectionFixture fixture(FixtureOptions{.undefined_column = "WEIGHT"});
++  BOOST_REQUIRE(!casacore::ArrayColumn<float>(fixture.ms, "WEIGHT").isDefined(1));
++  CheckBoth(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(excludes_undefined_spectral_weights) {
++  SelectionFixture fixture(
++      FixtureOptions{.undefined_column = "WEIGHT_SPECTRUM", .spectral_weights = true});
++  BOOST_REQUIRE(casacore::ArrayColumn<float>(fixture.ms, "WEIGHT_SPECTRUM").isDefined(0));
++  BOOST_REQUIRE(!casacore::ArrayColumn<float>(fixture.ms, "WEIGHT_SPECTRUM").isDefined(1));
++  CheckBoth(fixture);
++}
++
++BOOST_AUTO_TEST_CASE(contiguous_defers_invalid_uvw_until_visited) {
++  SelectionFixture fixture(FixtureOptions{.undefined_column = "UVW", .undefined_rows = {2}});
++  BOOST_REQUIRE(!casacore::ArrayColumn<double>(fixture.ms, "UVW").isDefined(2));
++  ContiguousMS provider(fixture.path, "CORRECTED_DATA", "MODEL_DATA", StorageManagerType::Default,
++                        fixture.Selection(), Channels(3), aocommon::PolarizationEnum::XX, false,
++                        false);
++  std::unique_ptr<MSReader> reader = provider.MakeReader();
++  BOOST_REQUIRE(reader->CurrentRowAvailable());
++  MSProvider::MetaData metadata;
++  reader->ReadMeta(metadata);
++  BOOST_CHECK_EQUAL(metadata.u_in_m, 10.0);
++  std::complex<float> data[3];
++  reader->ReadData(data);
++  BOOST_CHECK_EQUAL(data[0], DataValue(0, 0));
++  BOOST_CHECK_THROW(reader->NextInputRow(), casacore::AipsError);
++}
++
++BOOST_AUTO_TEST_CASE(direct_defers_invalid_uvw_until_visited) {
++  SelectionFixture fixture(FixtureOptions{.undefined_column = "UVW", .undefined_rows = {2}});
++  BOOST_REQUIRE(!casacore::ArrayColumn<double>(fixture.ms, "UVW").isDefined(2));
++  DirectMSRowProvider provider(fixture.ms, MSSelection{}, aocommon::VectorSet<size_t>{0},
++                               "CORRECTED_DATA", "MODEL_DATA", false);
++  BOOST_REQUIRE(!provider.AtEnd());
++  MsRowProviderBase::DataArray data;
++  MsRowProviderBase::FlagArray flags;
++  MsRowProviderBase::WeightArray weights;
++  double u, v, w, time;
++  float interval;
++  uint32_t ddid, antenna1, antenna2, field;
++  provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2, field, time, interval);
++  BOOST_CHECK_EQUAL(u, 10.0);
++  BOOST_REQUIRE_EQUAL(data.nelements(), 3);
++  BOOST_CHECK_EQUAL(data.data()[0], DataValue(0, 0));
++  BOOST_CHECK_THROW(provider.NextRow(), casacore::AipsError);
++}
++
++BOOST_AUTO_TEST_CASE(selected_invalid_cells_still_throw) {
++  for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT", "WEIGHT_SPECTRUM"}) {
++    BOOST_TEST_CONTEXT("selected invalid column " << column) {
++      SelectionFixture fixture(FixtureOptions{.undefined_column = column,
++                                              .undefined_rows = {2},
++                                              .spectral_weights = column == "WEIGHT_SPECTRUM"});
++      {
++        ContiguousMS provider(fixture.path, "CORRECTED_DATA", "MODEL_DATA",
++                              StorageManagerType::Default, fixture.Selection(), Channels(3),
++                              aocommon::PolarizationEnum::XX, false, false);
++        std::unique_ptr<MSReader> reader = provider.MakeReader();
++        BOOST_REQUIRE(reader->CurrentRowAvailable());
++        std::complex<float> data[3];
++        float weights[3];
++        reader->ReadData(data);
++        BOOST_CHECK_EQUAL(data[0], DataValue(0, 0));
++        reader->NextInputRow();
++        BOOST_REQUIRE(reader->CurrentRowAvailable());
++        BOOST_CHECK_THROW(reader->ReadData(data), casacore::AipsError);
++        BOOST_CHECK_THROW(reader->ReadWeights(weights), casacore::AipsError);
++      }
++      DirectMSRowProvider provider(fixture.ms, fixture.Selection(), aocommon::VectorSet<size_t>{0},
++                                   "CORRECTED_DATA", "MODEL_DATA", false);
++      MsRowProviderBase::DataArray data;
++      MsRowProviderBase::FlagArray flags;
++      MsRowProviderBase::WeightArray weights;
++      double u, v, w, time;
++      float interval;
++      uint32_t ddid, antenna1, antenna2, field;
++      provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2, field, time,
++                        interval);
++      BOOST_REQUIRE_EQUAL(data.nelements(), 3);
++      BOOST_CHECK_EQUAL(data.data()[0], DataValue(0, 0));
++      provider.NextRow();
++      BOOST_REQUIRE(!provider.AtEnd());
++      BOOST_CHECK_THROW(provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2,
++                                          field, time, interval),
++                        casacore::AipsError);
++      BOOST_CHECK_THROW(provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2,
++                                          field, time, interval),
++                        casacore::AipsError);
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(excluded_cells_across_block_boundaries) {
++  for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT", "WEIGHT_SPECTRUM"}) {
++    BOOST_TEST_CONTEXT("block boundaries, column " << column) {
++      SelectionFixture fixture(FixtureOptions{.rows = 2051,
++                                              .undefined_column = column,
++                                              .undefined_rows = {1, 1023, 1024, 2049},
++                                              .excluded_rows = {1, 1023, 1024, 2049},
++                                              .spectral_weights = column == "WEIGHT_SPECTRUM",
++                                              .correlations = 4});
++      // This fixture must exercise actual batching, including an excluded first
++      // row of a new block and a partial final block.
++      BOOST_REQUIRE_EQUAL(ColumnBlockRows(fixture.ms, 12), 1024);
++      CheckBoth(fixture);
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(baseline_masks_exclude_undefined_cells) {
++  for (SelectionMask mask : {SelectionMask::kAutocorrelation, SelectionMask::kBaselineLength}) {
++    for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT", "WEIGHT_SPECTRUM"}) {
++      BOOST_TEST_CONTEXT("baseline mask " << static_cast<int>(mask) << ", column " << column) {
++        SelectionFixture fixture(FixtureOptions{.undefined_column = column,
++                                                .spectral_weights = column == "WEIGHT_SPECTRUM",
++                                                .mask = mask});
++        CheckBoth(fixture);
++      }
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(ddid_mask_excludes_undefined_cells) {
++  for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT", "WEIGHT_SPECTRUM"}) {
++    BOOST_TEST_CONTEXT("DDID selection, column " << column) {
++      SelectionFixture fixture(FixtureOptions{.undefined_column = column,
++                                              .spectral_weights = column == "WEIGHT_SPECTRUM",
++                                              .mask = SelectionMask::kDataDescription});
++      BOOST_REQUIRE_EQUAL(ColumnBlockRows(fixture.ms, 3), 1024);
++      // ContiguousMS rejects multiple data descriptions when opening the MS.
++      CheckDirect(fixture);
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(selected_invalid_uvw_shape_throws) {
++  for (size_t size : {2u, 4u}) {
++    SelectionFixture fixture(FixtureOptions{.undefined_column = "UVW", .undefined_rows = {2}});
++    casacore::ArrayColumn<double>(fixture.ms, "UVW").put(2, casacore::Vector<double>(size, 1.0));
++    {
++      ContiguousMS provider(fixture.path, "CORRECTED_DATA", "MODEL_DATA",
++                            StorageManagerType::Default, fixture.Selection(), Channels(3),
++                            aocommon::PolarizationEnum::XX, false, false);
++      std::unique_ptr<MSReader> reader = provider.MakeReader();
++      BOOST_REQUIRE(reader->CurrentRowAvailable());
++      std::complex<float> data[3];
++      reader->ReadData(data);
++      BOOST_CHECK_EQUAL(data[0], DataValue(0, 0));
++      BOOST_CHECK_THROW(reader->NextInputRow(), std::runtime_error);
++    }
++    DirectMSRowProvider provider(fixture.ms, MSSelection{}, aocommon::VectorSet<size_t>{0},
++                                 "CORRECTED_DATA", "MODEL_DATA", false);
++    BOOST_REQUIRE(!provider.AtEnd());
++    BOOST_CHECK_THROW(provider.NextRow(), std::runtime_error);
++  }
++}
++
++BOOST_AUTO_TEST_CASE(all_valid_batches) {
++  for (bool spectral_weights : {false, true}) {
++    for (size_t correlations : {1u, 4u}) {
++      BOOST_TEST_CONTEXT("valid batches, spectral " << spectral_weights << ", correlations "
++                                                    << correlations) {
++        SelectionFixture fixture(FixtureOptions{.rows = 1031,
++                                                .undefined_column = "",
++                                                .excluded_rows = {},
++                                                .spectral_weights = spectral_weights,
++                                                .channels = correlations == 1 ? 1u : 7u,
++                                                .correlations = correlations});
++        CheckBoth(fixture);
++        const casacore::ArrayColumn<float> weights(fixture.ms,
++                                                   spectral_weights ? "WEIGHT_SPECTRUM" : "WEIGHT");
++        ColumnBlock<float> block;
++        const float* values = block.ReadCell(weights, 0, 1023, 0);
++        BOOST_REQUIRE(block.Loaded());
++        BOOST_CHECK_EQUAL(values[0], fixture.WeightValue(0, 0));
++        values = block.ReadCell(weights, 0, 1023, 42);
++        BOOST_CHECK(block.Loaded());
++        BOOST_CHECK_EQUAL(values[0], fixture.WeightValue(42, 0));
++      }
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(fallback_cell_shape_and_reset) {
++  SelectionFixture fixture;
++  casacore::ArrayColumn<casacore::Complex> column(fixture.ms, "CORRECTED_DATA");
++  const casacore::IPosition small(2, 1, 3);
++  const casacore::IPosition large(2, 1, 5);
++  column.put(2, casacore::Array<casacore::Complex>(large, casacore::Complex(42.0f, -2.0f)));
++  ColumnBlock<casacore::Complex> block;
++  const casacore::Complex* values = block.ReadCell(column, 0, 2, 0);
++  BOOST_CHECK(!block.Loaded());
++  BOOST_CHECK_EQUAL(block.CellSize(), 3);
++  BOOST_CHECK(block.CellShape().isEqual(small));
++  BOOST_CHECK_EQUAL(values[0], DataValue(0, 0));
++  values = block.ReadCell(column, 0, 2, 2);
++  BOOST_CHECK_EQUAL(block.CellSize(), 5);
++  BOOST_CHECK(block.CellShape().isEqual(large));
++  for (size_t i = 0; i != 5; ++i) BOOST_CHECK_EQUAL(values[i], casacore::Complex(42.0f, -2.0f));
++  values = block.ReadCell(column, 0, 2, 0);
++  BOOST_CHECK_EQUAL(block.CellSize(), 3);
++  BOOST_CHECK(block.CellShape().isEqual(small));
++  BOOST_CHECK_EQUAL(values[2], DataValue(0, 2));
++
++  // Repair the whole block. Fallback must persist until Reset(), after which
++  // the same block must return to the bulk path. Load()/Cell() remain usable.
++  const casacore::Array<casacore::Complex> repaired(small, casacore::Complex(17.0f, 3.0f));
++  column.put(1, repaired);
++  column.put(2, repaired);
++  values = block.ReadCell(column, 0, 2, 2);
++  BOOST_CHECK(!block.Loaded());
++  BOOST_CHECK_EQUAL(values[0], repaired.data()[0]);
++  block.Reset();
++  BOOST_CHECK(!block.Loaded());
++  values = block.ReadCell(column, 0, 2, 1);
++  BOOST_REQUIRE(block.Loaded());
++  BOOST_CHECK(block.CellShape().isEqual(small));
++  BOOST_CHECK_EQUAL(values[0], repaired.data()[0]);
++  block.Reset();
++  block.Load(column, 0, 2);
++  BOOST_CHECK(block.Loaded());
++  BOOST_CHECK_EQUAL(block.Cell(2)[2], repaired.data()[2]);
++}
++
++BOOST_AUTO_TEST_CASE(excludes_different_cell_shapes) {
++  for (const std::string column : {"CORRECTED_DATA", "FLAG", "WEIGHT", "WEIGHT_SPECTRUM"}) {
++    BOOST_TEST_CONTEXT("excluded shape mismatch, column " << column) {
++      SelectionFixture fixture(FixtureOptions{.undefined_column = column,
++                                              .spectral_weights = column == "WEIGHT_SPECTRUM"});
++      const casacore::IPosition shape(2, 2, 2);
++      if (column == "CORRECTED_DATA") {
++        casacore::ArrayColumn<casacore::Complex>(fixture.ms, column)
++            .put(1, casacore::Array<casacore::Complex>(shape, casacore::Complex(99.0f, 0.0f)));
++      } else if (column == "FLAG") {
++        casacore::ArrayColumn<bool>(fixture.ms, column).put(1, casacore::Array<bool>(shape, true));
++      } else {
++        casacore::ArrayColumn<float>(fixture.ms, column)
++            .put(1, casacore::Array<float>(column == "WEIGHT" ? casacore::IPosition(1, 2) : shape,
++                                           99.0f));
++      }
++      CheckBoth(fixture);
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(direct_variable_shapes_resize_outputs) {
++  for (bool spectral_weights : {false, true}) {
++    for (bool variable_channels : {false, true}) {
++      BOOST_TEST_CONTEXT("variable shapes, spectral " << spectral_weights << ", channels "
++                                                      << variable_channels) {
++        SelectionFixture fixture(FixtureOptions{
++            .undefined_column = "", .excluded_rows = {}, .spectral_weights = spectral_weights});
++        fixture.ms.spectralWindow().addRow();
++        fixture.ms.polarization().addRow();
++        fixture.ms.dataDescription().addRow();
++        casacore::MSColumns columns(fixture.ms);
++        const size_t channels = variable_channels ? 5 : 3;
++        columns.spectralWindow().numChan().put(1, channels);
++        columns.spectralWindow().chanFreq().put(1, casacore::Vector<double>(channels, 110e6));
++        columns.spectralWindow().chanWidth().put(1, casacore::Vector<double>(channels, 1e6));
++        columns.spectralWindow().refFrequency().put(1, 110e6);
++        columns.polarization().numCorr().put(1, 4);
++        columns.polarization().corrType().put(1, casacore::Vector<int>{9, 10, 11, 12});
++        casacore::Matrix<int> products(2, 4);
++        for (size_t pol = 0; pol != 4; ++pol) {
++          products(0, pol) = pol / 2;
++          products(1, pol) = pol % 2;
++        }
++        columns.polarization().corrProduct().put(1, products);
++        columns.dataDescription().spectralWindowId().put(1, 1);
++        columns.dataDescription().polarizationId().put(1, 1);
++        columns.dataDescId().put(1, 1);
++        const casacore::IPosition large(2, 4, channels);
++        casacore::Array<casacore::Complex> large_data(large);
++        casacore::Array<bool> large_flags(large);
++        casacore::Array<float> large_weights(large);
++        for (size_t i = 0; i != large_data.nelements(); ++i) {
++          large_data.data()[i] = DataValue(1, i);
++          large_flags.data()[i] = FlagValue(1, i);
++          large_weights.data()[i] = 3.0f + 0.25f * (spectral_weights ? i : i % 4);
++        }
++        columns.correctedData().put(1, large_data);
++        columns.flag().put(1, large_flags);
++        columns.weight().put(1, casacore::Vector<float>{3.0f, 3.25f, 3.5f, 3.75f});
++        if (spectral_weights) columns.weightSpectrum().put(1, large_weights);
++        BOOST_REQUIRE_EQUAL(ColumnBlockRows(fixture.ms, 3), 1);
++        DirectMSRowProvider provider(fixture.ms, MSSelection{}, aocommon::VectorSet<size_t>{0, 1},
++                                     "CORRECTED_DATA", "MODEL_DATA", false);
++        // Reuse all three arrays while they grow and shrink.
++        MsRowProviderBase::DataArray data;
++        MsRowProviderBase::FlagArray flags;
++        MsRowProviderBase::WeightArray weights;
++        for (size_t row = 0; row != 3; ++row) {
++          BOOST_REQUIRE(!provider.AtEnd());
++          double u, v, w, time;
++          float interval;
++          uint32_t ddid, antenna1, antenna2, field;
++          provider.ReadData(data, flags, weights, u, v, w, ddid, antenna1, antenna2, field, time,
++                            interval);
++          const casacore::IPosition shape = row == 1 ? large : casacore::IPosition(2, 1, 3);
++          BOOST_REQUIRE(data.shape().isEqual(shape));
++          BOOST_REQUIRE(flags.shape().isEqual(shape));
++          BOOST_REQUIRE(weights.shape().isEqual(shape));
++          BOOST_CHECK_EQUAL(ddid, row == 1 ? 1 : 0);
++          BOOST_CHECK_EQUAL(time, 1000.0 + row);
++          for (size_t i = 0; i != data.nelements(); ++i) {
++            BOOST_CHECK_EQUAL(data.data()[i], DataValue(row, i));
++            BOOST_CHECK_EQUAL(flags.data()[i], FlagValue(row, i));
++            BOOST_CHECK_EQUAL(weights.data()[i],
++                              row == 1 ? large_weights.data()[i] : fixture.WeightValue(row, i));
++          }
++          provider.NextRow();
++        }
++        BOOST_CHECK(provider.AtEnd());
++      }
++    }
++  }
++}
++
++BOOST_AUTO_TEST_SUITE_END()
++}  // namespace wsclean

@@ -34,8 +34,13 @@ log: [issue #1](https://github.com/peijin94/wsclean-mx/issues/1).
 
 The current development plan is [docs/development-plan.md](docs/development-plan.md).
 The [2026-10-17 audit](docs/audit-2026-10-17.md) records fresh benchmarks,
-regression coverage, and remaining correctness/test gaps. This is a development
+regression coverage, and initial correctness/test gaps. The
+[CPU correctness continuation](docs/continuation-2026-10-17.md) covers selection-safe
+readers, allocation portability, time metadata and the follow-up gates. This is a development
 patch set, not a claim that every WSClean observing mode is validated.
+The continuation also records an **observed dirty-imaging slowdown** versus the
+preceding mx build; its cause remains open. The historical speedups quoted here are
+not a clean performance non-regression result for the latest repairs.
 
 ## The patches
 
@@ -55,6 +60,9 @@ The patch set lives in `patches/mx/<repo>/`, one directory per library:
 | wsclean/0003 | Same, during reordering (cleaning runs) | reordering 2.3× |
 | radler/0004 | Peak finder: vectorized row maximum skips rows | peak search 8×, deconvolution 1.12× |
 | radler/0005 | Allocate multiscale peak scratch only for RMS-weighted searches | removes one unused full-image allocation per unweighted scale search; no promised wall-time gain |
+| wsclean/0004 | Preserve selected-row reads; validate full data/flag/weight shapes | avoids speculative-read failures and unsafe malformed-array extraction |
+| aocommon/0002 | Portable fundamental-alignment allocation in MultiArray | fixes invalid-alignment `std::bad_alloc` on macOS; retains over-aligned allocation |
+| wsclean/0005 | Convert in-memory provider start time from seconds to MJD days | correct FITS observation dates; row metadata remains seconds |
 
 The upstream padding bug: `WGridder::RealImage()` fills image padding with
 NaN, but its source file is compiled with `-ffast-math`, and Apple clang
@@ -133,10 +141,10 @@ not a sandbox for arbitrary WSClean arguments. Existing run and snapshot
 names are refused rather than deleted. A/B runs reverse variant order on
 alternate repetitions and fail on missing/malformed timings.
 
-Comparisons follow three tiers: bitwise (at `-j 1`, against the native
-upstream build), ULP, and scientific (rms difference relative to the
-reference). Multithreaded cleaning is not deterministic, so cleaned images
-are judged against upstream's own rerun spread.
+Comparisons follow three tiers: bitwise for operation-preserving incremental
+changes at `-j 1`, ULP, and scientific metrics against the fixed native upstream
+reference. Multithreaded cleaning is not deterministic; reference rerun and
+perturbation spread must be considered together with source-level science gates.
 
 ## Regression tests
 
@@ -145,20 +153,23 @@ scripts/test.sh build-mx
 ```
 
 This runs Python harness/FITS tests, rebuilds the selected mx binary, and runs
-linked-production convolution/resampler, median, peak and MS column-block
-checks. Synthetic unit fixtures are separate from the real MS benchmarks.
+linked-production convolution/resampler, median, peak, MS column-block,
+allocation and time-contract checks. It rejects mismatched CMake source mappings.
+Synthetic unit fixtures are separate from the real MS benchmarks.
 Compiler output may include upstream's expected non-AVX warning on arm64.
 
 The upstream unit/integration suites are separate and require their test data.
-The audit's full upstream unit run is **not green**: seven `std::bad_alloc`
-failures remain after fetching fixtures. See the audit for exact counts and
-commands; zero tests from `ctest -N` is not a successful validation.
+The initial audit's seven allocation failures are repaired, together with the
+in-memory date defect they exposed. The continuation report gives current native
+counts, reader fixtures, remaining skips and exact commands. Zero tests from
+`ctest -N` is not a successful validation; passing native tests does not settle
+the broader multiscale scientific-acceptance question.
 
 ## Roadmap
 
 The current patches are CPU-only. Planned next steps, described in
 `notes.md`: a Metal GPU gridding backend and benchmarks on larger
-measurement sets where gridding dominates. First complete the reader-selection
+measurement sets where gridding dominates. First complete the remaining science
 and reproducibility gates in [the development plan](docs/development-plan.md).
 Accelerate's vDSP 2D FFT was
 measured and is slower than ducc0's multithreaded FFT, so it is not used.

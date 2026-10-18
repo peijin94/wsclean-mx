@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Sat, 17 Oct 2026 21:49:42 -0400
+Subject: [PATCH] InMemoryProvider: return start time in MJD days
+
+
+diff --git a/msproviders/inmemoryprovider.h b/msproviders/inmemoryprovider.h
+index fda81f6f..899384b4 100644
+--- a/msproviders/inmemoryprovider.h
++++ b/msproviders/inmemoryprovider.h
+@@ -30,7 +30,7 @@ class InMemoryProvider final : public MSProvider {
+ 
+   void ReopenRW() final {}
+ 
+-  double StartTime() { return data_.info->start_time; }
++  double StartTime() final { return data_.info->start_time / 86400.0; }
+ 
+   aocommon::PolarizationEnum Polarization() final { return data_.polarization; }
+ 
+diff --git a/msproviders/msprovider.h b/msproviders/msprovider.h
+index 1adc3cba..2cda82f8 100644
+--- a/msproviders/msprovider.h
++++ b/msproviders/msprovider.h
+@@ -100,7 +100,7 @@ class MSProvider {
+   virtual void ReopenRW() = 0;
+ 
+   /**
+-   * First MJD time of the data.
++   * First MJD time of the data, in days (not MS TIME seconds).
+    */
+   virtual double StartTime() = 0;
+ 
+diff --git a/tests/interface/twsclean.cpp b/tests/interface/twsclean.cpp
+index 3ca721b9..36b306c2 100644
+--- a/tests/interface/twsclean.cpp
++++ b/tests/interface/twsclean.cpp
+@@ -57,6 +57,7 @@ InMemoryMs MakeInMemorySet() {
+ void CheckMetaData(const aocommon::FitsReader& reader) {
+   BOOST_REQUIRE_EQUAL(reader.ImageWidth(), 1024);
+   BOOST_REQUIRE_EQUAL(reader.ImageHeight(), 1024);
++  BOOST_CHECK_CLOSE(reader.DateObs(), 61041.0, 1e-10);
+   BOOST_CHECK_CLOSE_FRACTION(reader.PixelSizeX() * 180.0 * 60.0 / M_PI, 1.0, 1e-6);
+   BOOST_CHECK_CLOSE_FRACTION(reader.PixelSizeY() * 180.0 * 60.0 / M_PI, 1.0, 1e-6);
+ }
+diff --git a/tests/msproviders/tinmemoryprovider.cpp b/tests/msproviders/tinmemoryprovider.cpp
+index 4f32c26a..ac56f23b 100644
+--- a/tests/msproviders/tinmemoryprovider.cpp
++++ b/tests/msproviders/tinmemoryprovider.cpp
+@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(read_write) {
+   BOOST_CHECK_EQUAL(provider.SelectedBands().BandCount(), 2);
+   BOOST_CHECK_EQUAL(provider.SelectedBands()[3].ChannelCount(), 3);
+   BOOST_CHECK_EQUAL(provider.SelectedBands()[4].ChannelCount(), 2);
+-  BOOST_CHECK_EQUAL(provider.StartTime(), kStartTime);
++  BOOST_CHECK_EQUAL(provider.StartTime(), kStartTime / 86400.0);
+   BOOST_CHECK(provider.HasFrequencyBda());
+   BOOST_CHECK(!provider.IsRegular());
+   BOOST_CHECK_EQUAL(provider.PartDescription(), kDescription);
