@@ -254,6 +254,44 @@ boundary with ten references no longer do, because the family's own member
 distribution (median 1.39 %, p95 1.69 %) now brackets the candidates rather than
 being estimated from too few samples.
 
+## Configuration sweep on the real-source field (2026-10-18)
+
+The 3C196 agreement above was measured in one configuration. The sweep changes
+**exactly one** argument at a time from that base (`-j 8 -size 1024 1024 -scale
+4asec -weight briggs 0 -mgain 0.8 -multiscale -niter 3000`) and runs three
+reference reruns, two `mx-p11` runs and one perturbed-reference run per
+configuration (`bench/out/throttle-20261018/run_lofar_sweep.sh`).
+
+| Configuration | First pass (3 refs) | Follow-up with a larger family |
+|---|---|---|
+| `-multiscale-scale-bias 0.5` | mx passes everything; perturbed ref fails | — |
+| base (`briggs 0`, niter 3000) | mx ≡ ref at ~1e-7 (established earlier) | — |
+| `-mgain 0.6` | mx fails a 0.036 px position tie; perturbed ref passes | — |
+| `-padding 2` | ties at the envelope for all three candidates | — |
+| `-weight briggs -1` | all three fail model MAD rms (mx 9.8e-3 vs 2.9e-3) | — |
+| `-weight natural` | all three fail; mx 6e-3 total flux vs 4e-3 envelope, perturbed ref marginal | 13 refs, 7 mx, 6 perturbed: mx 2nd-moment deviations median 4.2e-4 vs perturbed 4.9e-5; mx reaches the family edge (4.8 % model rms) in 2 of 7 runs, perturbed never |
+| `-niter 10000` | all three fail against a *tight* family (envelope 7e-5) | 6 refs, 5 mx, 4 perturbed: mx restored-flux deviation median 10.7 % vs perturbed 4.2 %; model rms 3.8 % vs 1.2 % |
+
+**Reading.** A first pass with three references cannot be judged on its own — the
+natural and deep configurations are themselves sensitive, and their three-rerun
+envelopes were under-sampled exactly as before. The larger-family follow-up makes
+the informative comparison *mx against the perturbed control*, both as candidate
+families scored the same way:
+
+- **base and `-multiscale-scale-bias`**: mx at the float32 floor; in the scale-bias
+  configuration mx is closer to the reference than the one-ulp control is.
+- **`-weight natural` and `-niter 10000`**: mx's deviations are 2–3× larger than
+  the control's, and in the natural case mx lands on the family's edge in two of
+  seven runs while the control never does. The deviations mostly stay inside the
+  reference family's own spread, so the gate verdicts are mixed — but this is a
+  real, reproducible distribution shift, not a boundary artefact, and it is the
+  one open scientific question this sweep produced.
+
+The next step is a patch bisect at `-niter 10000` (the configuration with the
+clearest shift) across the archived snapshots (`mx-p1 … mx-p11`,
+`audit-p12-scratch`, `continue-cpu-fixes`) to localize which part of the stack
+introduces the extra divergence.
+
 ## Evidence
 
 Figures (`bench/plot_science_gates.py` → `docs/bench/science-gates/`):
