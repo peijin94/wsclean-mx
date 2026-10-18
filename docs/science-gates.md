@@ -199,13 +199,22 @@ deliberate one-ulp perturbation:
 | mx-p11 (r4) | restored matched-source flux spread 1.492e-2 vs envelope 1.457e-2 | 2.4 % over the envelope |
 | ulp (r1) | same metric 1.537e-2; model position 2.928 px vs 2.926 px; model unmatched 8 vs 6 | 5.5 % / 0.07 % / 2 sources over |
 
-Both candidates' source-flux spreads (1.46–1.54 %) sit on the reference family's
-own value (1.46 %), i.e. the same chaotic scale. A max-statistic gate cannot
-resolve a 2 % difference in the worst pair when the candidate is drawn from the
-same distribution, and the fact that the known-tiny change trips the same checks
-shows these particular exceedances are not evidence of a physical difference.
-Recommended next refinement: increase the reference family further and/or gate on
-the candidate's rank within the reference pair distribution instead of the max.
+Nine candidate runs now sample this behaviour under the revised metric — four of
+`mx-p11` and five of the perturbed reference:
+
+| Family | Runs analysed | Runs that trip at least one check | Margin |
+|---|---:|---:|---|
+| mx-p11 | 4 | 1 | 2 % over the envelope, on the restored matched-source flux spread |
+| upstream-fix-ulp | 5 | 4 | 2–14 % over, same metric; one exact-tie position check (2.93 vs 2.93 px) |
+
+Every exceedance is on a metric whose reference scatter itself spans a factor of
+~3 (the 45 reference pairs reach 1.457e-2 while the typical pair is well below
+it), and the deliberate one-ulp change trips these checks **more often than mx
+does** (4/5 versus 1/4). A check that fires four times out of five for a
+known-tiny perturbation cannot be read as evidence about the stack under test.
+The recommended refinement is therefore to increase the reference family
+substantially and/or gate on the candidate's rank within the reference-pair
+distribution instead of the max statistic.
 
 ## Evidence
 
