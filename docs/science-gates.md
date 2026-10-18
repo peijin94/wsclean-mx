@@ -218,6 +218,12 @@ distribution instead of the max statistic.
 
 ## Evidence
 
+Figures (`bench/plot_science_gates.py` → `docs/bench/science-gates/`):
+
+- `lofar-difference.png` — 3C196 restored image, mx−reference difference and its distribution: agreed at the float32 rounding floor;
+- `quiet-sun-difference.png` — the same for the quiet-Sun case: structured differences an order of magnitude above rounding, at the level the reference differs from itself;
+- `envelope-scatter.png` — the six gate metrics on one axis per dataset: reference-pair scatter (grey, with the max as the envelope line) against every mx-p11 and perturbed-reference rerun. It shows the contrast directly — candidates sit inside the envelope for the scalar metrics and at/just past it for the two source-flux-spread rows on the quiet-Sun field, while everything collapses onto ~1e-7 for 3C196.
+
 Local, gitignored, under `bench/out/`:
 
 - `throttle-20261018/sources-*-final.{json,log}` — three-rerun envelope results, first tool revision;
