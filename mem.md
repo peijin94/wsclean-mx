@@ -30,6 +30,16 @@ reasoning and long-form design in `notes.md`.
   Record per-run instructions/cycles and keep an A/A copy control.
 - The older bench/profile.sh still deletes outputs. Use fresh, owned profiling
   directories until that harness has the common validation/immutability guards.
+- Harness convention since 2026-10-18: run.sh writes counters.txt, ab.sh adds
+  instructions_G/cycles_G columns and a <tag>-ab.mode.txt verdict
+  (comparable / stall mode mismatch / counters unavailable), and bench/aa.sh runs
+  an A/A null control on two byte-identical snapshots. Wall time alone is not a
+  regression verdict.
+- ab.sh prints the mode verdict before the ratio table and reports unclassified
+  when counters are missing/incomplete/invalid, when repeats span cycle levels,
+  when instruction counts differ >20%, or for the linc container (its counters
+  measure the host CLI, not the guest). aa.sh also compares the snapshot's
+  libschaapthreading.dylib. bench/plot_report.py is NOT mode-aware yet.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
   external MS; two average-correction benchmarks are explicitly disabled upstream.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using

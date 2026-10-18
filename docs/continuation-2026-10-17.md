@@ -119,10 +119,14 @@ Repeating the comparison on throttle with the same binary and library bytes, and
 adding interleaved A/A and single-thread controls, showed that the per-run
 differences were a shared host timing mode: retired instruction counts match to
 ≤0.2% while the slow mode burns roughly 1.5× the cycles. Interleaved sweeps give
-0.3–0.5% differences at both `-j 1` and `-j 8`. The tables above stay as recorded,
-as do the RSS observations, which remain unexplained and are not claimed as a
-memory saving. Counters, sweeps and caveats:
-[throttle validation](throttle-validation-2026-10-18.md).
+0.3–0.5% differences at both `-j 1` and `-j 8`. An A/A null control run on chia
+with two byte-identical snapshots (`continue-cpu-fixes` and `page12-aa`, same
+SHA-256) spread 1.50–2.38 s wall at identical instruction counts — the same
+host-spread scale as the batches above, with no code difference involved at all.
+The tables above stay as recorded, as do the RSS observations, which remain
+unexplained and are not claimed as a memory saving. Counters, sweeps and caveats:
+[throttle validation](throttle-validation-2026-10-18.md). The harness now records
+per-run counters and an A/A control is part of the workflow (`bench/aa.sh`).
 
 ### Source and executable provenance
 

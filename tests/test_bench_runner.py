@@ -19,7 +19,7 @@ class BenchRunnerTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()
         (self.root / 'bench').mkdir()
-        for name in ('run.sh', 'ab.sh', 'snapshot.sh', 'common.sh'):
+        for name in ('run.sh', 'ab.sh', 'aa.sh', 'snapshot.sh', 'common.sh'):
             if (SOURCE / 'bench' / name).exists():
                 shutil.copy2(SOURCE / 'bench' / name, self.root / 'bench' / name)
         self.env = dict(os.environ, REPS='1', COOL='0', CONTAINER_CPUS='1')
@@ -35,6 +35,19 @@ if 'HARNESS_TIME_TEXT' in os.environ:
     output = Path(sys.argv[sys.argv.index('-name') + 1]).parent / 'time.txt'
     output.unlink()
     output.write_text(os.environ['HARNESS_TIME_TEXT'])
+if 'HARNESS_TIME_MAP' in os.environ:
+    mapping = json.loads(os.environ['HARNESS_TIME_MAP'])
+    name = Path(sys.argv[0]).parent.name
+    if name in mapping:
+        entry = mapping[name]
+        if isinstance(entry, list):
+            state = Path(os.environ['HARNESS_CALLS'] + '.' + name)
+            index = int(state.read_text()) if state.exists() else 0
+            state.write_text(str(index + 1))
+            entry = entry[index % len(entry)]
+        output = Path(sys.argv[sys.argv.index('-name') + 1]).parent / 'time.txt'
+        output.unlink()
+        output.write_text(entry)
 if '-version' in sys.argv:
     print('WSClean version HARNESS FIXTURE')
 print(os.environ.get('HARNESS_TIMING', 'Inversion: 00:00:01.250, prediction: 00:00:00.500, deconvolution: 00:00:00.125'))
@@ -170,7 +183,8 @@ print(os.environ.get('HARNESS_TIMING', 'Inversion: 00:00:01.250, prediction: 00:
         self.assertEqual(order, ['one', 'two', 'three', 'three', 'two', 'one', 'one', 'two', 'three'])
         with (self.root / 'bench/out/order-ab.tsv').open() as f:
             rows = list(csv.DictReader(f, delimiter='\t'))
-        self.assertEqual(list(rows[0]), ['variant', 'rep', 'wall', 'inversion', 'prediction', 'deconvolution'])
+        self.assertEqual(list(rows[0]), ['variant', 'rep', 'wall', 'inversion', 'prediction', 'deconvolution',
+                                         'instructions_G', 'cycles_G'])
         self.assertEqual([row['variant'] for row in rows], order)
         self.assertEqual([row['rep'] for row in rows], ['1'] * 3 + ['2'] * 3 + ['3'] * 3)
         self.assertEqual([row['inversion'] for row in rows], ['1.250'] * 9)
@@ -379,6 +393,256 @@ print(os.environ.get('HARNESS_TIMING', 'Inversion: 00:00:01.250, prediction: 00:
         self.rejected(result, 'timing')
         self.assertNotIn('Traceback', result.stderr)
         self.assertEqual(len((self.root / 'bench/out/nolog-ab.tsv').read_text().splitlines()), 1)
+
+    def time_text(self, wall, instructions=None, cycles=None, user=4.30):
+        text = f'real {wall}\nuser {user}\nsys 0.20\n'
+        if instructions is not None:
+            text += f'   {instructions}  instructions retired\n'
+        if cycles is not None:
+            text += f'   {cycles}  cycles elapsed\n'
+        return text
+
+    def test_run_and_ab_record_optional_hardware_counters(self):
+        self.wall_time_fixture()
+        text = self.time_text('1.20', 51_590_000_000, 15_300_000_000)
+        result = self.run_script('run.sh', 'one', 'counted', HARNESS_TIME_TEXT=text)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = self.root / 'bench/out/counted/one'
+        self.assertEqual((out / 'counters.txt').read_text().split(),
+                         ['instructions_G=51.5900', 'cycles_G=15.3000'])
+        result = self.run_script('ab.sh', 'countedab', 'one', HARNESS_TIME_TEXT=text)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with (self.root / 'bench/out/countedab-ab.tsv').open() as f:
+            row, = list(csv.DictReader(f, delimiter='\t'))
+        self.assertEqual(row['instructions_G'], '51.5900')
+        self.assertEqual(row['cycles_G'], '15.3000')
+
+    def test_ambiguous_or_truncated_counter_records_are_refused(self):
+        self.wall_time_fixture()
+        duplicated = ('real 1.20\nuser 4.30\nsys 0.20\n   51590000000  instructions retired\n'
+                      '   51590000000  instructions retired\n   15300000000  cycles elapsed\n')
+        # A duplicate record is ambiguous rather than silently taking the first value.
+        self.rejected(self.run_script('run.sh', 'one', 'dupcounters', HARNESS_TIME_TEXT=duplicated),
+                      'ambiguous')
+        # A truncated timing file is refused even when its counters are complete.
+        self.rejected(self.run_script('run.sh', 'one', 'shortrecord', HARNESS_TIME_TEXT=(
+            'real 1.20\nuser 4.30\n   51590000000  instructions retired\n'
+            '   15300000000  cycles elapsed\n')), 'timing')
+
+    def test_labelled_suffix_counters_are_not_read_as_counters(self):
+        self.wall_time_fixture()
+        text = ('real 1.20\nuser 4.30\nsys 0.20\n'
+                '   51590000000  instructions retired per second\n')
+        result = self.run_script('run.sh', 'one', 'suffixcounters', HARNESS_TIME_TEXT=text)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = self.root / 'bench/out/suffixcounters/one'
+        self.assertEqual((out / 'counters.txt').read_text().split(),
+                         ['instructions_G=na', 'cycles_G=na'])
+
+    def test_zero_wall_and_rounding_to_zero_counters_do_not_crash_or_pass(self):
+        self.wall_time_fixture()
+        for tag, text in (
+            ('zerowall', 'real 0.00\nuser 4.30\nsys 0.20\n'
+                         '   51590000000  instructions retired\n   15300000000  cycles elapsed\n'),
+            ('roundedsmall', self.time_text('1.20', 1000, 1000)),
+        ):
+            with self.subTest(tag=tag):
+                result = self.run_script('ab.sh', tag, 'one', HARNESS_TIME_TEXT=text)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                mode = (self.root / f'bench/out/{tag}-ab.mode.txt').read_text().lower()
+                self.assertIn('unclassified', mode)
+                self.assertNotIn('mode: comparable', mode)
+
+    def test_differing_instruction_counts_are_not_called_comparable(self):
+        self.wall_time_fixture()
+        mapping = json.dumps({
+            'one': self.time_text('1.20', 1_000_000_000, 300_000_000),
+            'two': self.time_text('1.20', 51_590_000_000, 15_300_000_000),
+        })
+        result = self.run_script('ab.sh', 'scopes', 'one,two', HARNESS_TIME_MAP=mapping)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mode = (self.root / 'bench/out/scopes-ab.mode.txt').read_text().lower()
+        self.assertIn('counter scope differs', mode)
+        self.assertIn('unclassified', mode)
+
+    def test_zero_or_repeated_counter_levels_are_not_called_comparable(self):
+        self.wall_time_fixture()
+        zero = self.time_text('1.20', 51_590_000_000, 0)
+        result = self.run_script('ab.sh', 'zerocounters', 'one', HARNESS_TIME_TEXT=zero)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mode = (self.root / 'bench/out/zerocounters-ab.mode.txt').read_text().lower()
+        self.assertIn('unclassified', mode)
+        self.assertIn('incomplete or invalid', mode)
+
+    def test_incomplete_counters_across_repeats_are_refused(self):
+        self.wall_time_fixture()
+        complete = self.time_text('1.20', 51_590_000_000, 15_300_000_000)
+        partial = 'real 1.21\nuser 4.30\nsys 0.20\n   51580000000  instructions retired\n'
+        mapping = json.dumps({'one': [complete] * 2, 'two': [complete, partial]})
+        result = self.run_script('ab.sh', 'repeatpartial', 'one,two', REPS='2', COOL='0', HARNESS_TIME_MAP=mapping)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mode = (self.root / 'bench/out/repeatpartial-ab.mode.txt').read_text().lower()
+        self.assertIn('incomplete or invalid', mode)
+        self.assertNotIn('mode: comparable', mode)
+
+    def test_counters_absent_is_recorded_but_never_invented(self):
+        self.wall_time_fixture()
+        result = self.run_script('run.sh', 'one', 'uncounted', HARNESS_TIME_TEXT=self.time_text('1.20'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = self.root / 'bench/out/uncounted/one'
+        self.assertEqual((out / 'counters.txt').read_text().split(), ['instructions_G=na', 'cycles_G=na'])
+        result = self.run_script('ab.sh', 'uncountedab', 'one', HARNESS_TIME_TEXT=self.time_text('1.20'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with (self.root / 'bench/out/uncountedab-ab.tsv').open() as f:
+            row, = list(csv.DictReader(f, delimiter='\t'))
+        self.assertEqual(row['instructions_G'], 'na')
+        self.assertEqual(row['cycles_G'], 'na')
+        self.assertIn('counter', result.stdout.lower())
+
+    def test_ab_marks_a_stall_mode_mismatch_between_equal_workloads(self):
+        self.wall_time_fixture()
+        mapping = json.dumps({
+            'one': self.time_text('1.20', 51_590_000_000, 15_300_000_000),
+            'two': self.time_text('1.35', 51_600_000_000, 20_900_000_000),
+        })
+        result = self.run_script('ab.sh', 'modes', 'one,two', HARNESS_TIME_MAP=mapping)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with (self.root / 'bench/out/modes-ab.mode.txt').open() as f:
+            mode = f.read().lower()
+        self.assertIn('stall', mode)
+        self.assertIn('cycles', mode)
+        self.assertIn('one', mode)
+        self.assertIn('stall', result.stdout.lower())
+
+    def test_ab_reports_no_stall_mismatch_for_comparable_counters(self):
+        self.wall_time_fixture()
+        mapping = json.dumps({
+            'one': self.time_text('1.20', 51_590_000_000, 15_300_000_000),
+            'two': self.time_text('1.21', 51_640_000_000, 15_350_000_000),
+        })
+        result = self.run_script('ab.sh', 'comparable', 'one,two', HARNESS_TIME_MAP=mapping)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mode = (self.root / 'bench/out/comparable-ab.mode.txt').read_text().lower()
+        self.assertIn('comparable', mode)
+        self.assertNotIn('stall mode mismatch', mode)
+
+    def test_ab_treats_incomplete_counter_pairs_as_unclassified(self):
+        self.wall_time_fixture()
+        mapping = json.dumps({
+            'one': self.time_text('1.20', 51_590_000_000, 15_300_000_000),
+            'two': 'real 1.20\nuser 4.30\nsys 0.20\n   51600000000  instructions retired\n',
+        })
+        result = self.run_script('ab.sh', 'partial', 'one,two', HARNESS_TIME_MAP=mapping)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mode = (self.root / 'bench/out/partial-ab.mode.txt').read_text().lower()
+        self.assertIn('unclassified', mode)
+        self.assertIn('incomplete', mode)
+
+    def test_ab_flags_repeats_spanning_several_cycle_levels(self):
+        self.wall_time_fixture()
+        mapping = json.dumps({
+            'one': [self.time_text('1.20', 51_590_000_000, 15_300_000_000)] * 2,
+            'two': [self.time_text('1.35', 51_600_000_000, 20_900_000_000),
+                    self.time_text('1.20', 51_600_000_000, 15_320_000_000)],
+        })
+        result = self.run_script('ab.sh', 'mixedmode', 'one,two', REPS='2', COOL='0', HARNESS_TIME_MAP=mapping)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mode = (self.root / 'bench/out/mixedmode-ab.mode.txt').read_text().lower()
+        self.assertIn('host mode present within two', mode)
+        self.assertIn('unclassified', mode)
+
+    def test_ab_mode_assessment_covers_every_variant_pair(self):
+        self.wall_time_fixture()
+        # Instruction counts are similar for all three (so the scope rule stays
+        # quiet) and the first variant sits between the others: only the two/three
+        # pair violates the stall rule, which a first-variant-only check would miss.
+        mapping = json.dumps({
+            'one': self.time_text('1.20', 51_590_000_000, 17_000_000_000),
+            'two': self.time_text('1.21', 51_600_000_000, 15_300_000_000),
+            'three': self.time_text('1.40', 51_610_000_000, 18_800_000_000),
+        })
+        result = self.run_script('ab.sh', 'pairwise', 'one,two,three', HARNESS_TIME_MAP=mapping)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mode = (self.root / 'bench/out/pairwise-ab.mode.txt').read_text()
+        self.assertIn('stall mode mismatch between two and three', mode)
+
+    def test_ab_refuses_mode_file_collisions_and_symlinks(self):
+        self.wall_time_fixture()
+        mode = self.root / 'bench/out/modeclash-ab.mode.txt'
+        mode.parent.mkdir(parents=True)
+        mode.write_text('keep mode notes')
+        result = self.run_script('ab.sh', 'modeclash', 'one')
+        self.rejected(result, 'exist')
+        self.assertEqual(mode.read_text(), 'keep mode notes')
+        self.assertFalse((self.root / 'calls').exists())
+        mode.unlink()
+        target = self.root / 'external-mode'
+        target.write_text('untouched')
+        mode.symlink_to(target)
+        result = self.run_script('ab.sh', 'modeclash', 'one')
+        self.rejected(result, 'symlink')
+        self.assertEqual(target.read_text(), 'untouched')
+
+    def test_aa_control_rejects_symlinked_snapshots(self):
+        self.wall_time_fixture()
+        (self.root / 'bench/bin/alias').symlink_to(self.root / 'bench/bin/one', target_is_directory=True)
+        self.rejected(self.run_script('aa.sh', 'one', 'alias', 'nullalias'), 'symlink')
+        self.binary(self.root / 'bench/bin/copy/wsclean')
+        binary = self.root / 'bench/bin/copy/wsclean'
+        binary.unlink()
+        binary.symlink_to(self.root / 'bench/bin/one/wsclean')
+        self.rejected(self.run_script('aa.sh', 'one', 'copy', 'nullalias2'), 'symlink')
+        self.assertFalse((self.root / 'bench/out').exists())
+
+    def test_aa_control_rejects_native_payload_symlinks_and_asymmetry(self):
+        self.wall_time_fixture()
+        live = self.root / 'build-mx'
+        self.binary(live / 'wsclean')
+        for name in ('one', 'copy'):
+            self.binary(self.root / f'bench/bin/{name}/wsclean')
+            (self.root / f'bench/bin/{name}/wsclean.native').symlink_to(live / 'wsclean')
+        self.rejected(self.run_script('aa.sh', 'one', 'copy', 'nullnative'), 'payload')
+        for name in ('one', 'copy'):
+            (self.root / f'bench/bin/{name}/wsclean.native').unlink()
+        self.binary(self.root / 'bench/bin/copy/wsclean.native')
+        self.rejected(self.run_script('aa.sh', 'one', 'copy', 'nullasym'), 'only one snapshot')
+        self.assertFalse((self.root / 'bench/out').exists())
+
+    def test_aa_control_checks_the_snapshot_library(self):
+        self.wall_time_fixture()
+        for name in ('one', 'copy'):
+            self.binary(self.root / f'bench/bin/{name}/wsclean')
+        (self.root / 'bench/bin/one/libschaapthreading.dylib').write_text('fixture library')
+        self.rejected(self.run_script('aa.sh', 'one', 'copy', 'nulllibasym'), 'only one snapshot')
+        (self.root / 'bench/bin/copy/libschaapthreading.dylib').write_text('fixture library')
+        result = self.run_script('aa.sh', 'one', 'copy', 'nulllibok')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('libschaapthreading.dylib', result.stdout)
+        (self.root / 'bench/bin/copy/libschaapthreading.dylib').write_text('different library')
+        self.rejected(self.run_script('aa.sh', 'one', 'copy', 'nulllibdiff'), 'not byte-identical')
+        self.assertFalse((self.root / 'bench/out/nulllibdiff-ab.tsv').exists())
+
+    def test_aa_control_requires_identical_binaries_and_runs_ab(self):
+        self.wall_time_fixture()
+        self.binary(self.root / 'bench/bin/copy/wsclean')
+        result = self.run_script('aa.sh', 'one', 'copy', 'nullctrl')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.root / 'bench/out/nullctrl-ab.tsv').exists())
+        self.assertEqual([Path(call['binary']).parent.name for call in self.calls()], ['one', 'copy'])
+        differing = self.root / 'bench/bin/copy/wsclean'
+        differing.write_text(self.fake + '\n# one byte differs\n')
+        differing.chmod(0o755)
+        result = self.run_script('aa.sh', 'one', 'copy', 'nullctrl2')
+        self.rejected(result, 'identical')
+        self.assertFalse((self.root / 'bench/out/nullctrl2-ab.tsv').exists())
+
+    def test_aa_control_rejects_same_variant_and_bad_slugs(self):
+        self.rejected(self.run_script('aa.sh', 'one', 'one', 'nullctrl'), 'differ')
+        for args in ((), ('one',), ('one', 'two')):
+            with self.subTest(args=args):
+                self.rejected(self.run_script('aa.sh', *args), 'usage:')
+        self.rejected(self.run_script('aa.sh', 'one', '..', 'tag'), 'invalid')
+        self.assertFalse((self.root / 'bench/out').exists())
 
 
 if __name__ == '__main__':

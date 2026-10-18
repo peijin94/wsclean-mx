@@ -57,5 +57,8 @@ rmdir "$out/tmp" 2>/dev/null || true
 
 wall=$(bench_wall_time "$out/time.txt")
 rss=$(awk '/maximum resident set size/{printf "%.0f", $1/1048576}' "$out/time.txt")
-echo "$variant $tag wall=${wall}s host_peak_rss=${rss}MiB"
+counters=$(bench_counters "$out/time.txt") || bench_die "invalid hardware counters: $out/time.txt"
+read -r instructions cycles <<< "$counters"
+printf 'instructions_G=%s\ncycles_G=%s\n' "$instructions" "$cycles" > "$out/counters.txt"
+echo "$variant $tag wall=${wall}s host_peak_rss=${rss}MiB instructions=${instructions}G cycles=${cycles}G"
 grep -E "Inversion:|prediction:|deconvolution:" "$out/wsclean.log" | tail -1 || true

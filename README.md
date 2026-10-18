@@ -130,6 +130,7 @@ container image pull --platform linux/amd64 docker.io/astronrd/linc:5.2.1
 
 bench/run.sh mx mytag <wsclean args>              # one run -> bench/out/mytag/mx/
 REPS=2 COOL=30 bench/ab.sh mytag mx,upstream,linc <wsclean args>   # alternating A/B
+REPS=2 COOL=30 bench/aa.sh snapl snapl2 nullctl <wsclean args>     # A/A null control
 .venv/bin/python bench/compare_fits.py bench/out/mytag-r1/linc bench/out/mytag-r1/mx
 .venv/bin/python bench/plot_report.py             # regenerate docs/bench/*.png
 ```
@@ -141,6 +142,22 @@ overrides. Keep benchmark MSs read-only as an independent safeguard; this is
 not a sandbox for arbitrary WSClean arguments. Existing run and snapshot
 names are refused rather than deleted. A/B runs reverse variant order on
 alternate repetitions and fail on missing/malformed timings.
+
+Every run also records retired instructions and cycles when the platform's
+`time` command provides them (`bench/out/<tag>/<variant>/counters.txt`), and
+`ab.sh` writes the comparison's mode assessment to `bench/out/<tag>-ab.mode.txt`.
+**Do not read a wall-clock difference as a patch effect until that file says
+`comparable`:** similar instruction counts with much higher cycle counts is a
+host stall/scheduling mode that has hit identical binaries alike. `bench/aa.sh`
+verifies that two snapshots are byte-identical and runs the same A/B machinery on
+them as a null control; use it to size the host's own spread next to any claimed
+improvement. The verdict is printed before the ratio table and is also
+`unclassified` when counters are missing, incomplete or invalid, when a variant's
+own repeats span several cycle levels, when instruction counts differ by more
+than 20% (different work, or counters measuring different things), or for the
+`linc` container, whose counters describe the host container CLI rather than the
+guest. `bench/plot_report.py` still labels historical wall ratios without reading
+mode files; treat its figures accordingly until that is updated.
 
 Comparisons follow three tiers: bitwise for operation-preserving incremental
 changes at `-j 1`, ULP, and scientific metrics against the fixed native upstream

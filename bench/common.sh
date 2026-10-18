@@ -53,17 +53,62 @@ bench_output() {
   [ ! -e "$path" ] || bench_die "output already exists: $path"
 }
 
+# SHA-256 of a file, for identity checks on frozen executables.
+bench_sha256() {
+  python3 - "$1" <<'PYCODE'
+import hashlib, sys
+from pathlib import Path
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PYCODE
+}
+
+# Optional hardware counters from /usr/bin/time -lp, printed as
+# "<instructions_G> <cycles_G>" so a wall-clock difference can be classified:
+# equal instruction counts with a large cycle increase is a host stall mode, not
+# a code cost. Prints "na na" where the platform's time command lacks them; values
+# are never invented.
+bench_counters() {
+  python3 - "$1" <<'PYCODE'
+import re, sys
+from pathlib import Path
+try:
+    text = Path(sys.argv[1]).read_text()
+except OSError:
+    sys.exit(f"bench: missing timing file: {sys.argv[1]}")
+def value(label):
+    # Horizontal whitespace only, so a split record cannot be reassembled across
+    # lines, and a labelled suffix ("... retired per second") does not match.
+    matches = re.findall(rf"^[ \t]*(\d+)[ \t]+{label}[ \t]*$", text, re.M)
+    if not matches:
+        return "na"
+    if len(matches) > 1:
+        sys.exit(f"bench: ambiguous counter records for {label}: {sys.argv[1]}")
+    return f"{int(matches[0]) / 1e9:.4f}"
+print(value("instructions retired"), value("cycles elapsed"))
+PYCODE
+}
+
 bench_wall_time() {
   python3 - "$1" <<'PYCODE'
 import math, re, sys
 from pathlib import Path
 try:
-    lines = [line for line in Path(sys.argv[1]).read_text().splitlines() if line.startswith("real")]
+    text = Path(sys.argv[1]).read_text()
 except OSError:
     sys.exit(f"bench: missing wall timing: {sys.argv[1]}")
-match = re.fullmatch(r"real\s+([0-9]+(?:\.[0-9]+)?)\s*", lines[0]) if len(lines) == 1 else None
-if not match or not math.isfinite(float(match[1])):
+# A truncated or partially malformed timing file (a failed or killed run) must
+# not pass as a record: all three of real/user/sys are required, each exactly
+# once, each with a fractional part and a finite value.
+records = {}
+for line in text.splitlines():
+    match = re.fullmatch(r"(real|user|sys)[ \t]+([0-9]+\.[0-9]+)[ \t]*", line)
+    if match:
+        records.setdefault(match.group(1), []).append(match.group(2))
+if (sorted(records) != ["real", "sys", "user"]
+        or any(len(values) != 1 for values in records.values())):
     sys.exit(f"bench: missing or malformed wall timing: {sys.argv[1]}")
-print(match[1])
+if not all(math.isfinite(float(values[0])) for values in records.values()):
+    sys.exit(f"bench: nonfinite wall timing: {sys.argv[1]}")
+print(records["real"][0])
 PYCODE
 }
