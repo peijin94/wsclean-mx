@@ -48,7 +48,10 @@ reasoning and long-form design in `notes.md`.
   Source positions are sub-pixel centroids with a 1% peak detection floor and a
   0.01 px position floor. On LOFAR 3C196 (real calibrator, fixture pinned by
   sha256 in upstream's CMakeLists) mx agrees with the reference at ~1e-7.
-  Quiet-Sun source checks sit on the envelope boundary for mx and ulp alike.
+  Quiet-Sun boundary resolved with a 50-rerun family + the predeclared
+  `--criterion p95` gate (candidate vs the 95th percentile of the family's own
+  members): all four mx runs pass both criteria; one perturbed-reference outlier
+  out of five fails. Family runs are stored as bench/out/envelope18-ref-r4..r53.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
   external MS; two average-correction benchmarks are explicitly disabled upstream.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using

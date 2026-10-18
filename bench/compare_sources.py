@@ -41,6 +41,11 @@ NUMERICAL_FLOOR = 1.0e-5      # predeclared float32 storage floor (see docs/scie
 POSITION_FLOOR_PX = 0.01      # positions are sub-pixel centroids now, so exact equality is
                               # not the right bar when the reference envelope is zero;
                               # 1/100 pixel is far below any physical positional error
+CRITERION_QUANTILE = 0.95     # `--criterion p95`: the candidate may not be more extreme
+                              # than the 95th percentile of the reference family's own
+                              # members, measured with the same statistic it is judged by
+                              # (deviation from the family median for scalar metrics,
+                              # worst pairwise spread for source metrics)
 
 
 
@@ -198,12 +203,33 @@ def relative_deviation(a, b):
     return abs(a - b) / scale
 
 
+def percentile(values, fraction):
+    values = [value for value in values if value is not None and np.isfinite(value)]
+    if not values:
+        return 0.0
+    return float(np.quantile(values, fraction))
+
+
+def candidate_percentile(values, candidate):
+    """Share of family values at or below the candidate (i.e. its rank)."""
+    values = [value for value in values if value is not None and np.isfinite(value)]
+    if not values:
+        return None
+    return float(sum(1 for value in values if value <= candidate) / len(values))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--candidate', required=True, type=Path)
     parser.add_argument('references', nargs='+', type=Path,
                         help='reference rerun directories (at least two for an envelope)')
     parser.add_argument('--json', type=Path, help='also write the full comparison here')
+    parser.add_argument('--criterion', choices=('max', 'p95'), default='max',
+                        help='max: candidate must stay inside the reference family\'s worst '
+                             'deviation (default, conservative). p95: candidate must not be '
+                             'more extreme than the 95th percentile of the family\'s own '
+                             'members, measured with the same statistic (see the module '
+                             'docstring and docs/science-gates.md)')
     args = parser.parse_args()
 
     names = set(product_files(args.references[0]))
@@ -217,7 +243,8 @@ def main():
     print(f"candidate: {args.candidate}")
     print(f"references: {', '.join(str(r) for r in args.references)}")
     print()
-    header = (f"{'product':<18}{'metric':<26}{'reference':>14}{'env_med':>11}{'envelope':>12}"
+    threshold_label = 'p95 family' if args.criterion == 'p95' else 'envelope'
+    header = (f"{'product':<18}{'metric':<26}{'reference':>14}{'env_med':>11}{threshold_label:>12}"
               f"{'candidate':>14}{'deviation':>12}  result")
     print(header)
     print('-' * len(header))
@@ -236,16 +263,27 @@ def main():
             # the max is what the gate uses, so a single wild rerun cannot be
             # hidden behind a tight median.
             envelope_median = float(np.median(deviations)) if deviations else 0.0
+            # Each reference member measured against the family median is the
+            # fair comparator for a candidate measured the same way; the family
+            # distribution of those deviations drives the p95 criterion.
+            member_deviations = [relative_deviation(centre, value) for value in values]
+            p95_family = percentile(member_deviations, CRITERION_QUANTILE)
             deviation = relative_deviation(centre, candidate_metrics[key])
-            passed = deviation <= max(envelope, NUMERICAL_FLOOR)
+            threshold = (max(p95_family, NUMERICAL_FLOOR) if args.criterion == 'p95'
+                         else max(envelope, NUMERICAL_FLOOR))
+            passed = deviation <= threshold
             entry['checks'][key] = {'reference_median': centre, 'envelope': envelope,
                                     'envelope_median': envelope_median,
+                                    'p95_family': p95_family,
+                                    'candidate_percentile': candidate_percentile(
+                                        member_deviations, deviation),
                                     'candidate': candidate_metrics[key], 'deviation': deviation,
-                                    'threshold': max(envelope, NUMERICAL_FLOOR),
+                                    'threshold': threshold, 'criterion': args.criterion,
                                     'passed': bool(passed)}
             if not passed:
-                failures.append(f'{name}: {key} deviation {deviation:.3e} > envelope {envelope:.3e}')
-            print(f"{name:<18}{key:<26}{centre:>14.6g}{envelope_median:>11.3g}{envelope:>12.6g}"
+                failures.append(f'{name}: {key} deviation {deviation:.3e} > '
+                                f'{threshold_label} {threshold:.3e}')
+            print(f"{name:<18}{key:<26}{centre:>14.6g}{envelope_median:>11.3g}{threshold:>12.6g}"
                   f"{candidate_metrics[key]:>14.6g}{deviation:>12.3e}  "
                   f"{'PASS' if passed else 'FAIL'}")
 
@@ -261,13 +299,32 @@ def main():
         reference_pairs = [c for c in pair_checks if c['matched']]
         flux_envelope = max((c['flux_ratio_spread'] for c in reference_pairs), default=0.0)
         offset_envelope = max((c['position_offset_max_px'] for c in reference_pairs), default=0.0)
+        # Per-member worst values against the rest of the family: the same
+        # statistic the candidate is scored with, applied to family members.
+        member_flux, member_offset = [], []
+        for index, member in enumerate(reference_metrics):
+            others = [compare_sources(member['_sources'], other['_sources'])
+                      for j, other in enumerate(reference_metrics) if j != index]
+            matched = [check for check in others if check['matched']]
+            member_flux.append(max((check['flux_ratio_spread'] for check in matched),
+                                   default=None))
+            member_offset.append(max((check['position_offset_max_px'] for check in matched),
+                                     default=None))
+        flux_p95 = percentile(member_flux, CRITERION_QUANTILE)
+        offset_p95 = percentile(member_offset, CRITERION_QUANTILE)
         entry['source_checks'] = {'candidate_vs_references': candidate_checks,
-                                  'reference_pairs': pair_checks}
+                                  'reference_pairs': pair_checks,
+                                  'member_worst_flux': member_flux,
+                                  'member_worst_offset': member_offset}
         if paired:
             worst_flux = max(c['flux_ratio_spread'] for c in paired)
             worst_offset = max(c['position_offset_max_px'] for c in paired)
-            flux_ok = worst_flux <= max(flux_envelope, NUMERICAL_FLOOR)
-            offset_ok = worst_offset <= max(offset_envelope, POSITION_FLOOR_PX) + 1e-9
+            flux_threshold = (max(flux_p95, NUMERICAL_FLOOR) if args.criterion == 'p95'
+                              else max(flux_envelope, NUMERICAL_FLOOR))
+            offset_threshold = (max(offset_p95, POSITION_FLOOR_PX) if args.criterion == 'p95'
+                                else max(offset_envelope, POSITION_FLOOR_PX))
+            flux_ok = worst_flux <= flux_threshold
+            offset_ok = worst_offset <= offset_threshold + 1e-9
             # A source seen by one image and not the other is a difference even
             # when everything else matched, so unmatched counts are checked too.
             unmatched_envelope = max((c['unmatched'] + c.get('unmatched_candidate', 0)
@@ -278,24 +335,28 @@ def main():
             entry['source_summary'] = {'matched': max(c['matched'] for c in paired),
                                        'flux_ratio_spread': worst_flux,
                                        'flux_ratio_envelope': flux_envelope,
+                                       'flux_ratio_p95': flux_p95,
+                                       'flux_threshold': flux_threshold,
                                        'position_offset_max_px': worst_offset,
                                        'position_offset_envelope_px': offset_envelope,
+                                       'position_offset_p95': offset_p95,
+                                       'position_threshold': offset_threshold,
                                        'unmatched': unmatched_candidate,
                                        'unmatched_envelope': unmatched_envelope,
                                        'flux_passed': bool(flux_ok), 'position_passed': bool(offset_ok),
                                        'unmatched_passed': bool(unmatched_ok)}
             if not flux_ok:
                 failures.append(f'{name}: source flux ratio spread {worst_flux:.3e} '
-                                f'> reference envelope {flux_envelope:.3e}')
+                                f'> {threshold_label} {flux_threshold:.3e}')
             if not offset_ok:
                 failures.append(f'{name}: source position offset {worst_offset:.3f} px '
-                                f'> reference envelope {offset_envelope:.3f} px')
+                                f'> {threshold_label} {offset_threshold:.3f} px')
             if not unmatched_ok:
                 failures.append(f'{name}: {unmatched_candidate} unmatched source(s) '
                                 f'> reference envelope {unmatched_envelope}')
-            print(f"{name:<18}{'matched source flux':<26}{'':>14}{flux_envelope:>12.3e}"
+            print(f"{name:<18}{'matched source flux':<26}{'':>14}{flux_threshold:>12.3e}"
                   f"{worst_flux:>14.3e}{'':>12}  {'PASS' if flux_ok else 'FAIL'}")
-            print(f"{name:<18}{'source position max (px)':<26}{'':>14}{offset_envelope:>12.6g}"
+            print(f"{name:<18}{'source position max (px)':<26}{'':>14}{offset_threshold:>12.6g}"
                   f"{worst_offset:>14.6g}{'':>12}  {'PASS' if offset_ok else 'FAIL'}")
             print(f"{name:<18}{'unmatched sources':<26}{'':>14}{unmatched_envelope:>12d}"
                   f"{unmatched_candidate:>14d}{'':>12}  {'PASS' if unmatched_ok else 'FAIL'}")

@@ -30,7 +30,7 @@ import numpy as np
 from bench import compare_sources as cs
 
 QUIET_SUN_REFS = [ROOT / f'bench/out/envelope18-ref-r{n}/upstream-fix'
-                  for n in range(4, 14)]
+                  for n in range(4, 54)]
 QUIET_SUN_MX = [ROOT / f'bench/out/envelope18-mx-r{n}/mx-p11' for n in (4, 5, 6, 7)]
 QUIET_SUN_ULP = [ROOT / f'bench/out/envelope18-ulp-r{n}/upstream-fix-ulp'
                  for n in (1, 3, 4, 5, 6)]
@@ -164,13 +164,17 @@ def main():
         'OVRO-LWA quiet-Sun 2048² multiscale: mx-p11 vs fixed reference, restored image',
         args.out / 'quiet-sun-difference.png',
         'Cleaning is chaotic here: the reference differs from its own reruns by the same '
-        'order (10-rerun scatter 3.3% median / 8.1% max on total flux).')
+        'order (50-rerun scatter: 3.0% median / 8.1% max on total flux).')
 
     figure, axes = plt.subplots(2, 1, figsize=(9.5, 8.6))
+    print(f'quiet-sun family: {len(QUIET_SUN_REFS)} reruns, '
+          f'{len(QUIET_SUN_MX)} mx and {len(QUIET_SUN_ULP)} perturbed-reference candidates')
+    print(f'3C196 family: {len(LOFAR_REFS)} reruns, '
+          f'{len(LOFAR_MX)} mx and {len(LOFAR_ULP)} perturbed-reference candidates')
     scatter_panel(axes[0], QUIET_SUN_REFS, (QUIET_SUN_MX, QUIET_SUN_ULP),
-                  'Quiet-Sun 2048² multiscale — 10 reference reruns (45 pairs)')
+                  f'Quiet-Sun 2048² multiscale — {len(QUIET_SUN_REFS)} reference reruns')
     scatter_panel(axes[1], LOFAR_REFS, (LOFAR_MX, LOFAR_ULP),
-                  'LOFAR 3C196 real-source field — 4 reference reruns (6 pairs)')
+                  f'LOFAR 3C196 real-source field — {len(LOFAR_REFS)} reference reruns')
     handles, labels = axes[0].get_legend_handles_labels()
     figure.legend(handles, labels, loc='lower center', ncol=4, fontsize=9, frameon=False)
     figure.suptitle('Reference family scatter vs candidates (bench/compare_sources.py metrics)',

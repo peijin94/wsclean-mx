@@ -26,6 +26,11 @@ where the **reference envelope** is the largest deviation observed between *refe
 **The numerical floor is 1e-5 relative.** It exists because the products are 32-bit FITS: sums over ~4M pixels carry ~1e-6 relative rounding before any algorithmic difference. It was added after the first run flagged dirty/PSF deviations of ~3e-6 as failures — i.e. it is justified by storage precision, not by the results below, and it cannot hide them: every cleaned-product deviation below is 3–4 orders of magnitude larger.
 
 **Known limits.** The envelope is a sampled spread, not a confidence interval: three reruns when this document was written, ten in the widened measurement below, four for the real-source field. Source matching is only informative on a field with real sources; the OVRO-LWA snapshot is a 10 s full-sky quiet-Sun integration whose "sources" are noise peaks, and its matched-source envelopes are large (tens of percent), which reflects that, not science. Because the gate compares the candidate's worst deviation against the reference family's worst pair, it is ambiguous when the candidate is drawn from the same distribution — see "Boundary behaviour".
+The quiet-Sun family was subsequently enlarged to 50 reruns and a predeclared
+p95 criterion added, which resolves that ambiguity for this configuration — see
+"Enlarged family (50 reruns) and the p95 criterion". The 3C196 real-source family
+remains four reruns, which is adequate there because the spread is at the float32
+floor.
 Because the spread is sampled, quantities that are intrinsically mobile (residual-image
 peak position) carry envelopes of the same order as the observed deviations, so one
 more sample can flip such a check either way. That is an argument for widening the
@@ -216,6 +221,39 @@ The recommended refinement is therefore to increase the reference family
 substantially and/or gate on the candidate's rank within the reference-pair
 distribution instead of the max statistic.
 
+## Enlarged family (50 reruns) and the p95 criterion — boundary resolved
+
+Both refinements recommended above were implemented and the case re-measured
+with **50 reference reruns** (1225 pairs) and nine candidates (four `mx-p11`, five
+perturbed-reference runs).
+
+New criterion, predeclared in `bench/compare_sources.py` as `--criterion p95`:
+the candidate may not be more extreme than the **95th percentile of the reference
+family's own members**, measured with the same statistic the candidate is judged
+by (deviation from the family median for scalar metrics, worst pairwise spread
+against the rest of the family for source metrics). The `max` criterion remains
+the default and still exits non-zero on its own verdict; `p95` is opt-in and its
+verdict drives the exit status when selected. Both are reported.
+
+Family statistics (50 reruns) and candidate verdicts:
+
+| Metric | family p95 | family max | pair max | candidates passing |
+|---|---:|---:|---:|---|
+| restored total flux | 3.75 % | 4.29 % | 8.15 % | 9/9 by max, 8/9 by p95 |
+| model MAD rms | 6.69 % | 7.22 % | 13.5 % | 9/9, 9/9 |
+| restored 2nd moment | 0.102 % | 0.154 % | 0.241 % | 9/9, 8/9 |
+| residual total flux | 14.6 % | 15.0 % | 19.9 % | 9/9, 9/9 |
+| restored source flux spread | 1.69 % | 1.75 % | — | 8/9, 8/9 |
+| model source flux spread | 54.9 % | 55.0 % | — | 9/9, 8/9 |
+
+**All four `mx-p11` runs pass under both criteria.** The single failing
+candidate is the same perturbed-reference run (`ulp-r5`) that was the outlier in
+the boundary tally above — one of five runs of a deliberately perturbed binary,
+not the stack under test. The source-flux-spread checks that were tripping at the
+boundary with ten references no longer do, because the family's own member
+distribution (median 1.39 %, p95 1.69 %) now brackets the candidates rather than
+being estimated from too few samples.
+
 ## Evidence
 
 Figures (`bench/plot_science_gates.py` → `docs/bench/science-gates/`):
@@ -223,6 +261,7 @@ Figures (`bench/plot_science_gates.py` → `docs/bench/science-gates/`):
 - `lofar-difference.png` — 3C196 restored image, mx−reference difference and its distribution: agreed at the float32 rounding floor;
 - `quiet-sun-difference.png` — the same for the quiet-Sun case: structured differences an order of magnitude above rounding, at the level the reference differs from itself;
 - `envelope-scatter.png` — the six gate metrics on one axis per dataset: reference-pair scatter (grey, with the max as the envelope line) against every mx-p11 and perturbed-reference rerun. It shows the contrast directly — candidates sit inside the envelope for the scalar metrics and at/just past it for the two source-flux-spread rows on the quiet-Sun field, while everything collapses onto ~1e-7 for 3C196.
+- `family50-verdicts.json` and `analyze_family50.py` (in `bench/out/throttle-20261018/`) — the 50-rerun family statistics and per-candidate verdicts under both criteria.
 
 Local, gitignored, under `bench/out/`:
 
@@ -244,5 +283,10 @@ Correctness (tests, selection, allocation, time units) is repaired and reviewed.
 - **Real-source field (3C196):** mx-p11 and the reference are numerically the same instrument (~1e-7, i.e. float32 rounding, in every measured quantity).
 - **Quiet-Sun multiscale:** the three-run "systematic failure" does not survive a ten-run envelope; mx sits inside the reference's own chaotic spread, and the integral metrics cannot separate a 1-ulp perturbation from that chaos.
 - **Quiet-Sun source-level checks** sit on the envelope boundary for both mx and the perturbed reference; they are not decisive at this configuration.
+- **Quiet-Sun, enlarged family:** with 50 reference reruns all four mx-p11 runs pass both the max and the predeclared p95 criterion; the only failing candidate across nine runs is one perturbed-reference outlier.
 
-Scientific acceptance is therefore **no longer blocked by evidence of a difference on real sources**; what remains is to make the quiet-Sun source-level criterion statistically meaningful (larger reference family or a rank-based gate) and to repeat the real-source gate at other configurations (weighting, channel count, iteration count) before it is treated as general.
+Scientific acceptance is therefore **no longer blocked**: the real-source field
+agrees at the float32 floor, and the quiet-Sun criterion now passes for every run
+of the stack under test with a statistically meaningful family. What remains is
+to repeat the real-source gate at other configurations (weighting, channel count,
+iteration count) before the equivalence claim is treated as general.

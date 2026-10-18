@@ -219,6 +219,49 @@ class CompareSourcesTests(unittest.TestCase):
         self.assertEqual(stripped['product']['total_flux'], 3.0)
         json.dumps(stripped)  # must remain serialisable
 
+    # --- criterion ----------------------------------------------------------
+
+    def test_percentile_and_rank_helpers(self):
+        self.assertEqual(compare_sources.percentile([1, 2, 3, 4, 5], 0.5), 3.0)
+        self.assertEqual(compare_sources.percentile([], 0.95), 0.0)
+        rank = compare_sources.candidate_percentile([1, 2, 3], 2.5)
+        self.assertTrue(rank is not None and abs(rank - 2 / 3) < 1e-9)
+        self.assertIsNone(compare_sources.candidate_percentile([], 1.0))
+
+    def test_p95_criterion_is_stricter_than_the_max_envelope(self):
+        # Four identical references and one wild member: the family's own 95th
+        # percentile sits below the worst pairwise deviation, so a candidate
+        # between the two must pass under `max` and fail under `p95`.
+        image = synthetic_image()
+        for index, scale in enumerate((1.0, 1.0, 1.0, 1.0, 1.1)):
+            self.write(self.root / f'r{index}', image * np.float32(scale))
+        candidate = self.write(self.root / 'cand', image * np.float32(1.08))
+        references = [str(self.root / f'r{index}') for index in range(5)]
+        under_max = subprocess.run(
+            [sys.executable, str(Path(compare_sources.__file__).resolve()),
+             '--candidate', str(candidate), *references],
+            text=True, capture_output=True, check=False)
+        under_p95 = subprocess.run(
+            [sys.executable, str(Path(compare_sources.__file__).resolve()),
+             '--candidate', str(candidate), *references, '--criterion', 'p95'],
+            text=True, capture_output=True, check=False)
+        self.assertEqual(under_max.returncode, 0, under_max.stdout)
+        self.assertEqual(under_p95.returncode, 1)
+        self.assertIn('total_flux', under_p95.stdout)
+        self.assertIn('p95 family', under_p95.stdout)
+
+    def test_p95_criterion_accepts_a_typical_member(self):
+        image = synthetic_image()
+        for index, scale in enumerate((1.0, 1.001, 1.002, 1.003, 1.004)):
+            self.write(self.root / f'r{index}', image * np.float32(scale))
+        candidate = self.write(self.root / 'cand', image * np.float32(1.0015))
+        result = subprocess.run(
+            [sys.executable, str(Path(compare_sources.__file__).resolve()),
+             '--candidate', str(candidate),
+             *[str(self.root / f'r{index}') for index in range(5)], '--criterion', 'p95'],
+            text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_json_output_omits_internal_arrays(self):
         image = synthetic_image()
         reference = self.write(self.root / 'ref', image)
