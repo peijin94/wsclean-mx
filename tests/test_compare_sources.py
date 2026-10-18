@@ -91,6 +91,27 @@ class CompareSourcesTests(unittest.TestCase):
         result = self.cli(candidate, first, second)
         self.assertEqual(result.returncode, 1)
 
+    def test_envelope_reports_median_and_max_of_pairwise_deviations(self):
+        image = synthetic_image()
+        # Pairwise deviations are 2e-3, 4e-3 and 2e-3: max 4e-3, median 2e-3.
+        self.write(self.root / 'r1', image)
+        self.write(self.root / 'r2', image * np.float32(1.002))
+        self.write(self.root / 'r3', image * np.float32(1.004))
+        candidate = self.write(self.root / 'cand', image.copy())
+        report = self.root / 'report.json'
+        result = subprocess.run(
+            [sys.executable, str(Path(compare_sources.__file__).resolve()),
+             '--candidate', str(candidate), str(self.root / 'r1'), str(self.root / 'r2'),
+             str(self.root / 'r3'), '--json', str(report)],
+            text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        checks = json.loads(report.read_text())[self.product]['checks']
+        envelope = checks['total_flux']['envelope']
+        median = checks['total_flux']['envelope_median']
+        self.assertAlmostEqual(envelope, 4e-3, delta=3e-4)
+        self.assertAlmostEqual(median, 2e-3, delta=3e-4)
+        self.assertLessEqual(median, envelope)
+
     def test_non_finite_pixels_are_refused(self):
         image = synthetic_image()
         reference = self.write(self.root / 'ref', image)
@@ -125,7 +146,10 @@ class CompareSourcesTests(unittest.TestCase):
         candidate = self.write(self.root / 'cand', synthetic_image(peak_xy=(32, 37)))
         result = self.cli(candidate, reference)
         self.assertEqual(result.returncode, 1)
-        self.assertIn('unmatched source', result.stdout)
+        # Either branch proves the point: a source that cannot be matched is a
+        # failure whether or not other sources did match.
+        self.assertTrue('unmatched source' in result.stdout or 'none matched' in result.stdout,
+                        result.stdout)
         self.assertIn('GATE FAILED', result.stdout)
 
     def test_unmatched_sources_are_reported_by_the_matcher(self):
@@ -166,8 +190,27 @@ class CompareSourcesTests(unittest.TestCase):
         sources = compare_sources.detect_sources(image, compare_sources.mad_rms(image))
         self.assertGreaterEqual(len(sources), 1)
         y, x, value = sources[0]
-        self.assertEqual((int(y), int(x)), (20, 41))
+        self.assertEqual((round(y), round(x)), (20, 41))
         self.assertGreater(value, 50.0)
+
+    def test_source_position_is_sub_pixel(self):
+        # A peak centred between pixels must be reported between pixels, not
+        # snapped to whichever neighbour happens to hold the largest sample.
+        image = synthetic_image(peak_xy=(20.5, 41.5), noise_sigma=1.0)
+        sources = compare_sources.detect_sources(image, compare_sources.mad_rms(image))
+        y, x, _ = sources[0]
+        self.assertAlmostEqual(y, 20.5, delta=0.15)
+        self.assertAlmostEqual(x, 41.5, delta=0.15)
+
+    def test_components_below_the_peak_fraction_are_ignored(self):
+        image = synthetic_image(noise_sigma=0.01)
+        yy, xx = np.mgrid[0:64, 0:64]
+        image += 5.0 * np.exp(-(((yy - 50) ** 2 + (xx - 12) ** 2) / 8.0))
+        image += 0.5 * np.exp(-(((yy - 15) ** 2 + (xx - 15) ** 2) / 8.0))
+        sources = compare_sources.detect_sources(image, compare_sources.mad_rms(image))
+        positions = [(round(y), round(x)) for y, x, _ in sources]
+        self.assertIn((50, 12), positions)
+        self.assertNotIn((15, 15), positions)
 
     def test_jsonable_strips_internal_arrays(self):
         report = {'product': {'_sources': np.zeros((2, 3)), 'total_flux': np.float32(3.0)}}

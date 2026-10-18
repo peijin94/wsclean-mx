@@ -43,8 +43,12 @@ reasoning and long-form design in `notes.md`.
 - Science gates (docs/science-gates.md, bench/compare_sources.py): candidate
   deviations are judged against the reference's own rerun envelope with a
   predeclared 1e-5 float32 floor. Dirty/PSF pass at ~1e-7; multiscale cleaned
-  products fail systematically (mx-p11, 3 reruns) while patch 12 passes against
-  the 4-run p11 envelope.
+  products now pass against a 10-rerun envelope (the 3-run failure was
+  under-sampling; the perturbed upstream-fix-ulp reference behaves like mx).
+  Source positions are sub-pixel centroids with a 1% peak detection floor and a
+  0.01 px position floor. On LOFAR 3C196 (real calibrator, fixture pinned by
+  sha256 in upstream's CMakeLists) mx agrees with the reference at ~1e-7.
+  Quiet-Sun source checks sit on the envelope boundary for mx and ulp alike.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
   external MS; two average-correction benchmarks are explicitly disabled upstream.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using

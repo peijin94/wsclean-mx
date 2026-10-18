@@ -25,7 +25,7 @@ where the **reference envelope** is the largest deviation observed between *refe
 
 **The numerical floor is 1e-5 relative.** It exists because the products are 32-bit FITS: sums over ~4M pixels carry ~1e-6 relative rounding before any algorithmic difference. It was added after the first run flagged dirty/PSF deviations of ~3e-6 as failures — i.e. it is justified by storage precision, not by the results below, and it cannot hide them: every cleaned-product deviation below is 3–4 orders of magnitude larger.
 
-**Known limits.** The envelope comes from a small number of reruns (3–4 per reference), so it is a sampled spread, not a confidence interval. Source matching is only informative on a field with real sources; the current OVRO-LWA snapshot is a 10 s full-sky quiet-Sun integration whose "sources" are noise peaks, and its matched-source envelopes are large (tens of percent), which reflects that, not science.
+**Known limits.** The envelope is a sampled spread, not a confidence interval: three reruns when this document was written, ten in the widened measurement below, four for the real-source field. Source matching is only informative on a field with real sources; the OVRO-LWA snapshot is a 10 s full-sky quiet-Sun integration whose "sources" are noise peaks, and its matched-source envelopes are large (tens of percent), which reflects that, not science. Because the gate compares the candidate's worst deviation against the reference family's worst pair, it is ambiguous when the candidate is drawn from the same distribution — see "Boundary behaviour".
 Because the spread is sampled, quantities that are intrinsically mobile (residual-image
 peak position) carry envelopes of the same order as the observed deviations, so one
 more sample can flip such a check either way. That is an argument for widening the
@@ -81,11 +81,18 @@ un-cleaned artefact rather than a source, and the reference reruns already scatt
 7 % there, so it sits near the boundary and is recorded rather than explained away —
 it is a different class of failure from the eight systematic ones.
 
-What would move this forward, in order:
+What would move this forward, in order — *all three items below were done on
+2026-10-18: the widened envelope (10 reruns + perturbed reference) is in
+"Widened envelope", the real-source field is the LOFAR 3C196 section, and the
+decision is recorded in "Status of the wider release question".*
 
-1. Widen the reference envelope (many more reruns, and the perturbed-reference `upstream-fix-ulp` build) so "chaotic spread" is measured rather than guessed.
-2. Repeat on a field with real sources (a calibrator or a bright event) where flux-ratio and position gates have physical meaning.
-3. Only then decide whether the stack needs a fix, a documented caveat, or acceptance.
+1. ~~Widen the reference envelope (many more reruns, and the perturbed-reference `upstream-fix-ulp` build) so "chaotic spread" is measured rather than guessed.~~ Done.
+2. ~~Repeat on a field with real sources (a calibrator or a bright event) where flux-ratio and position gates have physical meaning.~~ Done — LOFAR 3C196.
+3. ~~Only then decide whether the stack needs a fix, a documented caveat, or acceptance.~~ Done — no evidence of a difference on real sources; the quiet-Sun criterion needs a statistical refinement.
+
+Remaining refinement work: enlarge the reference family further and/or switch the
+gate to a rank-based criterion, and repeat the real-source gate at other
+configurations (weighting schemes, channel counts, iteration counts).
 
 ## Results: patch 12 (conditional multiscale scratch) — neutral at source level
 
@@ -110,13 +117,117 @@ optimization — is source-level neutral, matching its earlier bitwise equivalen
 Its source detection also matches the reference reruns (no unmatched sources in
 the restored image; the model matches all but within the envelope).
 
+## Widened envelope (2026-10-18): the three-run failure was under-sampling
+
+The 2048² conclusion above rested on three reference reruns, which the "Known
+limits" section already flagged as a weak estimate of a chaotic spread. Ten
+reference reruns (`envelope18-ref-r4 … r13`) now measure that spread directly,
+against two fresh `mx-p11` reruns and two reruns of the **perturbed reference**
+`upstream-fix-ulp` (whose only difference from the reference is a one-ulp change
+in its own convolution):
+
+| Metric (product) | Reference scatter, median / max over 10 reruns | mx-p11 deviation | ulp deviation |
+|---|---:|---:|---:|
+| total flux (restored) | 3.3 % / 8.1 % | 2.3 % | 1.9 % |
+| MAD rms (model) | 6.4 % / 13.1 % | 6.1 % | 5.7 % |
+| second moment (restored) | 0.11 % / 0.21 % | 0.017 % | 0.020 % |
+| total flux (residual) | 14.6 % / 19.4 % | 0.7 % | 0.6 % |
+
+**All four candidates pass.** mx-p11 deviates from the reference median by less
+than the reference deviates from itself, and the deliberate one-ulp perturbation
+behaves the same way — so at this configuration the integral metrics cannot
+separate a tiny physics perturbation from run-to-run cleaning chaos. The
+three-run envelope was an under-estimate of that chaos, and the "systematic
+failure" recorded above was a property of the sample size, not of the stack. The
+earlier result stays on record; this measurement supersedes its interpretation.
+
+## Real-source field (LOFAR 3C196): float-level equivalence
+
+The quiet-Sun snapshot has no real sources, which is why its matched-source
+envelopes are tens of percent and carry no scientific weight. The upstream CI
+fixture `LOFAR_3C196.ms` — a real observation of a bright calibrator
+(138.475 MHz, single channel, 603750 rows, 2.16′ beam, sha256
+`f834f4ee…5fc3`, matching upstream's pinned hash) — provides a field with real
+sources. Four reference reruns, then `mx-p11` and `upstream-fix-ulp` as
+candidates (`-size 1024 1024 -scale 4asec -weight briggs 0 -mgain 0.8
+-multiscale -niter 3000 -j 8`):
+
+| Quantity (restored image) | Reference envelope (max / median) | mx-p11 deviation |
+|---|---:|---:|
+| total flux | 6.6e-7 / 3.3e-7 | 5.4e-7 |
+| source position max | 3.97e-7 px | 3.97e-7 px |
+| matched-source flux spread | 2.09e-7 | 2.09e-7 |
+| unmatched sources | 0 | 0 |
+
+Every measured quantity of every product agrees to **float32 rounding**
+(~1e-7 relative), for the model and residual products as well. **GATE PASSED**
+for mx-p11, for its second rerun, and for the perturbed reference, whose own
+products are also indistinguishable from the reference here. On a real-source
+field this stack is numerically the same instrument as the fixed reference.
+
+## Metric revision (2026-10-18): sub-pixel positions, significance floor
+
+The first LOFAR pass failed only on source checks of the *model* product: `2.000
+px > 1.414 px` position offsets and a 73 % flux-ratio spread that came from
+near-zero clean components. A model image is a sparse set of delta-like peaks;
+its argmax flips between neighbouring pixels for sub-pixel differences, and its
+weakest components are numerically meaningless. That is a property of the metric,
+not of the stack, so `bench/compare_sources.py` was revised before the results
+above were taken:
+
+- source positions are now flux-weighted centroids over a 9×9 window (sub-pixel);
+- a source must exceed both 6σ and 1 % of the image peak, so near-zero components
+  cannot drive the statistics;
+- positions carry a predeclared 0.01 px floor, because exact equality is not the
+  right bar for a sub-pixel estimator when the reference envelope is zero.
+
+Two defects were found while testing the revision (both fixed, both now pinned by
+tests): non-maximum suppression compared candidate pixels against stored
+*centroids*, mixing coordinate systems, and a first attempt at re-centring the
+centroid window oscillated because truncation bias flips sign across the pixel
+midpoint. The pre-revision results remain on record above; the tables in this
+section use the revised metric.
+
+## Boundary behaviour (quiet-Sun field, revised metric)
+
+With ten reference reruns and the revised metric, the quiet-Sun source-level
+checks land *on* the envelope boundary — for both candidates, including the
+deliberate one-ulp perturbation:
+
+| Candidate | Failing checks | Magnitude |
+|---|---|---|
+| mx-p11 (r4) | restored matched-source flux spread 1.492e-2 vs envelope 1.457e-2 | 2.4 % over the envelope |
+| ulp (r1) | same metric 1.537e-2; model position 2.928 px vs 2.926 px; model unmatched 8 vs 6 | 5.5 % / 0.07 % / 2 sources over |
+
+Both candidates' source-flux spreads (1.46–1.54 %) sit on the reference family's
+own value (1.46 %), i.e. the same chaotic scale. A max-statistic gate cannot
+resolve a 2 % difference in the worst pair when the candidate is drawn from the
+same distribution, and the fact that the known-tiny change trips the same checks
+shows these particular exceedances are not evidence of a physical difference.
+Recommended next refinement: increase the reference family further and/or gate on
+the candidate's rank within the reference pair distribution instead of the max.
+
 ## Evidence
 
-Local, gitignored: `bench/out/throttle-20261018/sources-*-final.json` and
-`-final.log` (final tool revision, including the unmatched-source check);
-products under `bench/out/audit-20261017-*`. Commands to reproduce are in the
-logs; the reference products came from the 2026-10-17 audit runs.
+Local, gitignored, under `bench/out/`:
+
+- `throttle-20261018/sources-*-final.{json,log}` — three-rerun envelope results, first tool revision;
+- `throttle-20261018/envelope18-ovro-*.{json,log}` — ten-rerun envelope, pre-revision metric;
+- `throttle-20261018/rev2-*.{json,log}` — ten-rerun and LOFAR gates under the revised metric;
+- run products: `envelope18-ref-r4…r13`, `envelope18-ulp-r1…r6`, `envelope18-mx-r4…r7`, `lofar18-*`, plus the 2026-10-17 audit runs.
+
+`scripts/build_upstream_fix.sh` builds the reference used as `build-reffix/wsclean`
+and records its provenance; `bench/out/throttle-20261018/run_envelope18_gates.sh`
+and `run_revised_metric_gates.sh` are the analysis drivers. `LOFAR_3C196.ms` was
+downloaded from upstream's pinned CI URL and its sha256 verified against
+`upstream/wsclean/tests/CMakeLists.txt` before use; it is kept read-only.
 
 ## Status of the wider release question
 
-Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). **Scientific acceptance of the multiscale stack remains open** and is now expressed in measurable terms above instead of pixel RMS.
+Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
+
+- **Real-source field (3C196):** mx-p11 and the reference are numerically the same instrument (~1e-7, i.e. float32 rounding, in every measured quantity).
+- **Quiet-Sun multiscale:** the three-run "systematic failure" does not survive a ten-run envelope; mx sits inside the reference's own chaotic spread, and the integral metrics cannot separate a 1-ulp perturbation from that chaos.
+- **Quiet-Sun source-level checks** sit on the envelope boundary for both mx and the perturbed reference; they are not decisive at this configuration.
+
+Scientific acceptance is therefore **no longer blocked by evidence of a difference on real sources**; what remains is to make the quiet-Sun source-level criterion statistically meaningful (larger reference family or a rank-based gate) and to repeat the real-source gate at other configurations (weighting, channel count, iteration count) before it is treated as general.

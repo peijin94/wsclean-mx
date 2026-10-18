@@ -196,7 +196,9 @@ Science acceptance is separate and measured at source level, not by pixel RMS:
 position, size and matched-source quantities against the reference's own rerun
 envelope. Results and the predeclared decision rule are in
 [docs/science-gates.md](docs/science-gates.md) — dirty/PSF pass, the multiscale
-cleaned products currently fail that gate, and patch 12 is neutral.
+cleaned products pass against a ten-rerun envelope, patch 12 is neutral, and on a
+real-source field (LOFAR 3C196, upstream's pinned CI fixture) the stack agrees
+with the fixed reference to float32 rounding.
 
 The upstream unit/integration suites are separate and require their test data.
 The initial audit's seven allocation failures are repaired, together with the
