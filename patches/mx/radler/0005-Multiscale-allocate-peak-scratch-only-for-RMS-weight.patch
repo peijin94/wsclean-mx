@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Sat, 17 Oct 2026 20:42:42 -0400
+Subject: [PATCH] Multiscale: allocate peak scratch only for RMS weighting
+
+
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.cc b/cpp/algorithms/threaded_deconvolution_tools.cc
+index 6485bd6..824e545 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.cc
++++ b/cpp/algorithms/threaded_deconvolution_tools.cc
+@@ -72,7 +72,6 @@ ThreadedDeconvolutionTools::FindSingleScalePeak(
+     multiscale::MultiScaleTransforms* ms_transforms, Image& image, float scale,
+     bool allow_negative_components, const bool* mask, float border_ratio,
+     const Image& rms_factor_image, bool calculate_rms) {
+-  Image scratch(ms_transforms->Width(), ms_transforms->Height());
+   const size_t width = ms_transforms->Width();
+   const size_t height = ms_transforms->Height();
+   const size_t border_scale = std::ceil(scale * 0.5);
+@@ -99,6 +98,7 @@ ThreadedDeconvolutionTools::FindSingleScalePeak(
+ 
+     result.normalized_value = result.unnormalized_value;
+   } else {
++    Image scratch(width, height);
+     for (size_t i = 0; i != rms_factor_image.Size(); ++i) {
+       scratch[i] = image[i] * rms_factor_image[i];
+     }

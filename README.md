@@ -7,8 +7,10 @@ wsclean-mx is a small patch set on top of upstream
 that ships in the LINC 5.2.1 container (`2d5c1ed8`, WSClean 3.7). It builds
 natively for arm64, moves serial FFT and deconvolution work onto all cores,
 and removes I/O and locking bottlenecks.
-It also fixes an upstream bug that corrupts 2048² images on macOS. Images
-agree with upstream and LINC to within upstream's own run-to-run variation.
+It also fixes an upstream bug that corrupts 2048² images on macOS. Dirty/PSF
+products agree with the fixed upstream reference at approximately 1e-6 relative
+RMS on the tested snapshot. Multiscale cleaned products differ at percent level;
+their scientific acceptance needs broader validation (see the audit below).
 
 On a fanless MacBook Air M2 (16 GB), a full-sky 2048² multiscale clean
 (niter 3000) of one OVRO-LWA snapshot takes:
@@ -30,6 +32,11 @@ A 4096² dirty image takes 1.9 s with wsclean-mx vs 4.2 s with upstream.
 Full results, plots and methodology: [benchmark.md](benchmark.md). Progress
 log: [issue #1](https://github.com/peijin94/wsclean-mx/issues/1).
 
+The current development plan is [docs/development-plan.md](docs/development-plan.md).
+The [2026-10-17 audit](docs/audit-2026-10-17.md) records fresh benchmarks,
+regression coverage, and remaining correctness/test gaps. This is a development
+patch set, not a claim that every WSClean observing mode is validated.
+
 ## The patches
 
 The patch set lives in `patches/mx/<repo>/`, one directory per library:
@@ -47,6 +54,7 @@ The patch set lives in `patches/mx/<repo>/`, one directory per library:
 | wsclean/0002 | Read measurement set columns in blocks of rows (direct reads) | 4096² dirty image 1.70× |
 | wsclean/0003 | Same, during reordering (cleaning runs) | reordering 2.3× |
 | radler/0004 | Peak finder: vectorized row maximum skips rows | peak search 8×, deconvolution 1.12× |
+| radler/0005 | Allocate multiscale peak scratch only for RMS-weighted searches | removes one unused full-image allocation per unweighted scale search; no promised wall-time gain |
 
 The upstream padding bug: `WGridder::RealImage()` fills image padding with
 NaN, but its source file is compiled with `-ffast-math`, and Apple clang
@@ -119,19 +127,40 @@ REPS=2 COOL=30 bench/ab.sh mytag mx,upstream,linc <wsclean args>   # alternating
 
 Variants are `mx`, `upstream`, `linc` (the LINC container under Rosetta), or
 any frozen build in `bench/bin/<name>/` (`bench/snapshot.sh`). `run.sh`
-always adds `-no-update-model-required` so the measurement set is never
-written.
+adds `-no-update-model-required` and rejects known MS-writing and output-path
+overrides. Keep benchmark MSs read-only as an independent safeguard; this is
+not a sandbox for arbitrary WSClean arguments. Existing run and snapshot
+names are refused rather than deleted. A/B runs reverse variant order on
+alternate repetitions and fail on missing/malformed timings.
 
 Comparisons follow three tiers: bitwise (at `-j 1`, against the native
 upstream build), ULP, and scientific (rms difference relative to the
 reference). Multithreaded cleaning is not deterministic, so cleaned images
 are judged against upstream's own rerun spread.
 
+## Regression tests
+
+```bash
+scripts/test.sh build-mx
+```
+
+This runs Python harness/FITS tests, rebuilds the selected mx binary, and runs
+linked-production convolution/resampler, median, peak and MS column-block
+checks. Synthetic unit fixtures are separate from the real MS benchmarks.
+Compiler output may include upstream's expected non-AVX warning on arm64.
+
+The upstream unit/integration suites are separate and require their test data.
+The audit's full upstream unit run is **not green**: seven `std::bad_alloc`
+failures remain after fetching fixtures. See the audit for exact counts and
+commands; zero tests from `ctest -N` is not a successful validation.
+
 ## Roadmap
 
 The current patches are CPU-only. Planned next steps, described in
 `notes.md`: a Metal GPU gridding backend and benchmarks on larger
-measurement sets where gridding dominates. Accelerate's vDSP 2D FFT was
+measurement sets where gridding dominates. First complete the reader-selection
+and reproducibility gates in [the development plan](docs/development-plan.md).
+Accelerate's vDSP 2D FFT was
 measured and is slower than ducc0's multithreaded FFT, so it is not used.
 
 ## License

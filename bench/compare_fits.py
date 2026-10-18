@@ -9,16 +9,19 @@
 Only data arrays are compared; headers always differ (dates, versions).
 
 Tiers (see notes.md, "Comparison contract"):
-  T0  bitwise identical data
+  T0  bitwise identical data and dtype (byte order is canonicalized)
   T1  max ULP difference <= --max-ulp
   T2  rms(diff)/rms(ref) <= --max-rel-rms and max|diff|/max|ref| <= --max-rel-peak
 
 Exit status is non-zero if any common product violates the requested tier, or
 if the two directories don't contain the same set of products.
+Infinite pixels, empty arrays and arrays without finite coverage fail every
+tier. Matched NaN masks are allowed when finite pixels remain.
+Mixed integer/float arrays fail closed if any integer is outside [-2**53, 2**53],
+where conversion to float64 is no longer guaranteed to preserve the integer.
 """
 
 import argparse
-import hashlib
 import sys
 from pathlib import Path
 
@@ -29,6 +32,8 @@ from astropy.io import fits
 def load(path):
     with fits.open(path, memmap=False) as hdul:
         data = hdul[0].data
+    if data is None:
+        raise ValueError(f"{path}: primary HDU has no data")
     return np.ascontiguousarray(data)
 
 
@@ -36,34 +41,86 @@ def ulp_diff(a, b):
     """Max distance in units in the last place between two float arrays."""
     if a.dtype != b.dtype or a.dtype.kind != "f":
         return None
-    itype = {4: np.int32, 8: np.int64}[a.dtype.itemsize]
-    ia, ib = a.view(itype).astype(np.int64), b.view(itype).astype(np.int64)
-    # Map sign-magnitude floats onto a monotonic integer line (-0.0 -> 0).
-    int_min = -(np.int64(1) << (8 * a.dtype.itemsize - 1))
-    ia = np.where(ia < 0, int_min - ia, ia)
-    ib = np.where(ib < 0, int_min - ib, ib)
-    return int(np.max(np.abs(ia - ib))) if ia.size else 0
+    itype = {4: np.uint32, 8: np.uint64}[a.dtype.itemsize]
+    native = a.dtype.newbyteorder("=")
+    ia = a.astype(native, copy=False).view(itype)
+    ib = b.astype(native, copy=False).view(itype)
+    # Unsigned ordering avoids overflow even across the full float64 range.
+    # Both signed zeros map to the midpoint.
+    sign = itype(1 << (8 * a.dtype.itemsize - 1))
+    ia = np.where(ia & sign, sign - (ia & (sign - itype(1))), sign + ia)
+    ib = np.where(ib & sign, sign - (ib & (sign - itype(1))), sign + ib)
+    return int(np.max(np.maximum(ia, ib) - np.minimum(ia, ib))) if ia.size else 0
+
+
+def rms(values):
+    """Compute RMS without squaring unscaled float64 magnitudes."""
+    peak = float(np.nanmax(np.abs(values)))
+    if not peak or not np.isfinite(peak):
+        return peak
+    return peak * float(np.sqrt(np.nanmean((values / peak) ** 2)))
+
+
+def integer_difference(a, b):
+    """Subtract as Python integers before rounding differences for RMS metrics.
+
+    This handles signed/unsigned mixtures and their full range without overflow.
+    Object temporaries are bounded; no image-sized object arrays are created.
+    Integer differences cannot underflow to zero when converted to float64.
+    """
+    d = np.empty(a.shape, dtype=np.float64)
+    for start in range(0, a.size, 4096):
+        stop = start + 4096
+        exact = b.flat[start:stop].astype(object) - a.flat[start:stop].astype(object)
+        d.flat[start:stop] = exact
+    return d
 
 
 def compare(ref_path, test_path):
-    a, b = load(ref_path), load(test_path)
+    try:
+        a, b = load(ref_path), load(test_path)
+    except (OSError, ValueError, TypeError, IndexError) as exc:
+        return {"name": ref_path.name, "error": f"input error: {exc}"}
     r = {"name": ref_path.name, "shape": a.shape}
     if a.shape != b.shape:
         r["error"] = f"shape {a.shape} vs {b.shape}"
         return r
-    r["bitwise"] = (hashlib.sha256(a.tobytes()).digest()
-                    == hashlib.sha256(b.tobytes()).digest())
+    if not a.size:
+        r["error"] = "empty data array"
+        return r
+    if np.any(np.isinf(a)) or np.any(np.isinf(b)):
+        r["error"] = "infinite pixels"
+        return r
+    if np.all(np.isnan(a)) or np.all(np.isnan(b)):
+        r["error"] = "no finite pixels"
+        return r
+    for integer, floating in ((a, b), (b, a)):
+        if integer.dtype.kind in "iu" and floating.dtype.kind == "f":
+            if int(integer.min()) < -(2**53) or int(integer.max()) > 2**53:
+                r["error"] = "mixed integer/float comparison outside exact float64 integer range"
+                return r
+    native_a = a.astype(a.dtype.newbyteorder("="), copy=False)
+    native_b = b.astype(b.dtype.newbyteorder("="), copy=False)
+    r["bitwise"] = (native_a.dtype == native_b.dtype
+                    and native_a.tobytes() == native_b.tobytes())
     both_nan = np.isnan(a) & np.isnan(b)
     r["nan_mismatch"] = int(np.count_nonzero(np.isnan(a) != np.isnan(b)))
     a64 = np.where(both_nan, 0, a).astype(np.float64)
     b64 = np.where(both_nan, 0, b).astype(np.float64)
-    d = b64 - a64
-    rms_ref = float(np.sqrt(np.nanmean(a64 ** 2)))
+    if a.dtype.kind in "iu" and b.dtype.kind in "iu":
+        d = integer_difference(a, b)
+    else:
+        # A finite pair can still have an unrepresentably large difference.
+        with np.errstate(over="ignore"):
+            d = b64 - a64
+    rms_ref = rms(a64)
     peak_ref = float(np.nanmax(np.abs(a64)))
     r["max_abs"] = float(np.nanmax(np.abs(d)))
-    r["rel_rms"] = float(np.sqrt(np.nanmean(d ** 2))) / rms_ref if rms_ref else 0.0
-    r["rel_peak"] = r["max_abs"] / peak_ref if peak_ref else 0.0
-    r["peak_ratio"] = float(np.nanmax(np.abs(b64))) / peak_ref if peak_ref else 1.0
+    rms_diff = rms(d)
+    peak_test = float(np.nanmax(np.abs(b64)))
+    r["rel_rms"] = rms_diff / rms_ref if rms_ref else (np.inf if rms_diff else 0.0)
+    r["rel_peak"] = r["max_abs"] / peak_ref if peak_ref else (np.inf if r["max_abs"] else 0.0)
+    r["peak_ratio"] = peak_test / peak_ref if peak_ref else (np.inf if peak_test else 1.0)
     r["n_diff"] = int(np.count_nonzero(d))
     r["max_ulp"] = ulp_diff(np.where(both_nan, 0, a), np.where(both_nan, 0, b))
     return r
@@ -89,6 +146,12 @@ def main():
     p.add_argument("--max-rel-rms", type=float, default=1e-4)
     p.add_argument("--max-rel-peak", type=float, default=1e-3)
     args = p.parse_args()
+    if args.max_ulp < 0:
+        p.error("--max-ulp must be nonnegative")
+    for option in ("max_rel_rms", "max_rel_peak"):
+        value = getattr(args, option)
+        if not np.isfinite(value) or value < 0:
+            p.error(f"--{option.replace('_', '-')} must be finite and nonnegative")
 
     ref = {f.name: f for f in sorted(args.ref.glob("*.fits"))}
     test = {f.name: f for f in sorted(args.test.glob("*.fits"))}

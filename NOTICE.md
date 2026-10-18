@@ -64,6 +64,7 @@ its author and date in its header.
 | 2026-10-17 | `patches/mx/wsclean/0002-ContiguousMSReader-...patch` | wsclean `msproviders/msreaders/contiguousmsreader.{h,cpp}` | read measurement set columns in blocks of rows |
 | 2026-10-17 | `patches/mx/wsclean/0003-MSRowProvider-...patch` | wsclean `msproviders/columnblock.h` (new), `msproviders/msreaders/contiguousmsreader.{h,cpp}`, `msproviders/rowproviders/{msrowprovider,directmsrowprovider}.{h,cpp}` | read measurement set columns in blocks of rows during reordering |
 | 2026-10-17 | `patches/mx/radler/0004-peak_finder-Simple-...patch` | radler `cpp/math/peak_finder.cc` | skip rows that cannot raise the peak (vectorizable row maximum) |
+| 2026-10-17 | `patches/mx/radler/0005-Multiscale-...patch` | radler `cpp/algorithms/threaded_deconvolution_tools.cc` | allocate full-image peak-search scratch only when RMS weighting uses it |
 
 A wsclean-mx binary still reports upstream's version string ("WSClean
 version 3.7"); it is a modified version as described above.

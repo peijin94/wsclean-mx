@@ -3,6 +3,27 @@
 Short, durable facts and decisions. Update when something changes; put
 reasoning and long-form design in `notes.md`.
 
+## Active validation and next work
+
+- Current plan: `docs/development-plan.md`; evidence and limits:
+  `docs/audit-2026-10-17.md`. Read these before the historical measurements below.
+- `scripts/test.sh <mx-build>` runs Python harness/FITS tests and linked numerical
+  regressions. Full upstream/dependency suites are separate; CTest can list zero
+  even when the upstream `unittest` target is available.
+- Patch 12 (`radler/0005`, developer commit `c468d5c`) moves unused peak-search
+  scratch into the RMS-weighted branch. Allocation behavior is tested; all five
+  1024² multiscale products match p11 bitwise at `-j 1`. No reliable wall-time
+  gain is claimed from the noisy four-repeat experiment.
+- Full upstream suite after fixture downloads: 126 passed, 7 pre-existing
+  `std::bad_alloc` failures, 4 skipped. Block-read selection of undefined excluded
+  cells and broader multiscale scientific acceptance remain open.
+- Benchmark run/snapshot names are now immutable: use a new tag instead of
+  replacing old results. AB order reverses on alternate repeats. Known write
+  flags, including `-no-reorder`, are rejected; keep inputs OS-level read-only.
+- Fresh full-stack multiscale comparisons are not universally inside upstream's
+  sampled rerun spread. Dirty/PSF checks pass; close residual RMS alone does not
+  establish cleaned-image equivalence.
+
 ## Goal
 
 Apple Silicon (M-series) optimized WSClean. WSClean C++ stays in control;
@@ -123,7 +144,9 @@ submodule, regenerate `patches/build/*/<commit12>/`, rebase `patches/mx/`.
   x 23.9 kHz from 50.148 MHz (4.59 MHz BW), XX/XY/YX/YY, phased to zenith.
   maxuvw 322.5 lambda, beam ~10.7', w in [0, 4.55] lambda. No WEIGHT_SPECTRUM.
   ~11.8M gridded visibilities for Stokes I.
-- All bench runs use `-no-update-model-required` (run.sh enforces) so the MS is never written.
+- All bench runs suppress normal final model updates with `-no-update-model-required`.
+  This flag alone does not prevent every write path; the harness rejects known
+  overrides, and the test MS must remain read-only.
 - The MS is `chmod -R a-w` (read-only) after a `-no-reorder` clean run once
   added MODEL_DATA to it; restore from the tar if it ever changes. wsclean
   runs fine on it read-only.

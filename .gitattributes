@@ -1,0 +1,2 @@
+# Patch context lines legitimately contain a single space on blank lines.
+*.patch -whitespace

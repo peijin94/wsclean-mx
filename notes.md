@@ -3,6 +3,11 @@
 Apple Silicon optimization of WSClean. Facts, pins and environment live in
 `mem.md`; this file is the reasoning and the plan.
 
+**Current plan:** [docs/development-plan.md](docs/development-plan.md), updated
+after the 2026-10-17 code/test audit. The phased design below is historical
+context; its original “next” checklist predates patches 3–12. Fresh evidence
+and open validation failures are in [the audit](docs/audit-2026-10-17.md).
+
 ## 1. Thesis
 
 Accelerating WSClean on Apple Silicon is plausible, but MLX is the wrong
@@ -221,7 +226,9 @@ Rules:
 - `bench/run.sh <linc|upstream|mx> <tag> [args]`: identical invocation per
   variant into `bench/out/<tag>/<variant>/`; records wall time, host peak RSS
   and WSClean's inversion/prediction/deconvolution times. Forces
-  `-no-update-model-required` so the test MS is never modified.
+  `-no-update-model-required` to suppress normal final model updates. Known write
+  overrides (including direct no-reorder cleaning) are rejected; keep the test
+  MS read-only because arbitrary WSClean options are not sandboxed.
 - `bench/compare_fits.py <ref> <test> --tier T0|T1|T2`: per product, the
   bitwise match, n_diff, max ULP, max abs diff, rel_rms, rel_peak and peak
   ratio. Exits non-zero if the tier is violated. Max ULP is meaningless near
