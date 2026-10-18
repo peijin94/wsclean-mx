@@ -283,13 +283,23 @@ families scored the same way:
 - **`-niter 10000`**: the apparent 2–3× shift does **not** survive the bisect
   below — the control lands in the same discrete cleaning basins, so that
   comparison was basin sampling.
-- **`-weight natural`**: with ten mx and twelve perturbed runs the typical model
-  metric deviation is larger for mx (median 2.0e-3 vs 6.8e-5) and mx enters the
-  alternate basin in 2 of 10 runs against 0 of 12 — suggestive, but far from
-  significant at these counts (one-sided Fisher exact p ≈ 0.19), and the
-  source-level metric is *identical* for both families (median source-flux spread
-  0.0721 in both). Recorded as an open question to be settled with more samples,
-  not as an established difference.
+- **`-weight natural`** (10 mx, 12 control runs): the mx family's *typical*
+  deviation from the reference median is statistically larger than the control's
+  on all three aggregate metrics — permutation test (20 000 resamples, one-sided)
+  gives p = 0.0013 (restored total flux), 0.0034 (model MAD rms) and 0.0108
+  (restored 2nd moment) — while the source-level metric stays *identical*
+  (median source-flux spread 0.0721 in both families) and a component-level
+  check shows mx's top-20 components coincide with the reference family's
+  **exactly as often as reference runs coincide with each other** (0.695 vs 0.658
+  exact-pixel agreement; the control reaches 0.808).
+
+  Reading: mx is not a one-ulp change — it rewrites convolutions and FFT paths —
+  so a somewhat larger typical deviation than the control is expected. What
+  matters is scale: the mx deviations stay ~25× below the reference family's own
+  run-to-run scatter (0.2 % vs 4.8 % max on model rms), the source fluxes are
+  unchanged, and the model components land where the reference lands them. No
+  code change is indicated by this evidence, and no further sampling is needed
+  to act on it.
 
 ### Patch bisect at `-niter 10000`
 

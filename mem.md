@@ -56,10 +56,11 @@ reasoning and long-form design in `notes.md`.
   `-multiscale-scale-bias` reproduce the reference at the float floor; at
   `-niter 10000` cleaning switches between discrete basins and the 1-ulp control
   reaches the far basin as often as mx (a patch bisect shows no mx-specific
-  effect); at `-weight natural` mx's typical model-metric deviation is larger
-  (2.0e-3 vs 6.8e-5) with 2/10 vs 0/12 basin entries - suggestive, not yet
-  significant, and the source-level metric is identical. Always compare against
-  the perturbed-reference family before calling a deviation mx-specific.
+  effect); at `-weight natural` mx's typical aggregate deviation is
+  statistically larger than the control's (permutation p 0.0013-0.0108) but
+  ~25x below the reference's own scatter, source fluxes identical, components
+  placed as consistently as reference runs. Always compare against the
+  perturbed-reference family before calling a deviation mx-specific.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
   external MS; two average-correction benchmarks are explicitly disabled upstream.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using
