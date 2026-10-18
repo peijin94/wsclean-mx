@@ -33,7 +33,7 @@ The effective scientific baseline is **upstream plus the zero-padding fix**, not
 | P0 — fixed in this pass | Benchmark runners deleted an existing output path before validating arguments | Previous `bench/run.sh:27` and `bench/snapshot.sh:15`; traversal and unsafe overrides were possible | Reject invalid names, output symlinks/collisions, unavailable variants and known write/output overrides; never replace existing runs |
 | P1 — repaired for tested reader paths | Speculative block reads touched excluded invalid cells; fallback also needed full-shape validation | 27 production-reader cases cover excluded/selected cells, shapes, weights, metadata and boundaries | Keep valid reads batched; fall back per column/block; reject malformed selected shapes before extraction; retain the documented ContiguousMS first-cell limitation |
 | P1 — repaired | Seven native allocation failures and the exposed in-memory FITS date bug | Parent native run: 160 passed, 4 skipped, 0 failed; 869917 assertions | Fundamental allocation uses malloc; provider start time converts seconds to MJD days. Keep the four skips explicit rather than claiming all tests ran |
-| P1 — open, investigate first | Dirty-imaging wall time increased after the correctness repairs | Two four-repeat batches: median increases 12.6% and 14.4%; pooled 2.875 → 3.410 s. Busy/swapping host; coarse profiles do not isolate cause | Run a resident production-reader comparison and repeat on a quiet low-swap host; preserve all correctness checks and both timing batches |
+| P1 — retracted by measurement | Earlier dirty-imaging wall-time increases were a host timing mode, not a code cost | Chia batches were bimodal; on throttle the same binary bytes give 2.99/3.00 s at `-j 1` and 1.200/1.205 s at `-j 8`, with retired instructions ≤0.2% apart and an A/A copy control agreeing as well | Keep both earlier batches on record; require per-run instructions/cycles and an A/A copy control before any future regression verdict |
 | P1 — open | Full-stack multiscale scientific equivalence is not established by residual RMS alone | Fresh mx-p11 vs upstream restored-image relative RMS is 1.36–1.47%, above this session's upstream-rerun maximum of 0.858%; default T2 also fails for upstream reruns | Define source/flux/position and perturbed-reference gates on broader data; do not silently loosen pixel thresholds |
 | P1 — partly addressed | Test coverage and build provenance need portable automation | Dedicated native build and real-reader fixtures now pass; test.sh validates source mappings and runs 56 Python tests plus linked gates | Extend dependency/CI coverage; root CTest enumeration remains insufficient |
 | P1 — follow-up, source-level finding | CLI in-memory loader has separate column-contract concerns | `io/readinmemory.cpp` opens antenna2 with ANTENNA1 and requires WEIGHT_SPECTRUM | Add a focused ReadMsInMemory integration repro, then repair metadata/weight selection before recommending this mode broadly |
@@ -51,14 +51,22 @@ The public-API allocation regression failed in all four unweighted cases before 
 
 ## Ordered implementation plan
 
-### 0. Resolve the dirty-imaging performance gate
+### 0. Measurement method (closed 2026-10-18)
 
-- Keep both four-repeat batches and the pooled view; do not select the faster minimum as proof of no regression.
-- Compare the real production reader in a long-lived process to separate reader cost from startup, FITS I/O and scheduling.
-- Repeat end-to-end on an idle, low-swap host before attributing the slowdown to code or dismissing it as noise.
-- If a reader cost is isolated, optimize validated fast-path caching without weakening selected-cell shape checks.
+**Closed 2026-10-18:** the suspected dirty-imaging slowdown was a host timing mode.
+[Throttle validation](throttle-validation-2026-10-18.md) used the same binary and
+library bytes and added interleaved A/A plus single-thread controls. Retired
+instruction counts match to ≤0.2% while the slow mode burns ~1.5× the cycles, and
+interleaved sweeps give 0.3–0.5% differences at `-j 1` and `-j 8`.
 
-**Exit criterion:** an attributable explanation and a stable end-to-end result; no unqualified performance-retention claim until then.
+- Keep the earlier chia and throttle first-pass batches on record; do not delete or silently mediate them.
+- Record per-run retired instructions, cycles and host load in every timing run, and classify stall modes before comparing wall times.
+- Keep an A/A copy control (byte-identical binary under a second name) in the harness so a host mode cannot masquerade as a patch effect.
+- Do not weaken selected-cell shape or selection validation to chase a timing number.
+
+**Exit criterion (met):** an attributable explanation for the earlier spread, plus a
+measurement convention that would catch a recurrence. This is not a general
+performance guarantee for untested sizes, thread counts or MS layouts.
 
 ### 1. Complete scientific and observing-mode acceptance
 

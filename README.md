@@ -38,9 +38,10 @@ regression coverage, and initial correctness/test gaps. The
 [CPU correctness continuation](docs/continuation-2026-10-17.md) covers selection-safe
 readers, allocation portability, time metadata and the follow-up gates. This is a development
 patch set, not a claim that every WSClean observing mode is validated.
-The continuation also records an **observed dirty-imaging slowdown** versus the
-preceding mx build; its cause remains open. The historical speedups quoted here are
-not a clean performance non-regression result for the latest repairs.
+An earlier suspected dirty-imaging slowdown did **not** survive controlled
+measurement: interleaved A/A and single-thread sweeps put the candidate within
+0.3–0.5% of the baseline with equal retired instructions, per
+[docs/throttle-validation-2026-10-18.md](docs/throttle-validation-2026-10-18.md).
 
 ## The patches
 

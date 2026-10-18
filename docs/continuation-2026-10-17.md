@@ -76,7 +76,7 @@ full optimized stack match upstream bitwise. The actual `build-mx/wsclean`
 executable was also run directly through the `mx` variant: all five products
 of its multiscale smoke match the frozen candidate at T0.
 
-### Performance: an observed dirty-imaging slowdown remains open
+### Performance: recorded chia timings, and the later resolution of their spread
 
 Frozen variants: `continue-p12-baseline` versus `continue-cpu-fixes`. Runs were
 sequential, counterbalanced AB/BA, four repeats per variant per batch, 15-second
@@ -114,13 +114,15 @@ reader-inclusive samples 524/2347 and 366/2031 main-thread samples. Main-thread
 renames were combined by numeric thread ID. These are coarse, instrumented
 profiles—not proof that the slowdown is harmless or environmental.
 
-**Do not claim a new speedup or a cleared performance non-regression gate.**
-Correctness fixes are retained, but the measured dirty slowdown needs isolation
-on a quieter, low-swap host and a process-resident production-reader benchmark.
-The observed multiscale median improvement is not attributed to these fixes.
-First-batch peak RSS was 563.5/562.4 MiB baseline/candidate for dirty and
-1533.8/1412.5 MiB for multiscale; these observations are not a demonstrated memory
-saving under differing paging conditions.
+**Resolution (2026-10-18): this spread is not a code-level regression.**
+Repeating the comparison on throttle with the same binary and library bytes, and
+adding interleaved A/A and single-thread controls, showed that the per-run
+differences were a shared host timing mode: retired instruction counts match to
+≤0.2% while the slow mode burns roughly 1.5× the cycles. Interleaved sweeps give
+0.3–0.5% differences at both `-j 1` and `-j 8`. The tables above stay as recorded,
+as do the RSS observations, which remain unexplained and are not claimed as a
+memory saving. Counters, sweeps and caveats:
+[throttle validation](throttle-validation-2026-10-18.md).
 
 ### Source and executable provenance
 
@@ -158,7 +160,7 @@ no external issue state was changed in this continuation.
 
 ## Remaining work
 
-1. Isolate the observed dirty-imaging slowdown on a quieter, low-swap host and with a process-resident production-reader benchmark. Preserve shape/selection validation; do not remove correctness checks to recover a noisy timing number.
+1. Keep per-run retired instructions/cycles and an A/A copy control in timing runs, and use an idle host for any release-level performance claim.
 2. Establish source-flux/position and scientifically meaningful acceptance gates for the full optimized FFT/deconvolution stack versus the fixed upstream reference. Earlier percent-level multiscale differences remain an open result.
 3. Make the fix-only reference builder and complete source/patch/binary/library manifest reproducible from a clean checkout.
 4. Validate larger multi-integration datasets and profile a justified target before Metal or additional kernel changes.

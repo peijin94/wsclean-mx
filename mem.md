@@ -24,9 +24,10 @@ reasoning and long-form design in `notes.md`.
   storage and per-row metadata stay in MS seconds. FITS date is explicitly tested.
 - Native suite counts, real-MS product checks and timing samples are in the
   continuation report. Broader multiscale scientific acceptance remains open.
-- Dirty-4k follow-up timings were slower in both batches (pooled medians
-  2.875 s baseline / 3.410 s candidate). Cause is not isolated on the busy,
-  swapping host; this is an open performance gate, not a claimed speedup.
+- The earlier dirty-4k timing gap was a host stall mode, not code: retired
+  instructions match to <=0.2% while the slow mode burns ~1.5x cycles. Interleaved
+  A/A plus both-variant sweeps on throttle give 0.3-0.5% differences at -j1/-j8.
+  Record per-run instructions/cycles and keep an A/A copy control.
 - The older bench/profile.sh still deletes outputs. Use fresh, owned profiling
   directories until that harness has the common validation/immutability guards.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
