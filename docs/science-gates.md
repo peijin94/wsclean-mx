@@ -26,6 +26,10 @@ where the **reference envelope** is the largest deviation observed between *refe
 **The numerical floor is 1e-5 relative.** It exists because the products are 32-bit FITS: sums over ~4M pixels carry ~1e-6 relative rounding before any algorithmic difference. It was added after the first run flagged dirty/PSF deviations of ~3e-6 as failures — i.e. it is justified by storage precision, not by the results below, and it cannot hide them: every cleaned-product deviation below is 3–4 orders of magnitude larger.
 
 **Known limits.** The envelope comes from a small number of reruns (3–4 per reference), so it is a sampled spread, not a confidence interval. Source matching is only informative on a field with real sources; the current OVRO-LWA snapshot is a 10 s full-sky quiet-Sun integration whose "sources" are noise peaks, and its matched-source envelopes are large (tens of percent), which reflects that, not science.
+Because the spread is sampled, quantities that are intrinsically mobile (residual-image
+peak position) carry envelopes of the same order as the observed deviations, so one
+more sample can flip such a check either way. That is an argument for widening the
+envelope, not for excluding the metric.
 
 ## Results: 4096² dirty (niter 0), 8 threads
 
@@ -70,6 +74,12 @@ the same metrics by the same amounts (restored-image total flux 3.6 %, 3.9 %, 3.
 model MAD rms 8.3 %, 8.4 %, 8.6 %; residual total flux 16.2 %, 16.2 %, 16.3 % against
 envelopes of 1.0 %, 0.8 %, 1.9 %). The difference is therefore **systematic for this
 stack on this dataset**, not one unlucky run.
+
+One further metric tripped in a single rerun: the r2 candidate's residual-image peak
+row (8.1e-2 deviation against a 6.8e-2 envelope). That quantity is the brightest
+un-cleaned artefact rather than a source, and the reference reruns already scatter by
+7 % there, so it sits near the boundary and is recorded rather than explained away —
+it is a different class of failure from the eight systematic ones.
 
 What would move this forward, in order:
 
