@@ -86,7 +86,22 @@ cd wsclean-mx
 scripts/build_deps.sh       # casacore 3.8.2 -> deps/install
 scripts/build_mx.sh         # wsclean-mx      -> build-mx/wsclean
 scripts/build_upstream.sh   # (optional) unpatched reference -> build-upstream/wsclean
+scripts/build_upstream_fix.sh  # (optional) fixed reference -> build-reffix/wsclean
 ```
+
+`build_upstream_fix.sh` builds the pinned upstream plus the macOS build fixes plus
+only `patches/mx/wsclean/0001` (the uninitialized-padding repair), from a
+disposable clone in `deps/src/wsclean-ref-fix`, and writes
+`build-reffix/provenance.json` (commits, patch hashes, binary hash, linked
+libraries, compiler). Plain upstream is not a valid comparison baseline on macOS:
+with `clang -ffast-math` it produces corrupt 2048² images, which is why the
+repaired reference exists.
+
+Verified 2026-10-18: a fresh `build-reffix/wsclean` reproduces the frozen
+`bench/bin/upstream-fix` snapshot bitwise — zero differing pixels in all five
+image products (dirty, restored, model, PSF, residual) on the deterministic
+`-j 1` multiscale 1024² case. Binary SHA-256s differ only because the embedded
+source paths differ.
 
 `build-mx/wsclean` is a drop-in WSClean binary with the usual command line:
 
@@ -175,6 +190,13 @@ linked-production convolution/resampler, median, peak, MS column-block,
 allocation and time-contract checks. It rejects mismatched CMake source mappings.
 Synthetic unit fixtures are separate from the real MS benchmarks.
 Compiler output may include upstream's expected non-AVX warning on arm64.
+
+Science acceptance is separate and measured at source level, not by pixel RMS:
+`bench/compare_sources.py --candidate DIR REFERENCE_DIR ...` compares flux, peak
+position, size and matched-source quantities against the reference's own rerun
+envelope. Results and the predeclared decision rule are in
+[docs/science-gates.md](docs/science-gates.md) — dirty/PSF pass, the multiscale
+cleaned products currently fail that gate, and patch 12 is neutral.
 
 The upstream unit/integration suites are separate and require their test data.
 The initial audit's seven allocation failures are repaired, together with the

@@ -40,6 +40,11 @@ reasoning and long-form design in `notes.md`.
   when instruction counts differ >20%, or for the linc container (its counters
   measure the host CLI, not the guest). aa.sh also compares the snapshot's
   libschaapthreading.dylib. bench/plot_report.py is NOT mode-aware yet.
+- Science gates (docs/science-gates.md, bench/compare_sources.py): candidate
+  deviations are judged against the reference's own rerun envelope with a
+  predeclared 1e-5 float32 floor. Dirty/PSF pass at ~1e-7; multiscale cleaned
+  products fail systematically (mx-p11, 3 reruns) while patch 12 passes against
+  the 4-run p11 envelope.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
   external MS; two average-correction benchmarks are explicitly disabled upstream.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using
