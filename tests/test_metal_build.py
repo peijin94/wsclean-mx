@@ -130,6 +130,20 @@ class MetalIntegrationTest(unittest.TestCase):
         # coverage guard is what catches that, so it must stay printed.
         self.assertIn('origins.size()', cpu)
 
+    def test_dump_script_verifies_what_taql_silently_truncates(self):
+        script = ROOT / 'scripts/dump_ms_uvw.sh'
+        self.assertTrue(script.exists())
+        self.assertTrue(script.stat().st_mode & 0o111, 'must be executable')
+        result = subprocess.run(['bash', '-n', str(script)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = script.read_text()
+        # -ps -m is the difference between 621 250 rows and 54; the project's own
+        # casacore is the difference between a dump and a dyld error.
+        self.assertIn('-ps -m', text)
+        self.assertIn('deps/install/bin/taql', text)
+        self.assertIn('refusing to overwrite', text)
+        self.assertIn('incomplete dump', text)
+
 
 if __name__ == '__main__':
     unittest.main()

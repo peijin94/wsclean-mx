@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Mon, 19 Oct 2026 08:15:24 -0400
+Subject: [PATCH 11/11] uvw_file.h: a data row needs a tab, not just a leading
+ digit
+
+taql's own header lines can start with a digit ("6 selected columns: u v w xr
+xi f0"), so testing only the first character let the header through as a row.
+Harmless in the usable count - its v field parses as NaN and is dropped as
+non-finite - but it made the row count 621 251 instead of 621 250 and would
+have silently absorbed a genuinely malformed first line.
+
+diff --git a/metal/uvw_file.h b/metal/uvw_file.h
+index e3aa43f3..5125c152 100644
+--- a/metal/uvw_file.h
++++ b/metal/uvw_file.h
+@@ -51,7 +51,9 @@ inline RealVisibilitySet LoadUvwFile(const std::string& path) {
+   RealVisibilitySet set;
+   std::string line;
+   while (std::getline(in, line)) {
+-    // A data row starts with a number; the header lines do not.
++    // A data row starts with a number and is tab separated; taql's own headers
++    // can start with a digit too ("6 selected columns: ...").
++    if (line.find('\t') == std::string::npos) continue;
+     const char* begin = line.c_str();
+     char* end = nullptr;
+     const double u = std::strtod(begin, &end);
