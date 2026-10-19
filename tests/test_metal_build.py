@@ -81,6 +81,36 @@ class MetalIntegrationTest(unittest.TestCase):
         # Centred rounding is the fix for the one-cell placement divergence.
         self.assertIn('const float fx = u - rounded_u;', shader)
 
+    def test_roundtrip_mode_checks_the_adjoint_identity(self):
+        source = self.read('work/wsclean/metal/probe_main.cpp')
+        # The adjoint check is what catches a gridding/degridding mismatch that
+        # both directions' twins would miss, so it must not be droppable.
+        self.assertIn('roundtrip', source)
+        self.assertIn('adjoint', source)
+        shader = self.read('work/wsclean/metal/mxshaders.h')
+        self.assertIn('grid_degrid_poly', shader)
+
+    def test_cpu_baseline_script_stays_wired(self):
+        script = ROOT / 'scripts/metal_cpu_baseline.sh'
+        self.assertTrue(script.exists())
+        self.assertTrue(script.stat().st_mode & 0o111, 'must be executable')
+        result = subprocess.run(['bash', '-n', str(script)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = script.read_text()
+        for anchor in ('ducc0_wgridder_tool.cpp', '-march=native', 'libomp',
+                       'cpu-ducc0-baseline.txt'):
+            self.assertIn(anchor, text)
+        for source in ('gridding_kernel.cc', 'gl_integrator.cc', 'threading.cc',
+                       'string_utils.cc', 'mav.cc'):
+            self.assertIn(source, text, f'{source} must be linked into the baseline')
+        # The parameters that took debugging to find must not drift back.
+        tool = self.read('bench/metal/ducc0_wgridder_tool.cpp')
+        self.assertIn('ms2dirty_bda', tool, 'wsclean uses the BDA entry point, not ms2dirty')
+        self.assertIn('dirty2ms_bda', tool)
+        self.assertIn('kSigmaMin = 1.1', tool)
+        self.assertIn('kSigmaMax = 2.0', tool, 'the uv extent here explodes the w-plane count')
+        self.assertIn('pixel_size = 1.0 / static_cast<double>(grid)', tool)
+
 
 if __name__ == '__main__':
     unittest.main()

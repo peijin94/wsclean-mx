@@ -235,32 +235,53 @@ way, and at 4e-8 it says the pair is exactly adjoint to float32 precision.
 
 ### Improvement evaluation
 
-The honest comparison point is the stage this replaces, measured with the
-project's own tools on this machine:
+The honest comparison is kernel against kernel: ducc0's own CPU w-gridder on the
+same synthetic data, same machine, same visibility counts, measured with
+`scripts/metal_cpu_baseline.sh` (which mirrors wsclean's own `ms2dirty_bda`
+call with `do_wgridding=false` at 8 threads, so that it measures the same 2D
+gridding the Metal kernels implement).
 
-* **CPU**: `mx-p11` wsclean with `-gridder wgridder` on `LOFAR_3C196.ms`,
-  1024², `-niter 0`, 8 threads: whole run 0.80 s with wsclean's own timer
-  reporting **inversion 484 ms** for 603 814 visibilities.
-* **GPU**: the gridding kernel alone takes **12.6 ms** for the same visibility
-  count, and the round trip 22.7 ms.
+| nvis | CPU grid | CPU degrid | CPU total | GPU grid | GPU degrid | GPU total | CPU/GPU |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 200 064 | 19.18 ms | 19.19 ms | 38.37 ms | 4.21 ms | 3.44 ms | 7.65 ms | **5.0x** |
+| 603 814 | 42.59 ms | 43.06 ms | 85.65 ms | 12.60 ms | 10.10 ms | 22.70 ms | **3.8x** |
+| 1 000 064 | 69.61 ms | 70.09 ms | 139.70 ms | 22.46 ms | 17.52 ms | 39.98 ms | **3.5x** |
 
-So the gridding work that dominates the inversion stage (see the profile table
-at the top) is around **38x faster on the GPU** than in the stage that contains
-it. Three caveats keep this from being a wsclean speedup claim: the CPU figure
-is a whole stage (it includes the FFT and the measurement-set read), the GPU
-figure is a kernel (no FFT, no I/O, no w-planes - the synthetic data have w=0),
-and nothing here has been wired into the pipeline. It is a bound on what the
-wiring can recover, not a result.
+So the Metal kernels are **3.5-5x faster than ducc0's own optimized CPU
+gridder** for the same work, with the same accuracy (gridding within 5.0e-6,
+degridding within 3.2e-7 of a float64 twin, adjoint identity 2.3e-8-5.8e-7).
+Two honest qualifications:
 
-### Parked: standalone ducc0 CPU baseline
+* The CPU numbers include ducc0's FFT and kernel correction; at 1024² the fixed
+  part of the call is around 12 ms (20 064 visibilities cost 12.28 ms, of which
+  the scatter is a small fraction). Removing it would make the gridding-only
+  ratio larger, but the table measures calls, not loops.
+* ducc0's gridder is a strong baseline - it is mature, SIMD-vectorized, and
+  lock-based rather than atomic-based - so a 3.5-5x win is a real result, not a
+  weak one. The remaining headroom is the GPU-side atomic traffic (70 % of
+  kernel time per the ablation).
 
-`bench/metal/ducc0_wgridder_tool.cpp` times ducc0's own `ms2dirty`/`dirty2ms`
-on the same synthetic data, which would be the cleanest CPU comparison. It
-compiles (needs `-march=native`, OpenMP from Homebrew libomp, both wgridder
-headers plus `fftnd_impl.h`, and 2D `ms`/weights/mask views - a 1D `ms` trips a
-static assertion and an empty weight view segfaults), but **crashes with the
-parameters tried so far**: the uv/pixel-size mapping needs wsclean's own
-convention (its per-channel `f/c` scaling in `ffact` and the pixel size it
-passes), which is not yet replicated. The stage-level comparison above stands on
-its own; this tool is parked with the crash recorded rather than left as a
-silent gap.
+**Correction.** The previous round's summary compared the 12.6 ms gridding
+kernel against wsclean's 484 ms `-niter 0` inversion stage on `LOFAR_3C196.ms`
+and read the ratio as "~38x". That comparison is stage against kernel: the stage
+does a w-gridded inversion over multiple planes, MS I/O, the FFT, and the
+correction, while the kernel does one 2D plane. The kernel-vs-kernel table above
+supersedes it; the stage figure stays useful only as a bound on what the pipeline
+could recover if the whole stage were offloaded.
+
+### Resolved: standalone ducc0 CPU baseline
+
+`bench/metal/ducc0_wgridder_tool.cpp` (built and run by
+`scripts/metal_cpu_baseline.sh`) times ducc0's own w-gridder on the same
+synthetic data, which is what the table above uses. Getting it to run took
+three separate fixes, each recorded in the tool's header because each one
+produces a *crash rather than a wrong answer*:
+
+* `pixsize = 1/nxdirty` - ducc0's grid coordinate is `frac(u_lambda*pixsize)*nu`,
+  so an off-by-orders-of-magnitude pixel size makes the data land outside the
+  grid and the unconditional scatter write bus-errors.
+* `sigma_min/sigma_max = 1.1/2.0` - wsclean passes ducc0's defaults; passing the
+  uv extent instead makes the w-plane count explode and the allocation die.
+* The plain `ms2dirty`/`dirty2ms` entry points crash on this input even with
+  correct parameters; wsclean only exercises `ms2dirty_bda`, so the tool does the
+  same (one band, flat visibilities, empty weight and mask views, `flip_v`).

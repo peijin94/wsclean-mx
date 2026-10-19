@@ -1,26 +1,35 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Peijin Zhang
 //
-// CPU baseline for the Metal round-trip benchmark: grids and degrids the SAME
-// synthetic visibilities with ducc0's own ms2dirty/dirty2ms (the code the
-// w-gridder path runs), on the same machine, so the Metal kernels can be
-// compared against the thing they would replace rather than against a scalar
+// CPU baseline for the Metal kernels: grids and degrids synthetic visibilities
+// with ducc0's own w-gridder, on the same machine, so the Metal kernels can be
+// compared against the code they would replace rather than against a scalar
 // twin of themselves.
 //
-// The visibility generator, seeding and distribution replicate
-// mx-metal-probe's grid-test data exactly; the uv coordinates are in units of
-// one gridding cell, and 1 cell is declared to be 1 lambda by choosing
-// pixsize = 1/nx.
+// The call mirrors wsclean's WGridder<NumT>::AddInversionMsImplementation()
+// (BDA entry points, one band, flat visibility array, empty weight and mask
+// views, flip_v, centered). Three things cost a lot of debugging and are
+// recorded here:
 //
-// STATUS (2026-10-19): PARKED. It compiles against ducc0's own gridder but
-// segfaults with the parameters tried so far - the uv/pixel-size mapping is not
-// wsclean's (see docs/metal-plan.md, "Parked"). Kept because the plumbing
-// (includes, flags, 2D views) is the hard part and is already resolved here.
-// The stage-level CPU comparison in docs/metal-plan.md stands on its own.
+//  * ducc0's grid coordinate is frac(u_lambda * pixsize) * nu, where u_lambda
+//    is already scaled by frequency/c (getpix() in wgridder_impl.h). So
+//    pixsize = 1/nxdirty puts one grid cell at one wavelength. A pixsize off by
+//    orders of magnitude makes the data land outside the grid, and since the
+//    scatter writes unconditionally this is a bus error, not a wrong image.
+//  * sigma_min/sigma_max are NOT the uv extents: wsclean passes ducc0's
+//    defaults (1.1, 2.0). Passing the uv extent makes the w-plane count explode
+//    and the allocation die.
+//  * The plain ms2dirty/dirty2ms entry points crash on this input even with
+//    correct parameters; wsclean only exercises the _bda ones, so this tool
+//    does the same.
+//
+// The data are planar (w = 0) and the run uses do_wgridding=false,
+// allow_nshift=false: a pure 2D gridding, which is what the Metal kernels
+// implement. ducc0's FFT and kernel correction are inside the measured call;
+// they are noted in the report rather than subtracted here.
 
-#include "ducc0/wgridder/wgridder.h"       // ms2dirty / dirty2ms definitions
-#include "ducc0/wgridder/wgridder_impl.h"  // the gridder internals they use
-#include "ducc0/fft/fftnd_impl.h"        // r2r_separable_fht (wsclean includes this too)
+#include "ducc0/wgridder/wgridder_impl.h"
+#include "ducc0/fft/fftnd_impl.h"  // r2r_separable_fht, which the gridder calls
 
 #include <algorithm>
 #include <chrono>
@@ -28,7 +37,6 @@
 #include <complex>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <random>
 #include <string>
 #include <vector>
@@ -94,90 +102,87 @@ int main(int argc, char** argv) {
   const std::vector<float> visibilities = makeVisibilities(nvis, grid);
   const std::size_t count = visibilities.size() / 4;
 
-  // uv in wavelengths: one gridding cell equals 1 lambda, so the image pixel
-  // size is 1/nx and the uv extents are the data's own.
+  // One grid cell per wavelength, as explained in the header.
   const double pixel_size = 1.0 / static_cast<double>(grid);
-  const double frequency = 1.0;
+  constexpr double kSigmaMin = 1.1;  // ducc0's defaults, which wsclean passes
+  constexpr double kSigmaMax = 2.0;
+
   std::vector<double> uvw(3 * count, 0.0);
-  double sigma_max = 0.0;
+  std::vector<std::complex<float>> ms(count);
   for (std::size_t v = 0; v < count; ++v) {
     uvw[3 * v + 0] = visibilities[4 * v + 0];
     uvw[3 * v + 1] = visibilities[4 * v + 1];
     uvw[3 * v + 2] = 0.0;
-    sigma_max = std::max({sigma_max, std::fabs(uvw[3 * v + 0]), std::fabs(uvw[3 * v + 1])});
-  }
-  const double sigma_min = 1.0;
-  std::vector<double> frequencies(count, frequency);
-  // ducc0's gridder indexes ms(row, channel): the visibility array is 2D
-  // (nrows x nchan), exactly as wsclean passes it.
-  ducc0::vmav<std::complex<float>, 2> ms({count, 1});
-  for (std::size_t v = 0; v < count; ++v) {
-    ms(v, 0) = std::complex<float>(visibilities[4 * v + 2], visibilities[4 * v + 3]);
+    ms[v] = std::complex<float>(visibilities[4 * v + 2], visibilities[4 * v + 3]);
   }
 
-  ducc0::cmav<double, 2> uvw_ma(uvw.data(), {count, 3});
-  ducc0::cmav<double, 1> freq_ma(frequencies.data(), {count});
-  const ducc0::cmav<std::complex<float>, 2> ms_ma = ms;
-  // Real weights and mask: ducc0's gridder indexes them per (row, channel) and
-  // an empty view segfaults.
-  ducc0::vmav<float, 2> weights({count, 1});
-  ducc0::vmav<std::uint8_t, 2> mask({count, 1});
-  for (std::size_t v = 0; v < count; ++v) {
-    weights(v, 0) = 1.0f;
-    mask(v, 0) = 1;
-  }
-  const ducc0::cmav<float, 2> weight_ma = weights;
-  const ducc0::cmav<std::uint8_t, 2> mask_ma = mask;
+  const ducc0::cmav<double, 2> uvw_ma(uvw.data(), {count, 3});
+  const size_t n_freq_entries = 1;
+  const std::vector<double> frequencies(n_freq_entries, 1.0);
+  const ducc0::cmav<size_t, 1> freqlist_id = ducc0::cmav<size_t, 1>::build_uniform({count}, 0);
+  const ducc0::cmav<size_t, 1> freqlist_nfreqs =
+      ducc0::cmav<size_t, 1>::build_uniform({1}, n_freq_entries);
+  const ducc0::cmav<double, 1> freqlist_freqs(frequencies.data(), {n_freq_entries});
+  const ducc0::cmav<std::complex<float>, 1> ms_ma(ms.data(), {count});
+  const ducc0::cmav<float, 1> weight_ma(nullptr, {0});
+  const ducc0::cmav<std::uint8_t, 1> mask_ma(nullptr, {0});
   ducc0::vmav<float, 2> dirty({grid, grid});
-  ducc0::vmav<std::complex<float>, 2> predicted({count, 1});
+  ducc0::vmav<std::complex<float>, 1> predicted({count});
+
+  constexpr bool kDoWgridding = false;
+  constexpr bool kFlipU = false;
+  constexpr bool kFlipV = true;
+  constexpr bool kFlipW = false;
+  constexpr bool kDivideByN = false;
+  constexpr bool kAllowNShift = false;
+  constexpr size_t kVerbosity = 0;
 
   auto grid_once = [&]() {
-    ducc0::detail_gridder::ms2dirty<float, float>(
-        uvw_ma, freq_ma, ms_ma, weight_ma, mask_ma, pixel_size, pixel_size, epsilon,
-        /*do_wgridding=*/true, nthreads, dirty, /*verbosity=*/0, /*flip_u=*/false,
-        /*flip_v=*/false, /*flip_w=*/false, /*divide_by_n=*/false, sigma_min, sigma_max,
-        /*center_x=*/0.0, /*center_y=*/0.0, /*allow_nshift=*/true);
+    ducc0::detail_gridder::ms2dirty_bda<float, float>(
+        uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_ma, weight_ma, mask_ma, pixel_size,
+        pixel_size, epsilon, kDoWgridding, nthreads, dirty, kVerbosity, kFlipU, kFlipV, kFlipW,
+        kDivideByN, kSigmaMin, kSigmaMax, 0.0, 0.0, kAllowNShift);
   };
   auto degrid_once = [&]() {
-    ducc0::detail_gridder::dirty2ms<float, float>(
-        uvw_ma, freq_ma, dirty, weight_ma, mask_ma, pixel_size, pixel_size, epsilon,
-        /*do_wgridding=*/true, nthreads, predicted, /*verbosity=*/0, /*flip_u=*/false,
-        /*flip_v=*/false, /*flip_w=*/false, /*divide_by_n=*/false, sigma_min, sigma_max,
-        /*center_x=*/0.0, /*center_y=*/0.0, /*allow_nshift=*/true);
+    ducc0::detail_gridder::dirty2ms_bda<float, float, float>(
+        uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, dirty, weight_ma, mask_ma, pixel_size,
+        pixel_size, epsilon, kDoWgridding, nthreads, predicted, kVerbosity, kFlipU, kFlipV, kFlipW,
+        kDivideByN, kSigmaMin, kSigmaMax, 0.0, 0.0, kAllowNShift);
   };
 
-  grid_once();     // warm up: threads, allocators, kernel tables
+  std::fprintf(stderr, "[stage] %zu rows, calling ms2dirty_bda\n", count);
+  grid_once();  // warm up: threads, allocators, kernel tables
+  std::fprintf(stderr, "[stage] gridding ok, calling dirty2ms_bda\n");
   degrid_once();
+  std::fprintf(stderr, "[stage] degridding ok, timing\n");
 
   double best_grid = 1e30, best_degrid = 1e30;
   for (int r = 0; r < repeat; ++r) {
     const auto begin_grid = std::chrono::steady_clock::now();
     grid_once();
     const auto end_grid = std::chrono::steady_clock::now();
-    const double grid_seconds = std::chrono::duration<double>(end_grid - begin_grid).count();
-    best_grid = std::min(best_grid, grid_seconds);
+    best_grid = std::min(best_grid, std::chrono::duration<double>(end_grid - begin_grid).count());
 
     const auto begin_degrid = std::chrono::steady_clock::now();
     degrid_once();
     const auto end_degrid = std::chrono::steady_clock::now();
-    const double degrid_seconds = std::chrono::duration<double>(end_degrid - begin_degrid).count();
-    best_degrid = std::min(best_degrid, degrid_seconds);
+    best_degrid =
+        std::min(best_degrid, std::chrono::duration<double>(end_degrid - begin_degrid).count());
   }
 
   double dirty_sum = 0.0;
   for (std::size_t i = 0; i < static_cast<std::size_t>(grid) * grid; ++i) dirty_sum += dirty.raw(i);
   double ms_sum = 0.0;
-  for (std::size_t v = 0; v < count; ++v) ms_sum += std::real(predicted(v, 0));
+  for (std::size_t v = 0; v < count; ++v) ms_sum += std::real(predicted(v));
 
-  std::printf("ducc0_cpu nvis=%zu grid=%zu threads=%zu epsilon=%.3g sigma_max=%.4g\n", count,
-              grid, nthreads, epsilon, sigma_max);
+  std::printf("ducc0_cpu nvis=%zu grid=%zu threads=%zu epsilon=%.3g\n", count, grid, nthreads,
+              epsilon);
   std::printf("ducc0_cpu grid_ms=%.2f degrid_ms=%.2f total_ms=%.2f throughput_Mvis_s=%.1f "
               "(min of %d, after warm-up)\n",
               best_grid * 1e3, best_degrid * 1e3, (best_grid + best_degrid) * 1e3,
               static_cast<double>(count) / (best_grid + best_degrid) / 1e6, repeat);
   // Sanity: the data must actually land inside the grid, or the timing would be
   // measuring an empty transform.
-  std::printf("ducc0_cpu dirty_sum=%.6g predicted_sum=%.6g ratio=%.4g\n", dirty_sum, ms_sum,
-              ms_sum != 0.0 ? dirty_sum / ms_sum : 0.0);
+  std::printf("ducc0_cpu dirty_sum=%.6g predicted_sum=%.6g\n", dirty_sum, ms_sum);
   return (dirty_sum != 0.0 && std::isfinite(dirty_sum)) ? 0 : 1;
 }
