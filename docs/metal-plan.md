@@ -510,3 +510,30 @@ produces a *crash rather than a wrong answer*:
 * The plain `ms2dirty`/`dirty2ms` entry points crash on this input even with
   correct parameters; wsclean only exercises `ms2dirty_bda`, so the tool does the
   same (one band, flat visibilities, empty weight and mask views, `flip_v`).
+
+### Wiring: `-mgpu` is in, and it refuses
+
+`-mgpu` now routes the w-gridder's inversion through the Metal backend
+(`wsclean/metal/metalinversion.{h,mm}`, behind `WSCLEAN_MX_METAL`), and the
+backend refuses unless it can do *exactly* the same maths as the ducc0 call:
+one code path, no approximation that a user did not ask for. The gate checks a
+Metal device, no image shift, and the Fresnel criterion
+`pi*|w|*lambda*(l^2+m^2) <= 0.1 rad` at the image corners, and every refusal
+says why.
+
+Measured on the real data sets, and this is the number that decides the next
+milestone:
+
+| data set | max w | lambda | field | w error | verdict |
+|---|---|---|---|---|---|
+| LOFAR 3C196, 1024^2 at 0.4" | 495 km | 2.16 m | 4' | **6.83 rad** | refused |
+| LOFAR 3C196, 1024^2 at 4" | 13017 lambda | 2.16 m | 1.1 deg | ~8 rad | refused |
+| MWA snapshot, 512^2 at 50" | 1105 m | 2.23 m | 0.9 deg | 0.70 rad | refused |
+| MWA snapshot, 512^2 at 5" | 1105 m | 2.23 m | 0.05 deg | 0.70 rad | refused |
+
+So on real data the 2-D path refuses everywhere - correctly. A long LOFAR track
+carries 495 km of w, i.e. 2.3e5 wavelengths, and even a 4 arcmin field leaves
+6.8 rad of w-error. **The next milestone is w-layers**: grid each w-plane on the
+GPU and apply ducc0's `grid2dirty_post2` w-screen per plane. Until that exists
+the Metal backend cannot contribute to a real wide-field image, and `-mgpu`
+honestly does nothing but log its refusal.
