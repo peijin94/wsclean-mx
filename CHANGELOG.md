@@ -26,8 +26,17 @@ imaging throughput.
 
 ### Performance (Apple M2, 16 GiB; M4 throttle numbers agree within host modes)
 
-- 1024² dirty, `-j 1`: 3.4–3.8 s vs 7.4 s reference (~2×, fewer instructions).
-- 4096² dirty / 2048² multiscale `-j 8`: ~2.1× median wall ratio (audit).
+- 1024² dirty `-j 1`: 3.4–3.8 s vs 7.4 s reference (~2×, fewer instructions).
+- 1024² multiscale `-j 1`: 17.0 s vs 30.4 s (1.79×).
+- 4096² dirty `-j 8` (`bench/out/v010-dirty4k/`, 4×AB/BA + A/A, counters):
+  mx 2.05–2.28 s vs ref 4.11–4.42 s (~2.0×); A/A walls agree, cycles span
+  ≤2% (no stall mode); instructions 52.7G vs 71.7G at equal IPC.
+- 2048² multiscale n3000 `-j 8` (`bench/out/v010-ms2k/`, 4×AB/BA + A/A):
+  host loaded mid-run (cycles +20%, instructions flat — all variants hit);
+  pooled medians uninterpretable, but paired per-rep mx/ref wall ratios are
+  2.48× / 2.25× / 2.28× / 2.60× (stable across host modes); deconvolution
+  stage ~5× (mx 4.9–11.8 s vs ref 24.5–50.7 s), inversion ~1.4×.
+  Instructions 2.14× fewer at equal IPC.
 - All timing claims use interleaved AB/BA with per-run retired
   instructions/cycles plus a byte-identical A/A control (`bench/aa.sh`):
   an earlier +51% "regression" was retracted as a host stall mode
