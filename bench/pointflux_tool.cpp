@@ -71,11 +71,11 @@ int main(int argc, char** argv) {
   casacore::ArrayColumn<casacore::Double> uvw(ms, "UVW");
   casacore::ArrayColumn<casacore::Complex> data(ms, "DATA");
   casacore::ArrayColumn<casacore::Bool> flag(ms, "FLAG");
-  // Single spectral window, first channel (this testbed is single-channel).
+  // First spectral window, all its channels (exact per-channel wavelength).
   casacore::Table spw(ms.keywordSet().asTable("SPECTRAL_WINDOW"));
   casacore::ArrayColumn<casacore::Double> chanFreq(spw, "CHAN_FREQ");
-  const double freq = casacore::Vector<casacore::Double>(chanFreq.get(0))(0);
-  const double wavelength = kSpeedOfLight / freq;
+  const casacore::Vector<casacore::Double> freqs = chanFreq.get(0);
+  const casacore::uInt nchan = freqs.nelements();
 
   casacore::Vector<casacore::Double> uvwVec(3);
   casacore::Array<casacore::Complex> cell;
@@ -91,22 +91,24 @@ int main(int argc, char** argv) {
       ++nflagged;
       continue;
     }
-    const double u = uvwVec(0) / wavelength;
-    const double v = uvwVec(1) / wavelength;
-    const double w = uvwVec(2) / wavelength;
-    casacore::Complex sum(0.0f, 0.0f);
-    for (const Source& s : sources) {
-      const double nm1 = std::sqrt(std::max(0.0, 1.0 - s.l * s.l - s.m * s.m)) - 1.0;
-      const double phase = -kTwoPi * (u * s.l + v * s.m + w * nm1);
-      sum += static_cast<float>(s.flux) *
-             casacore::Complex(static_cast<float>(std::cos(phase)),
-                               static_cast<float>(std::sin(phase)));
-    }
     data.get(row, cell);
-    // DATA is (nchan=1, npol=4): XX=YY=I/2, XY=YX=0.
+    // DATA is (nchan, npol=4): flat-spectrum points, XX=YY=I/2, XY=YX=0,
+    // with the exact per-channel wavelength (no-averaged-frequency error).
     casacore::Cube<casacore::Complex> cube(cell);
-    const casacore::Complex half = sum * 0.5f;
-    for (casacore::uInt ch = 0; ch < cube.nrow(); ++ch) {
+    for (casacore::uInt ch = 0; ch < cube.nrow() && ch < nchan; ++ch) {
+      const double wavelength = kSpeedOfLight / freqs(ch);
+      const double u = uvwVec(0) / wavelength;
+      const double v = uvwVec(1) / wavelength;
+      const double w = uvwVec(2) / wavelength;
+      casacore::Complex sum(0.0f, 0.0f);
+      for (const Source& s : sources) {
+        const double nm1 = std::sqrt(std::max(0.0, 1.0 - s.l * s.l - s.m * s.m)) - 1.0;
+        const double phase = -kTwoPi * (u * s.l + v * s.m + w * nm1);
+        sum += static_cast<float>(s.flux) *
+               casacore::Complex(static_cast<float>(std::cos(phase)),
+                                 static_cast<float>(std::sin(phase)));
+      }
+      const casacore::Complex half = sum * 0.5f;
       cube(ch, 0, 0) = half;
       if (cube.ncolumn() > 1) cube(ch, 1, 0) = casacore::Complex(0.0f, 0.0f);
       if (cube.ncolumn() > 2) cube(ch, 2, 0) = casacore::Complex(0.0f, 0.0f);
@@ -115,7 +117,7 @@ int main(int argc, char** argv) {
     data.put(row, cell);
     ++nwritten;
   }
-  std::printf("inject: freq=%.6f MHz rows=%u written=%zu newly_flagged=%zu sources=%zu\n",
-              freq / 1e6, nrow, nwritten, nflagged, sources.size());
+  std::printf("inject: nchan=%u rows=%u written=%zu newly_flagged=%zu sources=%zu\n",
+              nchan, nrow, nwritten, nflagged, sources.size());
   return 0;
 }
