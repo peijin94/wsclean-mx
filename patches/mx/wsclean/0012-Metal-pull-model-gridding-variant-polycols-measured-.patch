@@ -1,0 +1,238 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Mon, 19 Oct 2026 08:49:40 -0400
+Subject: [PATCH 12/12] Metal: pull-model gridding variant (polycols), measured
+ and scan-bound
+
+Gives every grid cell exactly one owner: one cell per thread, one scalar
+accumulator, a 32x32 threadgroup, no atomics and no indexing tricks, with the
+same placement and weights as the push variants. This is the direct answer to
+the 16x gridding/degridding gap that the real-data measurement exposed.
+
+It is correct - within 1e-7 of the float64 twin at grid 64/128/512/1024, and it
+reproduces the push variants' own rel_max (2.11e-05 at 50.4, 1.17e-06 at 8
+lambda/cell) on the 440 745 real rows, so two independent accumulation
+strategies cross-check each other - and it is 4.8-5.1x SLOWER: 160.7 ms vs
+31.6 ms at 50.4, 84.9 ms vs 17.6 ms at 8.
+
+Cause: every thread walks the whole tile bucket, so the cost is
+sum over tiles of (cells) x (visibilities touching the tile) ~ 10^9 iterations
+for clustered data. The fix is finer binning (per tile and column group), not
+kernel arithmetic; with 8 groups the same model predicts ~20 ms and ~11 ms.
+
+Two probe fixes fell out of this, both of which faked a kernel failure:
+* a poly variant missing from the polynomial-reference list was compared against
+  the NORMALISED analytic reference, which reads as a ~4x error in an exact
+  kernel;
+* tie test visibilities at +-63.5 cells are outside any grid smaller than ~136,
+  which crashed 64/128 runs and made them look like kernel bugs.
+Also adds --variant poly / polyh, which did not exist (the poly variants were
+only reachable through --variant all).
+
+diff --git a/metal/metaldevice.h b/metal/metaldevice.h
+index c401ccb3..9a2ac456 100644
+--- a/metal/metaldevice.h
++++ b/metal/metaldevice.h
+@@ -40,6 +40,7 @@ enum class Variant {
+   kCostProbe,  // timing ablation: same memory/atomic pattern, no kernel math
+   kPoly,       // ducc0's fitted piecewise polynomial, no per-visibility normalisation
+   kPolyHoisted,  // kPoly with the 1D samples hoisted into registers
++    kPolyColumns,   // pull model: no atomics, one owner per cell
+ };
+ 
+ const char* variantName(Variant variant);
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index 6d883097..b952750a 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -126,6 +126,7 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+     case Variant::kCostProbe: return "costprobe";
+     case Variant::kPoly: return "poly";
+     case Variant::kPolyHoisted: return "poly-h";
++    case Variant::kPolyColumns: return "poly-cols";
+   }
+   return "unknown";
+ }
+@@ -152,11 +153,13 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     if (input.variant == Variant::kCostProbe) kernel_name = "grid_accumulate_cost_probe";
+     if (input.variant == Variant::kPoly) kernel_name = "grid_accumulate_poly";
+     if (input.variant == Variant::kPolyHoisted) kernel_name = "grid_accumulate_poly_hoisted";
++    if (input.variant == Variant::kPolyColumns) kernel_name = "grid_accumulate_poly_columns";
+     if ((input.variant == Variant::kHoisted || input.variant == Variant::kPacked) &&
+         input.support != 6) {
+       fail("the hoisted variants are specialized for support 6");
+     }
+-    if ((input.variant == Variant::kPoly || input.variant == Variant::kPolyHoisted) &&
++    if ((input.variant == Variant::kPoly || input.variant == Variant::kPolyHoisted ||
++         input.variant == Variant::kPolyColumns) &&
+         input.kernel_coefficients.empty()) {
+       fail("Variant::kPoly needs kernel_coefficients (see bench/metal/ducc0_kernel_tool.cpp)");
+     }
+@@ -218,7 +221,8 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     const unsigned support = static_cast<unsigned>(input.support);
+     const float beta = input.beta;
+     const float e0 = input.e0;
+-    if (input.variant == Variant::kPoly || input.variant == Variant::kPolyHoisted) {
++    if (input.variant == Variant::kPoly || input.variant == Variant::kPolyHoisted ||
++        input.variant == Variant::kPolyColumns) {
+       [encoder setBuffer:visibility_buffer offset:0 atIndex:0];
+       [encoder setBuffer:start_buffer offset:0 atIndex:1];
+       [encoder setBuffer:item_buffer offset:0 atIndex:2];
+@@ -253,8 +257,15 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+       [encoder setBytes:&beta length:sizeof(beta) atIndex:8];
+       [encoder setBytes:&e0 length:sizeof(e0) atIndex:9];
+     }
+-    [encoder dispatchThreadgroups:MTLSizeMake(tiles_per_row, tiles_per_row, 1)
+-            threadsPerThreadgroup:MTLSizeMake(16, 16, 1)];
++    // The pull variant maps one thread to one cell, so it needs a full 32x32
++    // threadgroup; the push variants tile with 16x16 and loop.
++    if (input.variant == Variant::kPolyColumns) {
++      [encoder dispatchThreadgroups:MTLSizeMake(tiles_per_row, tiles_per_row, 1)
++              threadsPerThreadgroup:MTLSizeMake(32, 32, 1)];
++    } else {
++      [encoder dispatchThreadgroups:MTLSizeMake(tiles_per_row, tiles_per_row, 1)
++              threadsPerThreadgroup:MTLSizeMake(16, 16, 1)];
++    }
+     [encoder endEncoding];
+ 
+     const auto begin = std::chrono::steady_clock::now();
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index d5dcc49d..43dcdafe 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -602,6 +602,58 @@ kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
+   }
+ }
+ 
++// Pull model: each thread OWNS four cells of its tile (one u column, a run of
++// four v rows) and accumulates them in registers while it scans the tile's
++// bucket list. Every cell is written by exactly one thread, so there are no
++// atomics, no CAS loops and no collisions - the cost that dominated the push
++// variants on clustered real data (gridding measured ~16x its own degridding
++// direction, which needs no atomics). The price is that each thread scans the
++// whole bucket and re-evaluates the weights of the visibilities that touch its
++// column; on 440k real visibilities that scan is ~10^8 cheap iterations, while
++// the atomic serialisation it replaces cost tens of milliseconds.
++kernel void grid_accumulate_poly_columns(device const float* visibilities,
++                                 device const uint* bucket_start,
++                                 device const uint* bucket_items,
++                                 device float* grid,
++                                 constant float* coefficients,
++                                 constant uint& degree,
++                                 constant uint& grid_size,
++                                 constant int& centre,
++                                 constant uint& tiles_per_row,
++                                 constant uint& support,
++                                 uint2 tid2 [[thread_position_in_threadgroup]],
++                                 uint2 tile_id [[threadgroup_position_in_grid]]) {
++  // Pull model, minimal form: one cell per thread, one scalar accumulator, no
++  // local arrays and no dynamic indexing anywhere. Each cell has exactly one
++  // owner, so the writes are plain stores and no atomics are needed.
++  const int cx = int(tile_id.x) * int(kTile) + int(tid2.x);
++  const int cy = int(tile_id.y) * int(kTile) + int(tid2.y);
++  const int half_support = int(support) / 2;
++  const uint tile_index = tile_id.y * tiles_per_row + tile_id.x;
++  const uint begin = bucket_start[tile_index];
++  const uint end = bucket_start[tile_index + 1];
++
++  float2 acc = float2(0.0f);
++  for (uint item = begin; item < end; ++item) {
++    const uint visibility = bucket_items[item];
++    const float u = visibilities[4 * visibility + 0];
++    const float v = visibilities[4 * visibility + 1];
++    const float rounded_u = round(u);
++    const float rounded_v = round(v);
++    const int jx = cx - (int(rounded_u) + centre);
++    if (jx < -half_support || jx >= half_support) continue;
++    const int jy = cy - (int(rounded_v) + centre);
++    if (jy < -half_support || jy >= half_support) continue;
++    const float wx = poly_sample((u - rounded_u) - float(jx), coefficients, degree, support);
++    const float wy = poly_sample((v - rounded_v) - float(jy), coefficients, degree, support);
++    acc += float2(visibilities[4 * visibility + 2], visibilities[4 * visibility + 3]) * (wx * wy);
++  }
++
++  device float* out = grid + 2 * (cy * int(grid_size) + cx);
++  out[0] = acc.x;
++  out[1] = acc.y;
++}
++
+ // Degridding: grid -> visibilities, the adjoint of the gridding accumulation.
+ // Each thread owns one visibility and sums its 6x6 neighbourhood of the grid,
+ // so no atomics are needed and there is no tile structure to pay for. The
+diff --git a/metal/probe_main.cpp b/metal/probe_main.cpp
+index 6939098d..3a881709 100644
+--- a/metal/probe_main.cpp
++++ b/metal/probe_main.cpp
+@@ -293,7 +293,12 @@ int runRoundTrip(const Options& options, const mx::metal::DeviceInfo& info,
+   const double twin_grid_seconds =
+       std::chrono::duration<double>(std::chrono::steady_clock::now() - twin_grid_begin).count();
+ 
+-  input.variant = mx::metal::Variant::kPolyHoisted;
++  // The round-trip and real-data measurements must be able to choose the
++  // gridding strategy under test (both are poly variants).
++  input.variant = (options.variant == mx::metal::Variant::kPolyColumns ||
++                   options.variant == mx::metal::Variant::kPoly)
++                      ? options.variant
++                      : mx::metal::Variant::kPolyHoisted;
+   const mx::metal::GridAccumResult gpu_grid = mx::metal::gridAccumulate(input);
+   const CheckResult grid_check = checkGrid(gpu_grid.grid, reference_raw);
+ 
+@@ -383,6 +388,12 @@ Options parseOptions(int argc, char** argv) {
+         options.variant = mx::metal::Variant::kHoisted;
+       } else if (name == "packed") {
+         options.variant = mx::metal::Variant::kPacked;
++      } else if (name == "poly") {
++        options.variant = mx::metal::Variant::kPoly;
++      } else if (name == "polyh") {
++        options.variant = mx::metal::Variant::kPolyHoisted;
++      } else if (name == "polycols") {
++        options.variant = mx::metal::Variant::kPolyColumns;
+       } else if (name == "costprobe") {
+         options.variant = mx::metal::Variant::kCostProbe;
+       } else if (!options.all_variants) {
+@@ -553,7 +564,11 @@ int main(int argc, char** argv) {
+   constexpr std::size_t kTies = 64;
+   input.visibilities.resize(4 * (options.nvis + kTies), 0.0f);
+   for (std::size_t k = 0; k < kTies; ++k) {
+-    const float magnitude = 0.5f + static_cast<float>(k);
++    // Exact half-integer coordinates (they pin the rounding rule), but wrapped
++    // modulo 16 cells: with 0.5+k the far ties sit at +-63.5, which is outside
++    // any grid smaller than ~136 cells and made small-grid runs look like kernel
++    // failures (out-of-range footprints in the CPU twin).
++    const float magnitude = 0.5f + static_cast<float>(k % 16);
+     input.visibilities[4 * (options.nvis + k) + 0] = (k % 2 == 0) ? magnitude : -magnitude;
+     input.visibilities[4 * (options.nvis + k) + 1] = (k % 4 < 2) ? magnitude : -magnitude;
+     input.visibilities[4 * (options.nvis + k) + 2] = 1.0f;
+@@ -630,12 +645,15 @@ int main(int argc, char** argv) {
+     if (!kernel_coefficients.empty()) {
+       variants.push_back(mx::metal::Variant::kPoly);
+       variants.push_back(mx::metal::Variant::kPolyHoisted);
++      variants.push_back(mx::metal::Variant::kPolyColumns);
+     }
+     variants.push_back(mx::metal::Variant::kCostProbe);
+   } else {
+     variants = {options.variant};
+   }
+-  if (options.variant == mx::metal::Variant::kPoly && kernel_coefficients.empty()) {
++  if ((options.variant == mx::metal::Variant::kPoly ||
++       options.variant == mx::metal::Variant::kPolyColumns) &&
++      kernel_coefficients.empty()) {
+     std::fprintf(stderr, "mx-metal-probe: --variant poly needs --kernel-coeffs\n");
+     return 2;
+   }
+@@ -648,8 +666,14 @@ int main(int argc, char** argv) {
+       mx::metal::GridAccumInput run_input = input;
+       run_input.variant = variant;
+       const mx::metal::GridAccumResult gpu = mx::metal::gridAccumulate(run_input);
++      // Everything that evaluates ducc0's polynomial (not the analytic ES
++      // formula, and with no per-visibility normalisation) is compared against
++      // the polynomial reference. Leaving a variant out here compares a raw
++      // grid against the NORMALISED analytic one, which reads as a ~4x "error"
++      // in an otherwise exact kernel.
+       const bool polynomial_reference = variant == mx::metal::Variant::kPoly ||
+-                                        variant == mx::metal::Variant::kPolyHoisted;
++                                        variant == mx::metal::Variant::kPolyHoisted ||
++                                        variant == mx::metal::Variant::kPolyColumns;
+       const std::vector<double>& reference_for_variant =
+           polynomial_reference ? reference_poly : reference;
+       // The minimum kernel time over repeats is the stable estimate.

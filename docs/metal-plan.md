@@ -316,6 +316,44 @@ spread case and should not be quoted alone; on real clustered coverage the
 honest range is 1.7-3.6x, with degridding carrying almost all of it until the
 atomic strategy is replaced.
 
+### Pull model (measured): correct, and scan-bound
+
+The 16x gridding/degridding gap at 50.4 lambda/cell is the atomic CAS merge, so
+the obvious fix is a pull kernel: give every cell exactly one owner and let that
+thread sum its own contributions, with no atomics at all. `polycols` implements
+the minimal form - one cell per thread, one scalar accumulator, a 32x32
+threadgroup, the same placement and weights as the push variants - and it is
+verified the same way (within 1e-7 of the float64 twin at grid 64/128/512/1024,
+and it agrees with the push variants' own rel_max of 2.11e-05 / 1.17e-06 on the
+real data, so two independent accumulation strategies cross-check each other).
+
+It is also **4.8-5.1x slower** on real data:
+
+| configuration | push (`polyh`) grid | pull (`polycols`) grid | degridding |
+|---|---:|---:|---:|
+| 50.4 lambda/cell | **31.6 ms** | 160.7 ms | 1.9-3.9 ms |
+| 8 lambda/cell | **17.6 ms** | 84.9 ms | 1.7-2.5 ms |
+
+The reason is the scan: with one thread per cell, every thread walks the entire
+tile bucket, so the cost is `sum over tiles of (cells in tile) x (visibilities
+touching that tile)`. For clustered data at 50.4 that is roughly
+`16 tiles x 1024 cells x 100 000 visibilities ~ 10^9` iterations, which matches
+the measured 160 ms. Removing the atomics does not pay for a 1024-way redundant
+scan.
+
+The fix is finer binning, not kernel arithmetic: bin the visibilities per
+*(tile, column group)* on the host, so a threadgroup only scans the visibilities
+that can reach its columns. With 8 groups the scan drops 8x, which the measured
+cost model puts at ~20 ms (50.4) and ~11 ms (8 lambda/cell) - at or below the
+push model, without atomics. That is the next experiment, and the cost model
+now predicts its payoff before it is written.
+
+Two probe bugs surfaced while building this, both of which faked a kernel
+failure and are now fixed: a poly variant missing from the polynomial-reference
+list compares a raw grid against the *normalised* analytic one (a ~4x "error" in
+an exact kernel), and tie test visibilities at +-63.5 cells are outside any grid
+smaller than ~136 cells (out-of-range footprints, i.e. crashes at 64/128).
+
 ### Resolved: standalone ducc0 CPU baseline
 
 Reproducing the real-data runs (both tools take the same two flags):

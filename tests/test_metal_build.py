@@ -130,6 +130,22 @@ class MetalIntegrationTest(unittest.TestCase):
         # coverage guard is what catches that, so it must stay printed.
         self.assertIn('origins.size()', cpu)
 
+    def test_every_poly_variant_is_compared_against_the_poly_reference(self):
+        # A poly variant missing from this list is compared against the
+        # NORMALISED analytic reference and reads as a ~4x error in an exact
+        # kernel.
+        probe = self.read('work/wsclean/metal/probe_main.cpp')
+        block = probe[probe.index('const bool polynomial_reference'):]
+        block = block[:block.index(';')]
+        for variant in ('kPoly', 'kPolyHoisted', 'kPolyColumns'):
+            self.assertIn(variant, block, f'{variant} must select the polynomial reference')
+        # The pull kernel must keep its one-owner invariant: no atomics.
+        shader = self.read('work/wsclean/metal/mxshaders.h')
+        kernel = shader[shader.index('kernel void grid_accumulate_poly_columns'):]
+        kernel = kernel[:kernel.index('// Degridding')]
+        self.assertNotIn('atomic_add_float', kernel)
+        self.assertIn('out[0] = acc.x', kernel)
+
     def test_dump_script_verifies_what_taql_silently_truncates(self):
         script = ROOT / 'scripts/dump_ms_uvw.sh'
         self.assertTrue(script.exists())
