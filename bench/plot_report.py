@@ -5,7 +5,10 @@
 
     bench/plot_report.py
 
-Each figure is skipped (with a note) if its input runs are missing.
+Each figure is skipped (with a note) if its input runs are missing. Wall-time
+ratios are annotated with bench/ab.sh's mode assessment: a ratio is only read as
+a variant cost where the mode file says `comparable`, and figures without mode
+files are labelled wall-clock only.
 """
 
 import csv
@@ -30,6 +33,47 @@ from sample_tree import inclusive  # noqa: E402
 STAGES = ["inversion", "prediction", "deconvolution", "other"]
 COLORS = {"inversion": "#4C72B0", "prediction": "#55A868",
           "deconvolution": "#C44E52", "other": "#8C8C8C"}
+
+
+def mode_status(tag, out=OUT):
+    """bench/ab.sh's verdict for a tag, read from <tag>-ab.mode.txt.
+
+    Returns 'comparable', 'stall mode mismatch', 'unclassified', 'absent'
+    (no mode file: the comparison predates the counter harness) or
+    'unrecognised' (a mode file whose first line this plotter does not know,
+    treated as unclassified by callers).
+    """
+    path = out / f"{tag}-ab.mode.txt"
+    if not path.exists():
+        return "absent"
+    first = next((line.strip() for line in path.read_text().splitlines() if line.strip()), "")
+    if first == "comparable":
+        return "comparable"
+    if "stall mode mismatch" in first:
+        return "stall mode mismatch"
+    if "unclassified" in first or first == "single variant: nothing to compare":
+        return "unclassified"
+    return "unrecognised"
+
+
+def ratio_note(tag, out=OUT):
+    """Suffix for a wall-ratio annotation on a figure."""
+    status = mode_status(tag, out)
+    if status == "comparable":
+        return ""
+    if status == "absent":
+        return " [no mode file: wall-clock only]"
+    return f" [{status}]"
+
+
+def figure_mode_note(tags, out=OUT):
+    """One line naming every comparison that is not mode-verified."""
+    statuses = {tag: mode_status(tag, out) for tag in tags}
+    if all(status == "comparable" for status in statuses.values()):
+        return "mode-verified: hardware counters comparable for every comparison"
+    problems = ", ".join(f"{tag}={status}" for tag, status in statuses.items()
+                         if status != "comparable")
+    return f"wall-clock only where not mode-verified: {problems}"
 
 
 def hms(s):
@@ -63,32 +107,33 @@ def with_other(s):
 def fig_stages():
     entries = []
     if (OUT / "b4k" / "linc").exists():
-        entries.append(("LINC 5.2.1\n(x86, Rosetta)", run_stats(OUT / "b4k" / "linc")))
+        entries.append(("LINC 5.2.1\n(x86, Rosetta)", run_stats(OUT / "b4k" / "linc"), "b4k"))
     if (OUT / "p1-ab.tsv").exists():
-        entries.append(("upstream\n(native arm64)", ab_min(OUT / "p1-ab.tsv", "upstream")))
-        entries.append(("mx: patch 1", ab_min(OUT / "p1-ab.tsv", "mx")))
+        entries.append(("upstream\n(native arm64)", ab_min(OUT / "p1-ab.tsv", "upstream"), "p1"))
+        entries.append(("mx: patch 1", ab_min(OUT / "p1-ab.tsv", "mx"), "p1"))
     if (OUT / "p2-ab.tsv").exists() and ab_min(OUT / "p2-ab.tsv", "mx"):
-        entries.append(("mx: patch 1\n+ candidate vForce", ab_min(OUT / "p2-ab.tsv", "mx")))
+        entries.append(("mx: patch 1\n+ candidate vForce", ab_min(OUT / "p2-ab.tsv", "mx"), "p2"))
     if not entries:
         return None
-    entries = [(n, with_other(s)) for n, s in entries]
+    entries = [(n, with_other(s), t) for n, s, t in entries]
     fig, ax = plt.subplots(figsize=(8, 4.2))
-    names = [n for n, _ in entries]
+    names = [n for n, _, _ in entries]
     left = [0] * len(entries)
     for st in STAGES:
-        vals = [s[st] for _, s in entries]
+        vals = [s[st] for _, s, _ in entries]
         ax.barh(names, vals, left=left, color=COLORS[st], label=st)
         left = [a + b for a, b in zip(left, vals)]
-    base = next((s["wall"] for n, s in entries if n.startswith("upstream")), None)
-    for i, (_, s) in enumerate(entries):
+    base = next((s["wall"] for n, s, _ in entries if n.startswith("upstream")), None)
+    for i, (_, s, tag) in enumerate(entries):
         txt = f"{s['wall']:.1f} s"
         if base:
-            txt += f"  ({base / s['wall']:.2f}x vs upstream)"
+            txt += f"  ({base / s['wall']:.2f}x vs upstream)" + ratio_note(tag)
         ax.text(s["wall"] + 0.3, i, txt, va="center", fontsize=9)
     ax.invert_yaxis()
-    ax.set_xlabel("wall time [s] (native: min of 3 alternating runs)")
+    ax.set_xlabel("wall time [s] (native: min of 3 alternating runs)\n"
+                  + figure_mode_note([tag for _, _, tag in entries]))
     ax.set_title("4096² Stokes I, 1000 iterations, OVRO-LWA 50 MHz snapshot, M2 8 threads")
-    ax.set_xlim(0, max(s["wall"] for _, s in entries) * 1.35)
+    ax.set_xlim(0, max(s["wall"] for _, s, _ in entries) * 1.35)
     ax.legend(loc="lower right", fontsize=8)
     fig.tight_layout()
     return save(fig, "stages.png")
@@ -231,10 +276,11 @@ def fig_deep():
     for i, (n, s, tag) in enumerate(rows):
         txt = f"{s['wall']:.1f} s"
         if n.endswith("mx") and tag in base:
-            txt += f"  ({base[tag] / s['wall']:.2f}x)"
+            txt += f"  ({base[tag] / s['wall']:.2f}x)" + ratio_note(tag)
         ax.text(s["wall"] + 0.8, i, txt, va="center", fontsize=9)
     ax.invert_yaxis()
-    ax.set_xlabel("wall time [s] (min of 2 alternating runs)")
+    ax.set_xlabel("wall time [s] (min of 2 alternating runs)\n"
+                  + figure_mode_note(sorted({tag for _, _, tag in rows})))
     ax.set_title("4096², briggs 0, mgain 0.8: upstream (+padding fix) vs mx patches 1+3+4")
     ax.set_xlim(0, max(s["wall"] for _, s, _ in rows) * 1.25)
     ax.legend(loc="lower right", fontsize=8)
@@ -271,10 +317,12 @@ def fig_subminor():
         if v != "upstream-fix" and tag in base:
             b = base[tag]
             txt += (f"  (wall {b['wall'] / s['wall']:.2f}x, "
-                    f"deconv {b['deconvolution'] / s['deconvolution']:.1f}x)")
+                    f"deconv {b['deconvolution'] / s['deconvolution']:.1f}x)"
+                    + ratio_note(tag))
         ax.text(s["wall"] + 0.5, i, txt, va="center", fontsize=8)
     ax.invert_yaxis()
-    ax.set_xlabel("wall time [s] (min of 2 alternating runs; multiscale runs were thermally noisy)")
+    ax.set_xlabel("wall time [s] (min of 2 alternating runs; multiscale runs were thermally noisy)\n"
+                  + figure_mode_note(sorted({tag for _, _, tag, _ in rows})))
     ax.set_title("Patches 5+6: multithreaded subminor loop, multiscale FFT reuse")
     ax.set_xlim(0, max(s["wall"] for _, s, _, _ in rows) * 1.6)
     ax.legend(loc="lower right", fontsize=8)
@@ -322,7 +370,8 @@ def fig_platforms():
                 fontsize=8)
     a1.invert_yaxis()
     a1.set_xlim(0, max(s["wall"] for _, s in rows) * 1.3)
-    a1.set_xlabel("wall time [s], min of 2 runs (Xeon host shared, load avg 23-33)")
+    a1.set_xlabel("wall time [s], min of 2 runs (Xeon host shared, load avg 23-33)\n"
+                  + figure_mode_note(sorted({t for t in PLATFORM_RUNS})))
     a1.legend(loc="upper right", fontsize=8)
     a1.set_title("Time", fontsize=10)
     a2.barh([n for n, _ in spread], [r for _, r in spread], color="#C44E52")
@@ -359,11 +408,13 @@ def fig_p11():
             left = [a + b for a, b in zip(left, vals)]
         base = rows[0][1]["wall"]
         for i, (_, s) in enumerate(rows):
-            ax.text(s["wall"] + base * 0.01, i, f"{s['wall']:.2f} s ({base / s['wall']:.2f}x)",
+            note = ratio_note(tsv.replace("-ab.tsv", ""))
+            ax.text(s["wall"] + base * 0.01, i, f"{s['wall']:.2f} s ({base / s['wall']:.2f}x){note}",
                     va="center", fontsize=8)
         ax.invert_yaxis()
         ax.set_xlim(0, base * 1.3)
-        ax.set_xlabel("wall time [s], min of 3 alternating runs, M2 8 threads")
+        ax.set_xlabel("wall time [s], min of 3 alternating runs, M2 8 threads\n"
+                      + figure_mode_note([tsv.replace("-ab.tsv", "")]))
         ax.set_title(title, fontsize=10)
     axes[0].legend(loc="lower right", fontsize=8)
     fig.suptitle("Patches 7-11 (2026-10-17): wsclean-mx-p11 vs p6 vs upstream", fontsize=11)

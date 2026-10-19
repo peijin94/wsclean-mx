@@ -64,6 +64,8 @@ COMMON=(-std=c++20 -O2 -I"$DEPS_PREFIX/include" -I"$BREW/include"
 "$OUT/peak_scratch_regression"
 "$CXX" "${COMMON[@]}" tests/multiarray_regression.cpp -o "$OUT/multiarray_regression"
 "$OUT/multiarray_regression"
+"$CXX" "${COMMON[@]}" tests/median_edge_regression.cpp -o "$OUT/median_edge_regression"
+"$OUT/median_edge_regression"
 "$CXX" "${COMMON[@]}" -I"$ROOT/work/wsclean" tests/inmemory_time_regression.cpp \
   "$BUILD/libwsclean.a" -L"$DEPS_PREFIX/lib" -lcasa_ms -lcasa_tables -lcasa_casa \
   -L"$BREW/lib" -lcfitsio -Wl,-rpath,"$DEPS_PREFIX/lib" \

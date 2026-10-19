@@ -19,7 +19,7 @@ class BenchRunnerTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()
         (self.root / 'bench').mkdir()
-        for name in ('run.sh', 'ab.sh', 'aa.sh', 'snapshot.sh', 'common.sh'):
+        for name in ('run.sh', 'ab.sh', 'aa.sh', 'snapshot.sh', 'common.sh', 'profile.sh'):
             if (SOURCE / 'bench' / name).exists():
                 shutil.copy2(SOURCE / 'bench' / name, self.root / 'bench' / name)
         self.env = dict(os.environ, REPS='1', COOL='0', CONTAINER_CPUS='1')
@@ -643,6 +643,71 @@ print(os.environ.get('HARNESS_TIMING', 'Inversion: 00:00:01.250, prediction: 00:
                 self.rejected(self.run_script('aa.sh', *args), 'usage:')
         self.rejected(self.run_script('aa.sh', 'one', '..', 'tag'), 'invalid')
         self.assertFalse((self.root / 'bench/out').exists())
+
+    # --- profile.sh ---------------------------------------------------------
+
+    def fake_sampler(self):
+        """A stand-in for macOS `sample` that writes the report immediately."""
+        path = self.root / 'fakebin/sample'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('#!/usr/bin/env bash\n'
+                        'out=""\n'
+                        'while [ $# -gt 0 ]; do [ "$1" = "-file" ] && { shift; out="$1"; }; shift; done\n'
+                        'printf "Call graph:\\nSort by top of stack, same collapsed (when >= 5):\\n'
+                        '  harness_fixture_function  (in wsclean)  42\\n" > "$out"\n')
+        path.chmod(0o755)
+        return path.parent
+
+    def sampler_env(self, fakebin):
+        return {'PATH': f"{fakebin}:{os.environ['PATH']}", 'SAMPLE_SECONDS': '1'}
+
+    def test_profile_refuses_existing_output(self):
+        out = self.root / 'bench/out/keep/one-profile'
+        out.mkdir(parents=True)
+        sentinel = out / 'sentinel'
+        sentinel.write_text('keep me')
+        result = self.run_script('profile.sh', 'one', 'keep')
+        self.assertTrue(sentinel.exists(), 'existing profile sentinel was deleted')
+        self.rejected(result, 'exist')
+        self.assertFalse((self.root / 'calls').exists())
+
+    def test_profile_required_arguments_and_slugs(self):
+        for args in ((), ('one',)):
+            self.rejected(self.run_script('profile.sh', *args), 'usage:')
+        for slug in ('', '.', '..', '.hidden', '../escape', 'a/b', 'a b'):
+            for args in ((slug, 'tag'), ('one', slug)):
+                with self.subTest(args=args):
+                    self.rejected(self.run_script('profile.sh', *args), 'invalid')
+        self.assertFalse((self.root / 'bench/out').exists())
+
+    def test_profile_rejects_unavailable_variant_and_forbidden_options(self):
+        self.rejected(self.run_script('profile.sh', 'unknown', 'tag'), 'variant')
+        for option in ('predict', 'name', 'temp-dir'):
+            for prefix in ('-', '--'):
+                with self.subTest(option=option, prefix=prefix):
+                    self.rejected(self.run_script('profile.sh', 'one', 'tag', prefix + option, 'x'),
+                                  'forbidden')
+        self.assertFalse((self.root / 'bench/out').exists())
+
+    def test_profile_requires_the_sampler(self):
+        result = self.run_script('profile.sh', 'one', 'nosampler',
+                                 SAMPLE_TOOL='definitely-not-a-sampler')
+        self.rejected(result, 'sampler')
+        self.assertFalse((self.root / 'bench/out').exists())
+
+    def test_profile_writes_top_functions_and_uses_runner_owned_paths(self):
+        fakebin = self.fake_sampler()
+        result = self.run_script('profile.sh', 'one', 'prof', **self.sampler_env(fakebin))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        top = (self.root / 'bench/out/prof/one-profile/top.txt').read_text()
+        self.assertIn('harness_fixture_function', top)
+        call = self.calls()[0]
+        self.assertTrue(call['binary'].endswith('bench/bin/one/wsclean'), call['binary'])
+        self.assertIn('-no-update-model-required', call['args'])
+        # -name is runner-owned and points inside this run's output directory.
+        name_index = call['args'].index('-name')
+        self.assertTrue(call['args'][name_index + 1].endswith('bench/out/prof/one-profile/img'),
+                        call['args'][name_index + 1])
 
 
 if __name__ == '__main__':

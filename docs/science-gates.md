@@ -333,6 +333,36 @@ sampling which basin each run fell into.** (This does not prove the builds are
 equivalent; it says the deep configuration cannot tell them apart this way.) In the
 base configuration none of this arises: agreement at the float32 floor.
 
+## External validity: LOFAR LBA/HBA and MWA fixtures (2026-10-18)
+
+The gates above all use one telescope's data. Three more real datasets from the
+LOFAR/MWA CI fixtures (`support.astron.nl/software/ci_data/EveryBeam`) extend the
+check; each was downloaded, its sha256 recorded, extracted under
+`build-test/test_data/` and made read-only (no upstream-pinned hash is published
+for these three, so the recorded hash is the tarball this work used):
+
+| Fixture | Content | sha256 (tarball) |
+|---|---|---|
+| `MWA-single-timeslot.ms` | real MWA, PupA field, 24 channels at 133.795 MHz | `39cb9f65…e5dc` |
+| `L258627-one-timestep.ms` | real LOFAR HBA, 1 channel at 138.477 MHz | `f10b4f15…f22b8` |
+| `lba.MS` | LOFAR LBA, 4 channels at 57.8125 MHz | `508d1d81…caa8` |
+
+Configurations: 512² multiscale, niter 3000, briggs 0; the MWA case additionally
+runs `-channels-out 4` (4 output channels plus the MFS products — 25 images per
+run), which exercises the multi-channel output path the single-channel 3C196
+field cannot.
+
+| Dataset | Reference reruns | Outcome |
+|---|---:|---|
+| LOFAR LBA (`lba.MS`) | 3 | **all candidates pass** at the float32 floor (mx ×2, control) |
+| LOFAR HBA (`L258627`) | 6 | mx and control indistinguishable: mx restored-flux deviations 4.2e-6…6.9e-6 against control 4.8e-8…2.4e-5; mx-r3 and the control pass, mx-r1's marginal three-reference failure (2.4e-5 on two integral metrics) sits inside the control's own range |
+| MWA PupA (24 ch, 4 out) | 8 | **chaotic**: candidates (mx **and** the one-ulp control) land exactly on the reference envelope (e.g. 1.124e-4 vs 1.123e-4; 7.016e-2 vs 7.016e-2) — boundary-limited, not mx-specific |
+
+Peak RSS from the same runs, for the cache-budget question: 512² single-channel
+multiscale 97 MiB; 512² with 4 output channels 96 MiB (channel count adds no
+measurable peak at this size); 1024² 435 MiB; 2048² 1393 MiB. Peak RSS tracks
+image size, not channel count, at these sizes.
+
 ## Evidence
 
 Figures (`bench/plot_science_gates.py` → `docs/bench/science-gates/`):

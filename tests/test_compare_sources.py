@@ -221,6 +221,22 @@ class CompareSourcesTests(unittest.TestCase):
 
     # --- criterion ----------------------------------------------------------
 
+    def test_subnormal_only_images_are_not_flushed_or_crashed(self):
+        # Subnormal-only data: the gate must neither flush it to zero (which
+        # would make every threshold trivially pass) nor crash. The significance
+        # floor is evaluated in double precision, so even a near-denormal peak
+        # stays detectable. Stack-level peak semantics are inherited from
+        # upstream; this pins the harness side of that contract.
+        tiny = float(np.finfo(np.float32).tiny)
+        for value in (np.float32(1e-40), np.float32(1e-44)):
+            with self.subTest(value=value):
+                image = np.zeros((8, 8), dtype=np.float32)
+                image[3, 4] = value
+                self.assertTrue(0.0 < float(image[3, 4]) < tiny)
+                sources = compare_sources.detect_sources(image, compare_sources.mad_rms(image))
+                self.assertEqual(len(sources), 1)
+                self.assertEqual(float(sources[0][2]), float(value))
+
     def test_percentile_and_rank_helpers(self):
         self.assertEqual(compare_sources.percentile([1, 2, 3, 4, 5], 0.5), 3.0)
         self.assertEqual(compare_sources.percentile([], 0.95), 0.0)

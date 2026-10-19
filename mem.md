@@ -63,6 +63,20 @@ reasoning and long-form design in `notes.md`.
   perturbed-reference family before calling a deviation mx-specific.
 - Four native skips are not passes: two BDA cases need an unavailable hard-coded
   external MS; two average-correction benchmarks are explicitly disabled upstream.
+- Harness housekeeping (2026-10-18): plot_report.py reads `<tag>-ab.mode.txt`
+  and marks every non-mode-verified ratio; profile.sh uses the shared guards and
+  refuses existing output; median/subnormal edge cases are pinned by
+  tests/median_edge_regression.cpp plus a gate test. Peak RSS tracks image size
+  (512² 97 MiB, 1024² 435 MiB, 2048² 1393 MiB), not channel count; WSClean 3.7
+  `-facets` does not exist (facet regions are prediction-only).
+- External fixtures for the real-source gate live in build-test/test_data as
+  read-only MSs: MWA-single-timeslot.ms (real MWA, PupA, 24 ch @133.795 MHz),
+  L258627-one-timestep.ms (real LOFAR HBA, 1 ch @138.477 MHz), lba.MS (LOFAR
+  LBA, 4 ch @57.8125 MHz), plus LOFAR_3C196.ms. LBA passes at the float floor,
+  HBA is mx ≡ control, MWA is chaotic (mx and control both on the envelope).
+- bench/out was trimmed 50.8 GB → 35 GB by removing 68 superseded runs that no
+  tracked file cites (`bench/trim_plan.py`, manifest docs/trim-2026-10-18.md);
+  every figure input and the current gate evidence are kept.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using
   ANTENNA1 and assumes WEIGHT_SPECTRUM. Do not infer full CLI in-memory support
   from the passing provider/interface time and allocation tests.
