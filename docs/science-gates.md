@@ -474,6 +474,15 @@ structure while bright-source photometry agrees. T2 pixel RMS is the wrong
 gate for deep cleans; envelope gates apply. Truth recovery is the gate that
 matters here, and both builds recover the same photometry.
 
+Sparse-MS limit, measured on the MWA fixture (2628 rows, 24 ch): the same
+injection recovers nothing reliable in either build — Briggs dirty peak 3.5
+vs 11.3 Jy truth (density weighting misfires on ultra-sparse uv), natural
+dirty is exact (12.0) but multiscale clean diverges per build per channel
+(peaks 0.8–2.7, negative bowls), mx and ref landing in different basins.
+2628 rows cannot support a photometry gate in any build; the MWA fixture
+stays a pipeline-equivalence testbed only. Dense uv (LOFAR 621k rows) is
+required, and there both builds agree to 1e-3.
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
