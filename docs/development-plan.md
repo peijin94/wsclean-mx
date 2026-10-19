@@ -111,6 +111,16 @@ and patch 12 is neutral.
 ### 4. Metal prototype only after those gates
 
 - Start with a standalone CPU-vs-Metal grid/degrid harness feeding identical buffers; keep a runtime CPU fallback.
+
+Status 2026-10-18: the standalone harness exists (`metal/`, `mx-metal-probe`,
+`scripts/metal_build.sh`) and the CPU fallback is automatic (the backend is only
+compiled under `WSCLEAN_MX_METAL=ON`; every other build is unchanged, verified by
+the regression suite). The harness reproduced the plan's motivating case on its
+first run: float32 arithmetic moved ~1 in 10^4 visibilities one cell away from
+the double-precision placement, which the centred-coordinate rounding now
+prevents on both sides. Next: kernel table, then wiring the w-gridder behind
+`-mgpu` and re-running the science gates. Details and measurements in
+`docs/metal-plan.md`.
 - Preserve high-precision coordinate/phase preprocessing rather than naively converting all math to GPU float.
 - Test point-source flux/position, wide-field and high-|w| cases, masked/nonfinite data, adjoint consistency and repeatability.
 - Evaluate tiled accumulation versus atomics on the actual visibility distribution. Measure end-to-end transfer/preprocessing/FFT costs, not only kernel time.

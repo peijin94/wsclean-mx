@@ -66,6 +66,15 @@ COMMON=(-std=c++20 -O2 -I"$DEPS_PREFIX/include" -I"$BREW/include"
 "$OUT/multiarray_regression"
 "$CXX" "${COMMON[@]}" tests/median_edge_regression.cpp -o "$OUT/median_edge_regression"
 "$OUT/median_edge_regression"
+# The Metal probe exists only in a build configured with WSCLEAN_MX_METAL=ON;
+# scripts/metal_build.sh produces one in build-mx-metal/. Its differential
+# assertions (GPU gridding vs float64 CPU twin) run whenever it is present.
+if [ -x "$BUILD/metal/mx-metal-probe" ]; then
+  "$BUILD/metal/mx-metal-probe" --quiet
+else
+  printf 'Metal probe absent in %s (WSCLEAN_MX_METAL=OFF): use scripts/metal_build.sh.\n' \
+    "$BUILD"
+fi
 "$CXX" "${COMMON[@]}" -I"$ROOT/work/wsclean" tests/inmemory_time_regression.cpp \
   "$BUILD/libwsclean.a" -L"$DEPS_PREFIX/lib" -lcasa_ms -lcasa_tables -lcasa_casa \
   -L"$BREW/lib" -lcfitsio -Wl,-rpath,"$DEPS_PREFIX/lib" \

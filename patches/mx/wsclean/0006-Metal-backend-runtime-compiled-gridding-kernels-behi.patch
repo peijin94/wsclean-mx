@@ -1,0 +1,929 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Sun, 18 Oct 2026 21:36:03 -0400
+Subject: [PATCH 6/6] Metal backend: runtime-compiled gridding kernels behind
+ WSCLEAN_MX_METAL
+
+Infrastructure for the experimental Apple Metal backend, off by default.
+
+* metal/mxshaders.h: Metal Shading Language sources compiled at runtime by the
+  OS Metal runtime, so no Xcode or metallib toolchain is required. One
+  threadgroup per 32x32 output tile, accumulated in threadgroup memory and
+  merged with device atomics; float adds use bit-cast CAS because Apple GPUs
+  have no native float atomics.
+* metal/metaldevice.{h,mm}: plain-C++ interface over Objective-C++; device
+  info, host-side visibility bucketing, gridding dispatch, and a
+  kernel-accuracy probe (fast math vs the precise namespace).
+* metal/probe_main.cpp -> mx-metal-probe: differential self-test against a
+  float64 CPU twin of the same arithmetic, plus structural checks (every
+  reference cell non-zero on the GPU, no cell touched without contributions)
+  and exact-tie visibilities pinning the round-half-away-from-zero rule.
+
+The probe found a substantive placement divergence: forming u + G/2 in float32
+rounds at the magnitude of G/2, which flips the nearest integer for
+visibilities within half a float32 step of a half-integer cell (~1 in 1e4
+uniformly drawn), moving a whole 6x6 footprint one cell away from the
+double-precision result and producing a 3.4e-2 relative grid error. Computing
+round(u) and fx = u - round(u) in centred coordinates is exact in float32 and
+removes the divergence; rel_max is 3.4e-7 afterwards.
+
+Measured on Apple M2, unoptimized baseline with direct kernel evaluation:
+200k visibilities on 1024^2 in 2.56 ms (78 Mvis/s), 1M in 11.61 ms
+(86 Mvis/s), 2M on 2048^2 in 18.26 ms (110 Mvis/s), all rel_max <= 3.6e-7.
+
+CMake: the new WSCLEAN_MX_METAL option (OFF) enables OBJCXX and metal/; every
+other build is unchanged.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a036bd2b..9dcb7a6d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -39,6 +39,11 @@ option(PORTABLE "Build portable binaries (with slightly decreased performance)"
+ option(BUILD_PACKAGES "Build Debian packages" OFF)
+ option(ENABLE_WTOWERS
+        "Enable compiling w-towers gridder (requires ska-sdp-func library)" OFF)
++# mx fork: experimental Apple Metal compute backend, off by default so every
++# other build stays byte-identical.
++option(WSCLEAN_MX_METAL
++       "Build the experimental Apple Metal compute backend (mx fork, macOS only)"
++       OFF)
+ 
+ # aocommon
+ FetchContent_Declare(
+@@ -458,6 +463,14 @@ target_link_libraries(wsclean-shared PUBLIC schaapcommon)
+ add_executable(wsclean main/main.cpp)
+ target_link_libraries(wsclean wsclean-lib)
+ 
++if(WSCLEAN_MX_METAL)
++  if(NOT APPLE)
++    message(FATAL_ERROR "WSCLEAN_MX_METAL requires macOS")
++  endif()
++  enable_language(OBJCXX)
++  add_subdirectory(metal)
++endif()
++
+ if(MPI_FOUND)
+   add_executable(wsclean-mp distributed/wsclean-mp.cpp distributed/worker.cpp)
+   target_link_libraries(wsclean-mp wsclean-lib)
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+new file mode 100644
+index 00000000..7170ef20
+--- /dev/null
++++ b/metal/CMakeLists.txt
+@@ -0,0 +1,22 @@
++# SPDX-License-Identifier: GPL-3.0-or-later
++# Copyright (C) 2026 Peijin Zhang
++#
++# Experimental Apple Metal compute backend (mx fork). Reached only when
++# WSCLEAN_MX_METAL=ON, which also enables the OBJCXX language at the top level.
++# The kernels are compiled from source at runtime, so no metallib toolchain is
++# required; only the Metal and Foundation frameworks are linked.
++
++add_library(mx-metal STATIC metaldevice.mm)
++target_include_directories(mx-metal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
++set_source_files_properties(metaldevice.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++
++find_library(MX_METAL_FRAMEWORK Metal REQUIRED)
++find_library(MX_FOUNDATION_FRAMEWORK Foundation REQUIRED)
++target_link_libraries(mx-metal PUBLIC ${MX_METAL_FRAMEWORK} ${MX_FOUNDATION_FRAMEWORK})
++
++# Differential self-test: the Metal gridding accumulator against a float64 CPU
++# twin of the same arithmetic. Run it from the build directory:
++#   ./mx-metal-probe            full size (1024² grid, 200k visibilities)
++#   ./mx-metal-probe --quiet    one machine-readable summary line
++add_executable(mx-metal-probe probe_main.cpp)
++target_link_libraries(mx-metal-probe PRIVATE mx-metal)
+diff --git a/metal/metaldevice.h b/metal/metaldevice.h
+new file mode 100644
+index 00000000..00eae26c
+--- /dev/null
++++ b/metal/metaldevice.h
+@@ -0,0 +1,71 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Copyright (C) 2026 Peijin Zhang
++//
++// Plain-C++ interface to the experimental Apple Metal compute backend of the
++// mx fork. No Objective-C types cross this header, so callers stay portable;
++// the implementation lives in metaldevice.mm and is only built when
++// WSCLEAN_MX_METAL is ON (macOS only).
++//
++// Status: infrastructure stage. The kernel here is the gridding accumulator
++// (the hot path identified by the 4k profile), validated against a CPU twin in
++// mx-metal-probe; it is not yet wired into the wsclean imaging path.
++
++#pragma once
++
++#include <cstddef>
++#include <string>
++#include <vector>
++
++namespace mx::metal {
++
++struct DeviceInfo {
++  bool available = false;
++  std::string name;
++  std::size_t recommended_working_set = 0;
++  std::size_t max_threads_per_threadgroup = 0;
++};
++
++DeviceInfo deviceInfo();
++
++struct GridAccumInput {
++  std::size_t grid_size = 0;   // G, grid is G x G complex (float2)
++  std::size_t support = 6;     // gridding kernel support in cells (even)
++  float beta = 2.3f;           // exponential-of-semicircle shape parameter
++  // Visibilities: 4 floats each (u, v in grid coordinates, then re, im).
++  std::vector<float> visibilities;
++};
++
++struct GridAccumResult {
++  std::vector<float> grid;   // 2 * G * G floats, re/im interleaved
++  double gpu_seconds = 0.0;  // kernel interval reported by Metal
++  double wall_seconds = 0.0;
++  std::size_t visibilities = 0;
++  std::size_t tiles = 0;
++};
++
++// Grids the visibilities through the Metal kernel and returns the grid.
++// Throws std::runtime_error when no device is present or compilation fails.
++GridAccumResult gridAccumulate(const GridAccumInput& input);
++
++// Evaluates the gridding kernel at the given arguments on the GPU, once with
++// the default (fast-math) functions and once through the precise namespace.
++// Exposed so the probe can attribute numerical differences between the GPU and
++// the CPU twin to either the kernel or the accumulation.
++struct KernelProbeResult {
++  std::vector<float> fast;
++  std::vector<float> precise;
++};
++
++KernelProbeResult evalEsKernel(const std::vector<float>& arguments, float support, float beta);
++
++// Host-side bucketing of visibilities into per-tile item lists (CSR). Exposed
++// so tests can check the assignment independently of any GPU.
++struct TileBuckets {
++  std::size_t tiles_per_row = 0;
++  std::vector<unsigned> start;  // tiles*tiles + 1 entries
++  std::vector<unsigned> items;
++};
++
++TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile = 32);
++
++}  // namespace mx::metal
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+new file mode 100644
+index 00000000..fee0634b
+--- /dev/null
++++ b/metal/metaldevice.mm
+@@ -0,0 +1,265 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Copyright (C) 2026 Peijin Zhang
++//
++// Objective-C++ implementation of the Metal backend interface. Built only
++// under WSCLEAN_MX_METAL; the Metal library is compiled from source strings at
++// runtime, so no metallib/Xcode toolchain is needed.
++
++#import <Foundation/Foundation.h>
++#import <Metal/Metal.h>
++
++#include "metal/metaldevice.h"
++#include "metal/mxshaders.h"
++
++#include <chrono>
++#include <cstring>
++#include <stdexcept>
++
++namespace mx::metal {
++
++namespace {
++
++[[noreturn]] void fail(const std::string& message) {
++  throw std::runtime_error("mx::metal: " + message);
++}
++
++std::string nsString(NSString* string) {
++  if (string == nil) return {};
++  const char* utf8 = [string UTF8String];
++  return utf8 != nullptr ? utf8 : std::string();
++}
++
++}  // namespace
++
++DeviceInfo deviceInfo() {
++  @autoreleasepool {
++    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
++    if (device == nil) return {};
++    DeviceInfo info;
++    info.available = true;
++    info.name = nsString([device name]);
++    info.recommended_working_set = static_cast<std::size_t>([device recommendedMaxWorkingSetSize]);
++    info.max_threads_per_threadgroup =
++        static_cast<std::size_t>([device maxThreadsPerThreadgroup].width *
++                                 [device maxThreadsPerThreadgroup].height *
++                                 [device maxThreadsPerThreadgroup].depth);
++    return info;
++  }
++}
++
++TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
++  if (input.grid_size == 0 || input.grid_size % tile != 0) {
++    fail("grid size must be a positive multiple of the tile size");
++  }
++  if (input.support == 0 || input.support % 2 != 0) {
++    fail("support must be a positive even number");
++  }
++  if (input.visibilities.size() % 4 != 0) {
++    fail("visibility array must hold four floats per visibility");
++  }
++  const std::size_t g = input.grid_size;
++  const std::size_t tiles_per_row = g / tile;
++  const std::size_t visibility_count = input.visibilities.size() / 4;
++  const int half = static_cast<int>(input.support) / 2;
++
++  TileBuckets buckets;
++  buckets.tiles_per_row = tiles_per_row;
++  buckets.start.assign(tiles_per_row * tiles_per_row + 1, 0);
++
++  // Pass one: count. A visibility is listed in every tile its support touches.
++  auto tilesOf = [&](const float* visibility, std::size_t& x0, std::size_t& x1,
++                     std::size_t& y0, std::size_t& y1) {
++    // Centred form, identical to the kernel: round the coordinate itself, then
++    // offset by the grid centre, so host bucketing and GPU placement can never
++    // disagree about which cell a visibility rounds to.
++    const long centre_index = static_cast<long>(g) / 2;
++    const long centre_x = std::llround(static_cast<double>(visibility[0])) + centre_index;
++    const long centre_y = std::llround(static_cast<double>(visibility[1])) + centre_index;
++    const long first_x = centre_x - half;
++    const long first_y = centre_y - half;
++    const long last_x = centre_x + half - 1;
++    const long last_y = centre_y + half - 1;
++    if (last_x < 0 || first_x > static_cast<long>(g) - 1 || last_y < 0 ||
++        first_y > static_cast<long>(g) - 1) {
++      return false;
++    }
++    x0 = static_cast<std::size_t>(std::max<long>(first_x, 0)) / tile;
++    x1 = static_cast<std::size_t>(std::max<long>(last_x, 0)) / tile;
++    y0 = static_cast<std::size_t>(std::max<long>(first_y, 0)) / tile;
++    y1 = static_cast<std::size_t>(std::max<long>(last_y, 0)) / tile;
++    return true;
++  };
++
++  for (std::size_t v = 0; v < visibility_count; ++v) {
++    std::size_t x0 = 0, x1 = 0, y0 = 0, y1 = 0;
++    if (!tilesOf(&input.visibilities[4 * v], x0, x1, y0, y1)) continue;
++    for (std::size_t ty = y0; ty <= y1; ++ty) {
++      for (std::size_t tx = x0; tx <= x1; ++tx) {
++        ++buckets.start[ty * tiles_per_row + tx + 1];
++      }
++    }
++  }
++  for (std::size_t t = 0; t < buckets.start.size() - 1; ++t) {
++    buckets.start[t + 1] += buckets.start[t];
++  }
++  buckets.items.assign(buckets.start.back(), 0);
++
++  // Pass two: fill, using a moving cursor per tile.
++  std::vector<unsigned> cursor(buckets.start.begin(), buckets.start.end() - 1);
++  for (std::size_t v = 0; v < visibility_count; ++v) {
++    std::size_t x0 = 0, x1 = 0, y0 = 0, y1 = 0;
++    if (!tilesOf(&input.visibilities[4 * v], x0, x1, y0, y1)) continue;
++    for (std::size_t ty = y0; ty <= y1; ++ty) {
++      for (std::size_t tx = x0; tx <= x1; ++tx) {
++        buckets.items[cursor[ty * tiles_per_row + tx]++] = static_cast<unsigned>(v);
++      }
++    }
++  }
++  return buckets;
++}
++
++GridAccumResult gridAccumulate(const GridAccumInput& input) {
++  @autoreleasepool {
++    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
++    if (device == nil) fail("no Metal device is available");
++
++    const std::size_t g = input.grid_size;
++    if (g == 0 || g % 32 != 0) fail("grid size must be a positive multiple of 32");
++    const TileBuckets buckets = bucketVisibilities(input);
++    const std::size_t tiles_per_row = buckets.tiles_per_row;
++    const std::size_t tiles = tiles_per_row * tiles_per_row;
++
++    NSError* error = nil;
++    id<MTLLibrary> library =
++        [device newLibraryWithSource:[NSString stringWithUTF8String:kGridAccumulateMSL]
++                             options:nil
++                               error:&error];
++    if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
++    id<MTLFunction> function = [library newFunctionWithName:@"grid_accumulate"];
++    if (function == nil) fail("kernel function 'grid_accumulate' is missing");
++    id<MTLComputePipelineState> pipeline =
++        [device newComputePipelineStateWithFunction:function error:&error];
++    if (pipeline == nil) fail("pipeline creation failed: " + nsString([error localizedDescription]));
++
++    const std::size_t grid_bytes = 2 * g * g * sizeof(float);
++    id<MTLBuffer> grid_buffer = [device newBufferWithLength:grid_bytes
++                                                   options:MTLResourceStorageModeShared];
++    std::memset([grid_buffer contents], 0, grid_bytes);
++
++    id<MTLBuffer> visibility_buffer = nil;
++    if (!input.visibilities.empty()) {
++      visibility_buffer =
++          [device newBufferWithBytes:input.visibilities.data()
++                              length:input.visibilities.size() * sizeof(float)
++                             options:MTLResourceStorageModeShared];
++    }
++    id<MTLBuffer> start_buffer =
++        [device newBufferWithBytes:buckets.start.data()
++                            length:buckets.start.size() * sizeof(unsigned)
++                           options:MTLResourceStorageModeShared];
++    id<MTLBuffer> item_buffer = nil;
++    if (!buckets.items.empty()) {
++      item_buffer = [device newBufferWithBytes:buckets.items.data()
++                                        length:buckets.items.size() * sizeof(unsigned)
++                                       options:MTLResourceStorageModeShared];
++    }
++
++    id<MTLCommandQueue> queue = [device newCommandQueue];
++    id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
++    id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
++    [encoder setComputePipelineState:pipeline];
++    [encoder setBuffer:visibility_buffer offset:0 atIndex:0];
++    [encoder setBuffer:start_buffer offset:0 atIndex:1];
++    [encoder setBuffer:item_buffer offset:0 atIndex:2];
++    [encoder setBuffer:grid_buffer offset:0 atIndex:3];
++    const unsigned grid_size = static_cast<unsigned>(g);
++    const int centre = static_cast<int>(g) / 2;
++    const unsigned tiles_row = static_cast<unsigned>(tiles_per_row);
++    const unsigned support = static_cast<unsigned>(input.support);
++    const float beta = input.beta;
++    [encoder setBytes:&grid_size length:sizeof(grid_size) atIndex:4];
++    [encoder setBytes:&centre length:sizeof(centre) atIndex:5];
++    [encoder setBytes:&tiles_row length:sizeof(tiles_row) atIndex:6];
++    [encoder setBytes:&support length:sizeof(support) atIndex:7];
++    [encoder setBytes:&beta length:sizeof(beta) atIndex:8];
++    [encoder dispatchThreadgroups:MTLSizeMake(tiles_per_row, tiles_per_row, 1)
++            threadsPerThreadgroup:MTLSizeMake(16, 16, 1)];
++    [encoder endEncoding];
++
++    const auto begin = std::chrono::steady_clock::now();
++    [command_buffer commit];
++    [command_buffer waitUntilCompleted];
++    const auto end = std::chrono::steady_clock::now();
++    if ([command_buffer status] != MTLCommandBufferStatusCompleted) {
++      fail("command buffer failed: " + nsString([[command_buffer error] localizedDescription]));
++    }
++
++    GridAccumResult result;
++    result.grid.resize(2 * g * g);
++    std::memcpy(result.grid.data(), [grid_buffer contents], grid_bytes);
++    result.gpu_seconds = [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
++    result.wall_seconds = std::chrono::duration<double>(end - begin).count();
++    result.visibilities = input.visibilities.size() / 4;
++    result.tiles = tiles;
++    return result;
++  }
++}
++
++KernelProbeResult evalEsKernel(const std::vector<float>& arguments, float support, float beta) {
++  @autoreleasepool {
++    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
++    if (device == nil) fail("no Metal device is available");
++    if (arguments.empty()) return {};
++
++    NSError* error = nil;
++    id<MTLLibrary> library =
++        [device newLibraryWithSource:[NSString stringWithUTF8String:kGridAccumulateMSL]
++                             options:nil
++                               error:&error];
++    if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
++    id<MTLFunction> function = [library newFunctionWithName:@"es_kernel_probe"];
++    if (function == nil) fail("kernel function 'es_kernel_probe' is missing");
++    id<MTLComputePipelineState> pipeline =
++        [device newComputePipelineStateWithFunction:function error:&error];
++    if (pipeline == nil) fail("pipeline creation failed: " + nsString([error localizedDescription]));
++
++    const std::size_t count = arguments.size();
++    id<MTLBuffer> argument_buffer =
++        [device newBufferWithBytes:arguments.data()
++                            length:count * sizeof(float)
++                           options:MTLResourceStorageModeShared];
++    id<MTLBuffer> fast_buffer =
++        [device newBufferWithLength:count * sizeof(float) options:MTLResourceStorageModeShared];
++    id<MTLBuffer> precise_buffer =
++        [device newBufferWithLength:count * sizeof(float) options:MTLResourceStorageModeShared];
++
++    id<MTLCommandQueue> queue = [device newCommandQueue];
++    id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
++    id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
++    [encoder setComputePipelineState:pipeline];
++    [encoder setBuffer:argument_buffer offset:0 atIndex:0];
++    [encoder setBuffer:fast_buffer offset:0 atIndex:1];
++    [encoder setBuffer:precise_buffer offset:0 atIndex:2];
++    [encoder setBytes:&support length:sizeof(support) atIndex:3];
++    [encoder setBytes:&beta length:sizeof(beta) atIndex:4];
++    const unsigned count_unsigned = static_cast<unsigned>(count);
++    [encoder setBytes:&count_unsigned length:sizeof(count_unsigned) atIndex:5];
++    [encoder dispatchThreads:MTLSizeMake(count, 1, 1)
++        threadsPerThreadgroup:MTLSizeMake(std::min<std::size_t>(count, 256), 1, 1)];
++    [encoder endEncoding];
++    [command_buffer commit];
++    [command_buffer waitUntilCompleted];
++    if ([command_buffer status] != MTLCommandBufferStatusCompleted) {
++      fail("kernel probe failed: " + nsString([[command_buffer error] localizedDescription]));
++    }
++
++    KernelProbeResult result;
++    result.fast.resize(count);
++    result.precise.resize(count);
++    std::memcpy(result.fast.data(), [fast_buffer contents], count * sizeof(float));
++    std::memcpy(result.precise.data(), [precise_buffer contents], count * sizeof(float));
++    return result;
++  }
++}
++
++}  // namespace mx::metal
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+new file mode 100644
+index 00000000..3bfa922b
+--- /dev/null
++++ b/metal/mxshaders.h
+@@ -0,0 +1,181 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Copyright (C) 2026 Peijin Zhang
++//
++// Metal Shading Language sources, compiled at runtime (no Xcode / metallib
++// toolchain needed: the OS Metal runtime accepts source strings).
++//
++// grid_accumulate: gridding of visibilities into the uv grid, one threadgroup
++// per output tile. Each threadgroup accumulates its tile in threadgroup memory
++// and merges once into the global grid, so the expensive part is private and
++// only the tile merge pays atomics. Visibilities are pre-bucketed on the host
++// into per-tile lists (a visibility lands in every tile its support touches).
++
++#pragma once
++
++namespace mx::metal {
++
++inline constexpr const char* kGridAccumulateMSL = R"MSL(
++#include <metal_stdlib>
++using namespace metal;
++
++// Float add through integer atomics: Apple GPUs have no native
++// atomic_fetch_add on float, so bit-cast and CAS. Both address spaces are
++// covered: threadgroup for the tile accumulation, device for the merge.
++inline void atomic_add_float(device atomic_uint* address, float value) {
++  uint expected = atomic_load_explicit(address, memory_order_relaxed);
++  while (true) {
++    float updated = as_type<float>(expected) + value;
++    uint desired = as_type<uint>(updated);
++    if (atomic_compare_exchange_weak_explicit(address, &expected, desired,
++                                              memory_order_relaxed,
++                                              memory_order_relaxed)) {
++      return;
++    }
++  }
++}
++
++inline void atomic_add_float(threadgroup atomic_uint* address, float value) {
++  uint expected = atomic_load_explicit(address, memory_order_relaxed);
++  while (true) {
++    float updated = as_type<float>(expected) + value;
++    uint desired = as_type<uint>(updated);
++    if (atomic_compare_exchange_weak_explicit(address, &expected, desired,
++                                              memory_order_relaxed,
++                                              memory_order_relaxed)) {
++      return;
++    }
++  }
++}
++
++// Exponential-of-semicircle gridding kernel; the same formula the C++ side
++// uses, so agreement between the two paths is a test of the GPU mechanics.
++inline float es_kernel(float x, float support, float beta) {
++  float half_support = 0.5f * support;
++  if (x <= -half_support || x >= half_support) return 0.0f;
++  float t = 2.0f * x / support;
++  return exp(beta * (sqrt(1.0f - t * t) - 1.0f));
++}
++
++// The same kernel through the precise math namespace. Apple GPUs evaluate the
++// default exp/sqrt under fast math, which is not accurate enough for a strict
++// differential test against the CPU twin, so the gridding path uses this.
++inline float es_kernel_precise(float x, float support, float beta) {
++  float half_support = 0.5f * support;
++  if (x <= -half_support || x >= half_support) return 0.0f;
++  float t = precise::divide(2.0f * x, support);
++  return precise::exp(beta * (precise::sqrt(1.0f - t * t) - 1.0f));
++}
++
++// Kernel-accuracy probe: evaluates both variants over the arguments gridding
++// actually uses, so the fast/precise deviation can be measured directly.
++kernel void es_kernel_probe(device const float* arguments,
++                            device float* fast_values,
++                            device float* precise_values,
++                            constant float& support,
++                            constant float& beta,
++                            constant uint& count,
++                            uint index [[thread_position_in_grid]]) {
++  if (index >= count) return;
++  const float x = arguments[index];
++  fast_values[index] = es_kernel(x, support, beta);
++  precise_values[index] = es_kernel_precise(x, support, beta);
++}
++
++constant uint kTile = 32;      // output tile edge, in cells
++constant uint kThreads = 256;  // 16x16 threads per threadgroup
++
++// One threadgroup per tile. Grid coordinates are cell-centred: a visibility at
++// grid coordinate u contributes to cells i0 + j, j in [-S/2, S/2), where
++// i0 = round(u) + G/2 and the kernel argument for cell i0 + j is f - j with
++// f = u - round(u).
++//
++// The rounding is done in centred coordinates on purpose. Forming u + G/2 in
++// float32 rounds at the magnitude of G/2 (6e-5 near u = 460 on a 1024 grid),
++// which flips the nearest integer for a visibility near a half-integer cell
++// (measured: ~1 in 10^4 uniformly drawn visibilities lands one cell away from
++// the double-precision CPU result). u - round(u) is exact in float32 for
++// |u| < 2^23, so both sides then place every visibility in the same cell, with
++// round() following round-half-away-from-zero as std::lround does.
++kernel void grid_accumulate(device const float* visibilities,  // u, v, re, im
++                            device const uint* bucket_start,   // per tile
++                            device const uint* bucket_items,
++                            device atomic_uint* grid,          // 2 * G * G
++                            constant uint& grid_size,
++                            constant int& centre,  // grid_size / 2
++                            constant uint& tiles_per_row,
++                            constant uint& support,
++                            constant float& beta,
++                            uint2 tid2 [[thread_position_in_threadgroup]],
++                            uint2 tile_id [[threadgroup_position_in_grid]],
++                            uint tid [[thread_index_in_threadgroup]]) {
++  threadgroup atomic_uint tile[(kTile * kTile) * 2];
++
++  for (uint i = tid; i < kTile * kTile; i += kThreads) {
++    atomic_store_explicit(&tile[2 * i], 0u, memory_order_relaxed);
++    atomic_store_explicit(&tile[2 * i + 1], 0u, memory_order_relaxed);
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++
++  const uint tile_index = tile_id.y * tiles_per_row + tile_id.x;
++  const uint begin = bucket_start[tile_index];
++  const uint end = bucket_start[tile_index + 1];
++  const int half_support = int(support) / 2;
++  const int tile_x0 = int(tile_id.x) * int(kTile);
++  const int tile_y0 = int(tile_id.y) * int(kTile);
++
++  for (uint item = begin + tid; item < end; item += kThreads) {
++    const uint visibility = bucket_items[item];
++    const float u = visibilities[4 * visibility + 0];
++    const float v = visibilities[4 * visibility + 1];
++    const float2 value = float2(visibilities[4 * visibility + 2],
++                                visibilities[4 * visibility + 3]);
++    // Centred arithmetic: exact in float32, and the cell index is the double
++    // precision result.
++    const float rounded_u = round(u);
++    const float rounded_v = round(v);
++    const int i0 = int(rounded_u) + centre;
++    const int j0 = int(rounded_v) + centre;
++    const float fx = u - rounded_u;
++    const float fy = v - rounded_v;
++
++    float sum_x = 0.0f, sum_y = 0.0f;
++    for (int j = -half_support; j < half_support; ++j) {
++      sum_x += es_kernel(fx - float(j), support, beta);
++      sum_y += es_kernel(fy - float(j), support, beta);
++    }
++    if (sum_x == 0.0f || sum_y == 0.0f) continue;
++
++    for (int jy = -half_support; jy < half_support; ++jy) {
++      const int cy = j0 + jy - tile_y0;
++      if (cy < 0 || cy >= int(kTile)) continue;
++      const float wy = es_kernel(fy - float(jy), support, beta) / sum_y;
++      if (wy == 0.0f) continue;
++      for (int jx = -half_support; jx < half_support; ++jx) {
++        const int cx = i0 + jx - tile_x0;
++        if (cx < 0 || cx >= int(kTile)) continue;
++        const float wx = es_kernel(fx - float(jx), support, beta) / sum_x;
++        const float weight = wx * wy;
++        atomic_add_float(&tile[2 * (cy * int(kTile) + cx)],
++                         weight * value.x);
++        atomic_add_float(&tile[2 * (cy * int(kTile) + cx) + 1],
++                         weight * value.y);
++      }
++    }
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++
++  // Merge the tile into the grid. Cells never touched stay exactly zero.
++  for (uint i = tid; i < kTile * kTile; i += kThreads) {
++    const float re = as_type<float>(atomic_load_explicit(&tile[2 * i], memory_order_relaxed));
++    const float im =
++        as_type<float>(atomic_load_explicit(&tile[2 * i + 1], memory_order_relaxed));
++    if (re == 0.0f && im == 0.0f) continue;
++    const uint cx = tile_x0 + i % kTile;
++    const uint cy = tile_y0 + i / kTile;
++    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
++    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++  }
++}
++)MSL";
++
++}  // namespace mx::metal
+diff --git a/metal/probe_main.cpp b/metal/probe_main.cpp
+new file mode 100644
+index 00000000..e78ecf07
+--- /dev/null
++++ b/metal/probe_main.cpp
+@@ -0,0 +1,293 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Copyright (C) 2026 Peijin Zhang
++//
++// mx-metal-probe: differential self-test of the Metal gridding accumulator
++// against a float64 CPU twin of the same arithmetic.
++//
++// The CPU twin uses the identical kernel formula and normalization, so
++// agreement tests the GPU mechanics (bucketing, threadgroup tiles, atomic
++// merge, indexing) rather than any approximation choice. Two structural
++// properties are checked as well: cells that received no contribution must be
++// exactly zero after the merge, and every cell the reference finds significant
++// must be non-zero on the GPU.
++//
++// Usage: mx-metal-probe [--nvis N] [--grid G] [--support S] [--beta B] [--quiet]
++
++#include "metal/metaldevice.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <random>
++#include <string>
++#include <vector>
++
++namespace {
++
++struct Options {
++  std::size_t nvis = 200000;
++  std::size_t grid = 1024;
++  std::size_t support = 6;
++  float beta = 2.3f;
++  bool quiet = false;
++  std::string dump_prefix;  // when set, write visibilities and both grids
++};
++
++float esKernel(float x, float support, float beta) {
++  const float half = 0.5f * support;
++  if (x <= -half || x >= half) return 0.0f;
++  const float t = 2.0f * x / support;
++  return std::exp(beta * (std::sqrt(1.0f - t * t) - 1.0f));
++}
++
++// The reference implementation of the same accumulation, in double precision.
++std::vector<double> referenceGrid(const Options& options,
++                                  const std::vector<float>& visibilities) {
++  const std::size_t g = options.grid;
++  const int half = static_cast<int>(options.support) / 2;
++  const long centre_index = static_cast<long>(g) / 2;
++  std::vector<double> grid(2 * g * g, 0.0);
++  for (std::size_t v = 0; v + 3 < visibilities.size(); v += 4) {
++    // Centred form, mirroring the kernel: round the coordinate itself, then add
++    // the grid centre. u - round(u) is exact in double as it is in float32, so
++    // both sides agree on cell placement and fractional offset everywhere,
++    // including at exact half-integer ties.
++    const long rounded_u = std::lround(static_cast<double>(visibilities[v]));
++    const long rounded_v = std::lround(static_cast<double>(visibilities[v + 1]));
++    const long i0 = rounded_u + centre_index;
++    const long j0 = rounded_v + centre_index;
++    const double fx = static_cast<double>(visibilities[v]) - static_cast<double>(rounded_u);
++    const double fy = static_cast<double>(visibilities[v + 1]) - static_cast<double>(rounded_v);
++    double sum_x = 0.0, sum_y = 0.0;
++    for (int j = -half; j < half; ++j) {
++      sum_x += esKernel(static_cast<float>(fx - j), options.support, options.beta);
++      sum_y += esKernel(static_cast<float>(fy - j), options.support, options.beta);
++    }
++    if (sum_x == 0.0 || sum_y == 0.0) continue;
++    for (int jy = -half; jy < half; ++jy) {
++      const long cy = j0 + jy;
++      if (cy < 0 || cy >= static_cast<long>(g)) continue;
++      const double wy = esKernel(static_cast<float>(fy - jy), options.support, options.beta) / sum_y;
++      if (wy == 0.0) continue;
++      for (int jx = -half; jx < half; ++jx) {
++        const long cx = i0 + jx;
++        if (cx < 0 || cx >= static_cast<long>(g)) continue;
++        const double wx =
++            esKernel(static_cast<float>(fx - jx), options.support, options.beta) / sum_x;
++        const double weight = wx * wy;
++        grid[2 * (static_cast<std::size_t>(cy) * g + static_cast<std::size_t>(cx))] +=
++            weight * static_cast<double>(visibilities[v + 2]);
++        grid[2 * (static_cast<std::size_t>(cy) * g + static_cast<std::size_t>(cx)) + 1] +=
++            weight * static_cast<double>(visibilities[v + 3]);
++      }
++    }
++  }
++  return grid;
++}
++
++Options parseOptions(int argc, char** argv) {
++  Options options;
++  for (int i = 1; i < argc; ++i) {
++    const std::string argument = argv[i];
++    auto value = [&](const char* name) -> const char* {
++      if (i + 1 >= argc) {
++        std::fprintf(stderr, "mx-metal-probe: %s needs a value\n", name);
++        std::exit(2);
++      }
++      return argv[++i];
++    };
++    if (argument == "--nvis") {
++      options.nvis = std::strtoull(value("--nvis"), nullptr, 10);
++    } else if (argument == "--grid") {
++      options.grid = std::strtoull(value("--grid"), nullptr, 10);
++    } else if (argument == "--support") {
++      options.support = std::strtoull(value("--support"), nullptr, 10);
++    } else if (argument == "--beta") {
++      options.beta = std::strtof(value("--beta"), nullptr);
++    } else if (argument == "--quiet") {
++      options.quiet = true;
++    } else if (argument == "--dump") {
++      options.dump_prefix = value("--dump");
++    } else {
++      std::fprintf(stderr, "mx-metal-probe: unknown argument %s\n", argument.c_str());
++      std::exit(2);
++    }
++  }
++  return options;
++}
++
++}  // namespace
++
++int main(int argc, char** argv) {
++  const Options options = parseOptions(argc, argv);
++  const mx::metal::DeviceInfo info = mx::metal::deviceInfo();
++
++  // Kernel-accuracy check first: the arguments gridding actually evaluates.
++  {
++    std::vector<float> arguments;
++    for (int j = -static_cast<int>(options.support) / 2;
++         j < static_cast<int>(options.support) / 2; ++j) {
++      for (int step = 0; step < 1000; ++step) {
++        const float f = -0.5f + static_cast<float>(step) / 1000.0f;
++        arguments.push_back(f - static_cast<float>(j));
++      }
++    }
++    for (float boundary : {-3.0f, -2.9995f, -0.5f, 0.0f, 0.4995f, 2.9995f, 3.0f}) {
++      arguments.push_back(boundary);
++    }
++    const mx::metal::KernelProbeResult kernel = mx::metal::evalEsKernel(
++        arguments, static_cast<float>(options.support), options.beta);
++    double fast_worst = 0.0, precise_worst = 0.0;
++    for (std::size_t i = 0; i < arguments.size(); ++i) {
++      const double reference =
++          esKernel(arguments[i], static_cast<float>(options.support), options.beta);
++      if (reference <= 0.0) continue;
++      fast_worst = std::max(fast_worst, std::fabs(kernel.fast[i] - reference) / reference);
++      precise_worst =
++          std::max(precise_worst, std::fabs(kernel.precise[i] - reference) / reference);
++    }
++    constexpr double kKernelTolerance = 1.0e-6;
++    const bool kernel_passed = precise_worst <= kKernelTolerance;
++    std::printf("kernel_check points=%zu fast_rel_worst=%.3g precise_rel_worst=%.3g "
++                "tolerance=%.0e status=%s\n",
++                arguments.size(), fast_worst, precise_worst, kKernelTolerance,
++                kernel_passed ? "PASS" : "FAIL");
++    if (!kernel_passed) return 1;
++  }
++
++  mx::metal::GridAccumInput input;
++  input.grid_size = options.grid;
++  input.support = options.support;
++  input.beta = options.beta;
++
++  std::mt19937_64 random(20261018);  // fixed seed: the probe is a test
++  std::uniform_real_distribution<float> uv(-0.45f * static_cast<float>(options.grid),
++                                           0.45f * static_cast<float>(options.grid));
++  std::normal_distribution<float> flux(1.0f, 0.25f);
++  input.visibilities.resize(4 * options.nvis);
++  for (std::size_t v = 0; v < options.nvis; ++v) {
++    input.visibilities[4 * v + 0] = uv(random);
++    input.visibilities[4 * v + 1] = uv(random);
++    input.visibilities[4 * v + 2] = flux(random);
++    input.visibilities[4 * v + 3] = flux(random) * 0.5f;
++  }
++  // Exact half-integer coordinates pin the tie rule of the rounding: the CPU
++  // uses lround and the GPU round(), both round-half-away-from-zero. Ties are
++  // exactly representable in float32, and they are the cases where a differing
++  // rule would move a whole footprint by one cell.
++  constexpr std::size_t kTies = 64;
++  input.visibilities.resize(4 * (options.nvis + kTies), 0.0f);
++  for (std::size_t k = 0; k < kTies; ++k) {
++    const float magnitude = 0.5f + static_cast<float>(k);
++    input.visibilities[4 * (options.nvis + k) + 0] = (k % 2 == 0) ? magnitude : -magnitude;
++    input.visibilities[4 * (options.nvis + k) + 1] = (k % 4 < 2) ? magnitude : -magnitude;
++    input.visibilities[4 * (options.nvis + k) + 2] = 1.0f;
++    input.visibilities[4 * (options.nvis + k) + 3] = -0.5f;
++  }
++
++  if (!info.available) {
++    std::printf("metal_probe status=SKIP reason=no-metal-device\n");
++    return 0;
++  }
++
++  const std::vector<double> reference = referenceGrid(options, input.visibilities);
++  const mx::metal::GridAccumResult gpu = mx::metal::gridAccumulate(input);
++  if (gpu.grid.size() != reference.size()) {
++    std::fprintf(stderr, "mx-metal-probe: grid size mismatch\n");
++    return 1;
++  }
++
++  if (!options.dump_prefix.empty()) {
++    auto write = [](const std::string& path, const void* data, std::size_t bytes) {
++      FILE* file = std::fopen(path.c_str(), "wb");
++      if (file == nullptr || std::fwrite(data, 1, bytes, file) != bytes) {
++        std::fprintf(stderr, "mx-metal-probe: cannot write %s\n", path.c_str());
++        std::exit(2);
++      }
++      std::fclose(file);
++    };
++    write(options.dump_prefix + "-vis.f32", input.visibilities.data(),
++          input.visibilities.size() * sizeof(float));
++    std::vector<float> reference_float(reference.begin(), reference.end());
++    write(options.dump_prefix + "-ref.f32", reference_float.data(),
++          reference_float.size() * sizeof(float));
++    write(options.dump_prefix + "-gpu.f32", gpu.grid.data(), gpu.grid.size() * sizeof(float));
++    FILE* meta = std::fopen((options.dump_prefix + "-meta.txt").c_str(), "w");
++    if (meta == nullptr) {
++      std::fprintf(stderr, "mx-metal-probe: cannot write metadata\n");
++      return 2;
++    }
++    std::fprintf(meta, "grid=%zu support=%zu beta=%.9g nvis=%zu\n", options.grid,
++                 options.support, options.beta, options.nvis);
++    std::fclose(meta);
++  }
++
++  double max_abs_reference = 0.0;
++  double sum_square_difference = 0.0;
++  double sum_square_reference = 0.0;
++  double max_abs_difference = 0.0;
++  std::size_t mismatched_zero = 0, missed_significant = 0, significant_cells = 0;
++  for (std::size_t i = 0; i < gpu.grid.size(); ++i) {
++    const double a = gpu.grid[i];
++    const double b = reference[i];
++    const double difference = std::fabs(a - b);
++    max_abs_difference = std::max(max_abs_difference, difference);
++    max_abs_reference = std::max(max_abs_reference, std::fabs(b));
++    sum_square_difference += difference * difference;
++    sum_square_reference += b * b;
++    if (b == 0.0 && a != 0.0) ++mismatched_zero;
++    if (std::fabs(b) > 1e-9 * max_abs_reference || b != 0.0) {
++      if (b != 0.0) ++significant_cells;
++      if (b != 0.0 && a == 0.0) ++missed_significant;
++    }
++  }
++  const double rms_difference = std::sqrt(sum_square_difference / gpu.grid.size());
++  const double rms_reference = std::sqrt(sum_square_reference / gpu.grid.size());
++  const double relative_max = max_abs_difference / std::max(max_abs_reference, 1e-30);
++  const double relative_rms = rms_difference / std::max(rms_reference, 1e-30);
++  const double throughput =
++      gpu.gpu_seconds > 0.0 ? static_cast<double>(options.nvis) / gpu.gpu_seconds / 1e6 : 0.0;
++
++  // Predeclared acceptance: float32 accumulation noise against a float64 twin.
++  constexpr double kTolerance = 1.0e-5;
++  const bool passed = relative_max <= kTolerance && relative_rms <= kTolerance &&
++                      mismatched_zero == 0 && missed_significant == 0;
++  if (!passed) {
++    // Diagnosable failures: list the worst cells with their coordinates.
++    std::vector<std::size_t> worst;
++    for (std::size_t i = 0; i < gpu.grid.size(); ++i) {
++      if (std::fabs(gpu.grid[i] - reference[i]) > kTolerance * max_abs_reference) {
++        worst.push_back(i);
++      }
++    }
++    std::sort(worst.begin(), worst.end(), [&](std::size_t a, std::size_t b) {
++      return std::fabs(gpu.grid[a] - reference[a]) > std::fabs(gpu.grid[b] - reference[b]);
++    });
++    std::printf("cells-above-tolerance=%zu of %zu\n", worst.size(), gpu.grid.size());
++    for (std::size_t k = 0; k < std::min<std::size_t>(worst.size(), 8); ++k) {
++      const std::size_t i = worst[k];
++      std::printf("  worst[%zu] cell=(%zu,%zu) component=%zu ref=%.9g gpu=%.9g diff=%.3g\n", k,
++                  i / 2 / options.grid, i / 2 % options.grid, i % 2,
++                  reference[i], gpu.grid[i], gpu.grid[i] - reference[i]);
++    }
++  }
++
++  if (!options.quiet) {
++    std::printf("device=%s max_threads=%zu working_set=%.1fGiB\n", info.name.c_str(),
++                info.max_threads_per_threadgroup,
++                static_cast<double>(info.recommended_working_set) / (1u << 30));
++    std::printf("grid=%zu support=%zu beta=%.2f nvis=%zu tiles=32x32\n", options.grid,
++                options.support, options.beta, options.nvis);
++    std::printf("nonzero-reference-cells=%zu missed=%zu unexpected-nonzero=%zu\n",
++                significant_cells, missed_significant, mismatched_zero);
++  }
++  std::printf("metal_probe device=\"%s\" nvis=%zu grid=%zu gpu_ms=%.2f wall_ms=%.2f "
++              "throughput_Mvis_s=%.1f max_abs_diff=%.3g max_abs_ref=%.3g rel_max=%.3g "
++              "rel_rms=%.3g tolerance=%.0e status=%s\n",
++              info.name.c_str(), options.nvis, options.grid, gpu.gpu_seconds * 1e3,
++              gpu.wall_seconds * 1e3, throughput, max_abs_difference, max_abs_reference,
++              relative_max, relative_rms, kTolerance, passed ? "PASS" : "FAIL");
++  return passed ? 0 : 1;
++}
