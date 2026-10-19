@@ -30,6 +30,7 @@ fi
   "$ROOT/work/wsclean/metal/metaldevice.mm" "$ROOT/work/wsclean/metal/metalinversion.mm" \
   
   "$DUCC0/wgridder/wgridder.cc" \
+  "$ROOT/build-mx-metal/_deps/schaapcommon-build/libschaapcommon.a" \
   "$DUCC0/math/gridding_kernel.cc" "$DUCC0/math/gl_integrator.cc" \
   "$DUCC0/infra/threading.cc" "$DUCC0/infra/string_utils.cc" "$DUCC0/infra/mav.cc" \
   -framework Metal -framework Foundation \

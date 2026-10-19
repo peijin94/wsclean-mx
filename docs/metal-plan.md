@@ -733,3 +733,35 @@ Fixed by porting the cost model exactly. wsclean builds and links with it; the
 standalone w-layer harness still needs ducc0's FFT object on its link line (the
 vendored copy ships no `fftnd.cc`, so `detail_fft::c2c<float>` does not resolve
 there - wsclean resolves it through schaapcommon's ducc0 target).
+
+### w-layers, fifth pass: the cost-model fix, and what it did and did not fix
+
+Fixing `getNuNv` (previous section) changed the geometry inside wsclean from
+supp 8 / nu 350 to supp 7 / nu 378 with `nplanes=125` on LOFAR 3C196 - and the
+w-path still refused, this time for a new reason: ducc0's chosen support is **7
+(odd)**, and the Metal kernels validated `support % 2 == 0`. The kernels were
+also hardcoded to `kSupport = 6` / `kHalfSupport = 3`, so they could only ever
+grid with W=6 while the layout assumed W=7.
+
+Both are now parameterised: the MSL source is substituted per call
+(`mslSource(support)` -> `kSupport`, `kHalfSupport`, `kLowestOffset`), and the
+window anchor uses `kLowestOffset = (W-1)/2`, which is correct for both
+parities (W=6: -2..+3, W=7: -3..+3).
+
+Measured, `LOFAR_3C196.ms`, 1024x1024 at 4", `-niter 0`, one channel:
+
+| | inversion | image |
+|---|---|---|
+| CPU (ducc0) | 0.538 s | peak 0.57244 |
+| GPU (Metal w-layers) | 2.401 s | peak 0.58073 |
+
+Peak ratio 1.0145, sum ratio 0.9926, field rms agrees to 0.03% - and the images
+are **decorrelated** (correlation 0.056, difference rms 1.37x the signal). So the
+power is right and the phases are not: the same signature as the w-sweep, now at
+full size. The remaining defect is in the kernel/placement plumbing, not in the
+plane geometry - the layout now satisfies ducc0's invariant
+(`wmin + wshift = dw(1 - supp/2)` holds exactly).
+
+Verdict: do not wire. The w-path is 4.5x slower than ducc0 (full per-plane 2-D
+FFTs; the band-limited `uranges`/`vranges` transform is still not implemented)
+and not equivalent. `-mgpu` stays on the 2-D path with `w_gridding = false`.
