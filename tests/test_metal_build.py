@@ -148,7 +148,7 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('4.0 / (static_cast<double>(grid)', impl)
         # 3. ducc0's w-tap formula, and explicitly not PolynomialKernel::eval
         self.assertIn('z = (z_off - nth)*2 + (W-1)', impl)
-        self.assertIn('the nth piece of the same polynomial', impl)
+        self.assertIn('nth piece of the same polynomial', impl)
         # the wired path must stay 2-D while the scale is open
         gridder = self.read('work/wsclean/wgridder/wgridder.h')
         self.assertIn('input.w_gridding = false;', gridder)
@@ -166,7 +166,7 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('if constexpr (std::is_same<NumT, float>::value', gridder)
         self.assertIn('metal_done ? "used" : "refused, falling back to ducc0"', gridder)
         impl = self.read('work/wsclean/metal/metalinversion.mm')
-        for anchor in ('inversion2DSupported', 'M_PI * w_max * lambda * lm_sq',
+        for anchor in ('inversionSupported', 'M_PI * w_max * lambda * lm_sq',
                        'w-term too large for a 2-D inversion', 'n_channels'):
             self.assertIn(anchor, impl, f'{anchor} is part of the 2-D gate')
         header = self.read('work/wsclean/metal/metalinversion.h')
