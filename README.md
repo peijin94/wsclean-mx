@@ -8,16 +8,20 @@ that ships in the LINC 5.2.1 container (`2d5c1ed8`, WSClean 3.7). It builds
 natively for arm64, moves serial FFT and deconvolution work onto all cores,
 and removes I/O and locking bottlenecks.
 It also fixes an upstream bug that corrupts 2048² images on macOS. Dirty/PSF
-products agree with the fixed upstream reference at approximately 1e-6 relative
-RMS on the tested snapshot. Multiscale cleaned products differ at percent level;
-their scientific acceptance needs broader validation (see the audit below).
+products agree with the fixed upstream reference at float32 rounding
+(~1e-7 relative RMS). On a real-source field (LOFAR 3C196) the multiscale
+cleaned products agree at the same floor in every measured quantity; on the
+noise-dominated quiet-Sun snapshot they sit inside the reference's own
+chaotic spread (50-rerun family, max and p95 criteria). Details:
+[docs/science-gates.md](docs/science-gates.md) and
+[CHANGELOG.md](CHANGELOG.md).
 
 On a fanless MacBook Air M2 (16 GB), a full-sky 2048² multiscale clean
 (niter 3000) of one OVRO-LWA snapshot takes:
 
 | Build | Wall time |
 |-------|-----------|
-| **wsclean-mx** (native arm64, patches 1–11) | **11.4 s** |
+| **wsclean-mx** (native arm64, CPU patch stack) | **11.4 s** |
 | upstream WSClean (native arm64, with the padding fix) | 23.7 s |
 | LINC 5.2.1 container (Apple `container`, Rosetta)\* | 43.4 s |
 | LINC 5.2.1 on Linux, 2× Xeon Silver 4214, `-j 8`\* | 49.3 s |
