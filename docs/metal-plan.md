@@ -567,3 +567,35 @@ Two things the attempt did establish:
 Next: debug it in `bench/metal/ducc0_image_check.cpp` against
 `ms2dirty(do_wgridding=true)` on synthetic w != 0 data, where the reference is
 pinned and iterations cost seconds, and only then wire it back.
+
+### w-layers: four bugs found, one left
+
+The first attempt was 670x wrong. Bisecting in
+`bench/metal/wlayer_check.cpp` (`scripts/metal_wlayer_check.sh`, seconds per
+run, reference = `ms2dirty_bda(do_wgridding=true)` on the same synthetic data)
+found four distinct defects, three now fixed:
+
+1. **Hard plane assignment** (fixed). ducc0 does not bin a visibility into one
+   w-plane: `x2grid_c<true>` spreads it over `support` planes with the
+   polynomial's w-taps. A hard assignment loses the interpolation entirely.
+2. **Missing FFT normalisation** (fixed). `detail_fft::c2c` is unnormalised, so
+   a backward 2-D transform scales by `grid^2`, and the Hermitian half-plane
+   extraction accounts for another 2 per axis: the plane needs `4/grid^2`.
+   Measured signature: the image was exactly `grid^2/4` too large at every grid
+   size, which is what identified it.
+3. **Wrong kernel evaluator** (fixed). `PolynomialKernel::eval()` takes the
+   argument *normalised* to [-1,1]; the w-tap needs ducc0's
+   `z = (z_off - nth)*2 + (W-1)` with `z_off` the distance **in planes** and
+   `nth` selecting the polynomial piece - i.e. exactly what the shader's
+   `poly_sample` does with a cell-distance argument. Using `eval()` instead gave
+   a weight sum that no constant could correct.
+4. **Still open: a uniform factor 2.99** between my image and ducc0's
+   w-gridded one, with the peak then matching to 2e-4 and the residual at ~1%
+   rms (the same order as the 2-D harness's reference-kernel caveat). Three
+   bugs down, this one is not a shape error - the ratio is the same in peak and
+   sum - so it is a single missing normalisation in the plane-sum path, and it
+   must be understood, not divided out by a constant.
+
+`-mgpu` therefore still uses the verified 2-D path. The harness, the debug hooks
+(`MX_METAL_DEBUG_PLANES`, `MX_METAL_DEBUG_NOSCREEN`, `MX_METAL_DEBUG_SCALE`) and
+the three fixes stay in the tree so the next pass starts from measurements.

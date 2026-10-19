@@ -1,0 +1,631 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Mon, 19 Oct 2026 13:21:42 -0400
+Subject: [PATCH 16/16] Metal: w-layer inversion - three bugs fixed, one scale
+ still open
+
+The w-path now: spreads each visibility over support planes with ducc0's own
+w-taps (TemplateKernel::eval2s: z = (z_off-nth)*2 + (W-1) with z_off the
+distance in planes - i.e. the shader's poly_sample, NOT PolynomialKernel::eval,
+whose argument is normalised to [-1,1]), and normalises the backward FFT by
+4/grid^2 (ducc0's detail_fft::c2c is unnormalised, and the Hermitian half-plane
+extraction accounts for 2 per axis).
+
+Measured against ducc0's w-gridded inversion on identical data at w=0: with
+those three fixed, the peak agrees to 2e-4 and the residual is ~1% rms - the
+same order as the 2-D harness's reference-kernel caveat - but only after an
+unexplained uniform factor 2.99. That factor is NOT a shape error (peak and sum
+ratios agree), so it is one missing normalisation in the plane-sum path; it must
+be understood rather than divided out, so -mgpu keeps using the verified 2-D
+path and refuses where w matters.
+
+Also adds bench/metal/wlayer_check.cpp + scripts/metal_wlayer_check.sh: the fast
+bisection harness (seconds per run, pinned reference) that found these, plus
+debug hooks MX_METAL_DEBUG_{PLANES,NOSCREEN,SCALE} for the next pass.
+
+diff --git a/metal/metalinversion.h b/metal/metalinversion.h
+index e8369cad..2a218b5a 100644
+--- a/metal/metalinversion.h
++++ b/metal/metalinversion.h
+@@ -1,35 +1,38 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ // Copyright (C) 2026 Peijin Zhang
+ //
+-// Metal-backed 2-D inversion: the same operation ducc0's ms2dirty() performs
+-// with do_wgridding=false, but the gridding step runs on the GPU.
++// Metal-backed inversion: the operation ducc0's ms2dirty() performs, with the
++// gridding step on the GPU.
+ //
+-// Why only 2-D: ducc0's w-gridding loops w-planes and applies a w-screen per
+-// plane, which the Metal kernels do not do yet. The gate
+-// inversion2DSupported() therefore refuses whenever the w-term matters, and the
+-// caller falls back to ducc0. That keeps the integration honest - a run is
+-// either doing exactly the same maths as the CPU path or it is not using this
+-// code at all.
++//  * `w_gridding = false`: one grid + ducc0's Hartley chain (2-D inversion).
++//  * `w_gridding = true`: ducc0's w-plane structure - one grid per w-plane, a
++//    2-D backward FFT per plane, the w-screen applied on extraction, then the
++//    global kernel corrections.
+ //
+-// The forward chain is ducc0's own (complex2hartley, hartley2_2D, and the
+-// inner-window extraction with krn->corfunc), so only the accumulation is new.
++// Geometry: ducc0's cell is 1/(pixsize*nu) wavelengths, so the image pixel stays
++// pixsize. The Metal grid has nu_metal >= nu cells (kernel tile) covering the
++// same uv extent, so its cells are pixsize*nu_metal and the kernel corrections
++// are sampled at 1/nu_metal.
++//
++// Normalisation: ducc0's detail_fft::c2c is UNNORMALISED, so a backward 2-D
++// transform scales by grid^2; the w-branch divides that back out. Getting it
++// wrong scales the whole image by grid^2, which is how the first attempt failed.
+ 
+ #ifndef MX_METAL_METALINVERSION_H
+ #define MX_METAL_METALINVERSION_H
+ 
+ #include <complex>
+ #include <cstddef>
+-#include <vector>
+ 
+ namespace mx::metal {
+ 
+-struct Inversion2DInput {
++struct InversionInput {
+   std::size_t n_rows = 0;
+-  const double* uvws = nullptr;            // (n_rows, 3), metres
+-  const double* frequencies = nullptr;     // (n_channels), Hz, ascending
++  const double* uvws = nullptr;             // (n_rows, 3), metres
++  const double* frequencies = nullptr;      // (n_channels), Hz, ascending
+   std::size_t n_channels = 0;
+   const std::complex<float>* ms = nullptr;  // (n_rows * n_channels), row-major
+-  double pixel_size_x = 0.0;           // radians
++  double pixel_size_x = 0.0;                // radians
+   double pixel_size_y = 0.0;
+   double epsilon = 1.0e-4;
+   std::size_t n_threads = 1;
+@@ -41,20 +44,17 @@ struct Inversion2DInput {
+   double m_shift = 0.0;
+   std::size_t image_width = 0;
+   std::size_t image_height = 0;
++  bool w_gridding = false;
+ };
+ 
+-// True when this data set and configuration can be done by the Metal path:
+-// a Metal device, one frequency, and a w-term small enough that the 2-D
+-// approximation is below the gridding accuracy. The w threshold is the standard
+-// Fresnel criterion, pi*|w|*lambda*(l^2+m^2)_max < 0.1 rad, evaluated at the
+-// image corners.
+-bool inversion2DSupported(const Inversion2DInput& input);
+-
+-// Fills `dirty` (image_width * image_height, row-major) with the dirty image.
+-// Returns false if the Metal path could not be used; the caller must then fall
+-// back. On success the result matches ducc0's 2-D inversion to the accuracy
+-// documented in docs/metal-plan.md.
+-bool inversion2D(const Inversion2DInput& input, float* dirty);
++// True when the Metal path can run at all: a Metal device, no image shift, and
++// either w-gridding enabled or a w-term small enough for a 2-D inversion
++// (pi*|w|*lambda*(l^2+m^2) <= 0.1 rad at the image corners).
++bool inversionSupported(const InversionInput& input);
++
++// Fills `dirty` (image_width * image_height, row-major). Returns false if the
++// Metal path could not be used, stating the reason on stderr.
++bool inversion(const InversionInput& input, float* dirty);
+ 
+ }  // namespace mx::metal
+ 
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 2a22ac1c..0af67d5c 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -13,6 +13,7 @@
+ #include <cmath>
+ #include <complex>
+ #include <cstdio>
++#include <cstdlib>
+ #include <exception>
+ #include <vector>
+ 
+@@ -20,13 +21,21 @@ namespace mx::metal {
+ namespace {
+ 
+ constexpr double kSpeedOfLight = 299792458.0;
++constexpr double kTwoPi = 6.283185307179586476925286766559;
+ 
+-// ducc0's getNuNv() cost model, restricted to the 2-D kernel family: minimise
+-// fftcost(nu,nv) + gridcost(nvis,supp). Choosing the kernel by "smallest
+-// support" instead selects a different W, and because the grid correction comes
+-// from the same kernel object the whole image then lands on a different scale.
++// Debug hooks, so the w-layer maths can be bisected without recompiling:
++//   MX_METAL_DEBUG_PLANES=<n>  force nplanes (0 = ducc0's formula)
++//   MX_METAL_DEBUG_NOSCREEN=1  skip the w-screen (valid only for w = 0)
++//   MX_METAL_DEBUG_SCALE=<s>   multiply the final image by s
++double debugDouble(const char* name, double fallback) {
++  const char* value = std::getenv(name);
++  if (value == nullptr || *value == '\0') return fallback;
++  return std::strtod(value, nullptr);
++}
++
++// ducc0's getNuNv() cost model, restricted to the 2-D kernel family.
+ std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t image_size,
+-                         std::size_t rows, double node_epsilon, double& ofactor_out) {
++                         std::size_t rows, double& ofactor_out) {
+   constexpr double kNrefFft = 2048.0, kCostRefFft = 0.0693;
+   constexpr std::size_t kSimdWidth = 4;  // float, NEON
+   constexpr double kNthreads = 8.0;      // ducc0's reference thread count
+@@ -46,7 +55,6 @@ std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t
+                        static_cast<double>(supp * nvec * kSimdWidth +
+                                            (2 * nvec + 1) * (supp + 3) * kSimdWidth);
+     grid_cost /= kNthreads;
+-    (void)node_epsilon;
+     const double cost = fft_cost + grid_cost;
+     if (cost < best_cost) {
+       best_cost = cost;
+@@ -58,11 +66,51 @@ std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t
+   return best;
+ }
+ 
+-}  // namespace
++// nm1 = sqrt(1-l^2-m^2)-1, in the accurate form ducc0 uses near zero.
++double nm1Of(double l, double m) {
++  const double sum = l * l + m * m;
++  if (sum >= 1.0) return -std::sqrt(sum) - 1.0;
++  return -sum / (std::sqrt(1.0 - sum) + 1.0);
++}
+ 
+-namespace {
++struct PlaneLayout {
++  std::size_t nplanes = 1;
++  double dw = 0.0;
++  double wmin = 0.0;
++  double wshift = 0.0;
++  double nshift = 0.0;
++};
+ 
+-bool supported(const Inversion2DInput& input, const char** why) {
++// ducc0's countRanges() w-plane layout, with the Metal grid's ofactor.
++PlaneLayout planeLayout(const InversionInput& input, std::size_t grid, std::size_t support,
++                        double w_min, double w_max) {
++  PlaneLayout layout;
++  const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
++  const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
++  double nm1min = 1e300, nm1max = -1e300;
++  for (int ci = 0; ci < 2; ++ci) {
++    const double l = x0 + ci * static_cast<double>(input.image_width - 1) * input.pixel_size_x;
++    for (int cj = 0; cj < 2; ++cj) {
++      const double m = y0 + cj * static_cast<double>(input.image_height - 1) * input.pixel_size_y;
++      const double value = nm1Of(l, m);
++      nm1min = std::min(nm1min, value);
++      nm1max = std::max(nm1max, value);
++    }
++  }
++  layout.nshift = -0.5 * (nm1max + nm1min);
++  const double ofactor =
++      static_cast<double>(grid) / static_cast<double>(std::max(input.image_width, input.image_height));
++  const double amplitude =
++      std::max(std::fabs(nm1max + layout.nshift), std::fabs(nm1min + layout.nshift));
++  layout.dw = 0.5 / ofactor / std::max(amplitude, 1e-30);
++  const double raw = (w_max - w_min) / layout.dw + static_cast<double>(support);
++  layout.nplanes = std::max<std::size_t>(1, static_cast<std::size_t>(raw));
++  layout.wmin = 0.5 * (w_min + w_max) - 0.5 * static_cast<double>(layout.nplanes - 1) * layout.dw;
++  layout.wshift = layout.dw - 0.5 * static_cast<double>(support) * layout.dw - layout.wmin;
++  return layout;
++}
++
++bool supported(const InversionInput& input, const char** why) {
+   if (input.n_rows == 0 || input.uvws == nullptr || input.ms == nullptr) {
+     *why = "no rows";
+     return false;
+@@ -79,8 +127,6 @@ bool supported(const Inversion2DInput& input, const char** why) {
+     *why = "empty image";
+     return false;
+   }
+-  // The 2-D path does not implement ducc0's image shift yet; refuse rather than
+-  // silently produce a shifted image.
+   if (std::fabs(input.l_shift) > 1e-12 || std::fabs(input.m_shift) > 1e-12) {
+     *why = "image shift not implemented";
+     return false;
+@@ -89,9 +135,7 @@ bool supported(const Inversion2DInput& input, const char** why) {
+     *why = "no Metal device";
+     return false;
+   }
+-  // Fresnel criterion: ignoring w blurs the image by ~pi*|w|*lambda*(l^2+m^2).
+-  // Require that to stay below 0.1 rad at the image corners.
+-  // Worst case over the band: the longest wavelength has the largest w-term.
++  if (input.w_gridding) return true;
+   double lambda = 0.0;
+   for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+     lambda = std::max(lambda, kSpeedOfLight / input.frequencies[ch]);
+@@ -106,8 +150,8 @@ bool supported(const Inversion2DInput& input, const char** why) {
+   const double w_error = M_PI * w_max * lambda * lm_sq;
+   if (w_error > 0.1) {
+     std::fprintf(stderr,
+-                 "[mx-metal] w-gate: w_max=%.1f m lambda=%.2f m l_max=%.3g rad "
+-                 "lm_sq=%.3g error=%.3g rad\n",
++                 "[mx-metal] w-gate: w_max=%.1f m lambda=%.2f m l_max=%.3g rad lm_sq=%.3g "
++                 "error=%.3g rad\n",
+                  w_max, lambda, l_max, lm_sq, w_error);
+     *why = "w-term too large for a 2-D inversion";
+     return false;
+@@ -115,119 +159,300 @@ bool supported(const Inversion2DInput& input, const char** why) {
+   return true;
+ }
+ 
++struct Geometry {
++  std::size_t grid = 0;  // nu_metal cells per axis
++  std::size_t nu = 0;    // ducc0's grid size for the same pixsize
++  double cell_x = 0.0;   // u cells per wavelength
++  double cell_y = 0.0;
++  std::vector<double> cfu;
++  std::vector<double> cfv;
++  std::shared_ptr<ducc0::PolynomialKernel> kernel;
++};
++
++bool makeGeometry(const InversionInput& input, std::size_t& image_size, Geometry& out) {
++  const std::vector<std::size_t> candidates =
++      ducc0::getAvailableKernels<float>(input.epsilon, 2, 1.1, 2.0);
++  if (candidates.empty()) return false;
++  image_size = std::max(input.image_width, input.image_height);
++  double ofactor = 0.0;
++  const std::size_t index = chooseKernel(candidates, image_size, input.n_rows, ofactor);
++  out.kernel = ducc0::selectKernel(index);
++  if (!out.kernel) return false;
++  out.nu = 2 * ducc0::good_size_complex(static_cast<std::size_t>(image_size * ofactor * 0.5) + 1);
++  out.grid = ((out.nu + 31) / 32) * 32;
++  // ducc0's cell is 1/(pixsize*nu) wavelengths; ours covers the same uv extent
++  // with grid cells, so a visibility's cell coordinate is u_lambda*pixsize*grid.
++  out.cell_x = input.pixel_size_x * static_cast<double>(out.grid);
++  out.cell_y = input.pixel_size_y * static_cast<double>(out.grid);
++  out.cfu = out.kernel->corfunc(input.image_width / 2 + 1, 1.0 / static_cast<double>(out.grid), 1);
++  out.cfv = out.kernel->corfunc(input.image_height / 2 + 1, 1.0 / static_cast<double>(out.grid), 1);
++  return true;
++}
++
++void fillAccumInput(const InversionInput& input, const Geometry& geometry, GridAccumInput& accumulate) {
++  accumulate.grid_size = geometry.grid;
++  accumulate.support = geometry.kernel->support();
++  accumulate.kernel_degree = geometry.kernel->degree();
++  accumulate.kernel_coefficients.assign(geometry.kernel->Coeff().begin(),
++                                        geometry.kernel->Coeff().end());
++  accumulate.variant = Variant::kPoly;
++}
++
++// Roll the centred Metal grid to ducc0's DC-at-0 frame.
++void rollToDucc0Frame(const std::vector<float>& centred, std::size_t grid,
++                      std::vector<std::complex<float>>& out) {
++  for (std::size_t i = 0; i < grid; ++i) {
++    const std::size_t si = (i + grid / 2) % grid;
++    for (std::size_t j = 0; j < grid; ++j) {
++      const std::size_t sj = (j + grid / 2) % grid;
++      out[i * grid + j] = std::complex<float>(centred[2 * (si * grid + sj) + 0],
++                                              centred[2 * (si * grid + sj) + 1]);
++    }
++  }
++}
++
+ }  // namespace
+ 
+-bool inversion2DSupported(const Inversion2DInput& input) {
++bool inversionSupported(const InversionInput& input) {
+   const char* why = "";
+   return supported(input, &why);
+ }
+ 
+-
+-bool inversion2D(const Inversion2DInput& input, float* dirty) {
++bool inversion(const InversionInput& input, float* dirty) {
+   const char* why = "";
+   if (!supported(input, &why)) {
+     std::fprintf(stderr, "[mx-metal] refused: %s\n", why);
+     return false;
+   }
++  std::size_t image_size = 0;
++  Geometry geometry;
++  if (!makeGeometry(input, image_size, geometry)) {
++    std::fprintf(stderr, "[mx-metal] refused: no usable gridding kernel\n");
++    return false;
++  }
++  const std::size_t grid = geometry.grid;
++  const std::size_t image_pixels = input.image_width * input.image_height;
++  std::fill(dirty, dirty + image_pixels, 0.0f);
+ 
+-  // ducc0's kernel choice, then the grid geometry that follows from it. With
+-  // pixsize = 1/nu one grid cell is one wavelength; the Metal grid must cover
+-  // the same number of wavelengths, so its cells are slightly wider when the
+-  // tile rounding adds cells.
+-  const std::vector<std::size_t> candidates =
+-      ducc0::getAvailableKernels<float>(input.epsilon, 2, 1.1, 2.0);
+-  if (candidates.empty()) return false;
+-  double ofactor = 0.0;
+-  const std::size_t image_size = std::max(input.image_width, input.image_height);
+-  const std::size_t index =
+-      chooseKernel(candidates, image_size, input.n_rows, input.epsilon, ofactor);
+-  const std::shared_ptr<ducc0::PolynomialKernel> kernel = ducc0::selectKernel(index);
+-  if (!kernel) return false;
+-  const std::size_t nu = 2 * ducc0::good_size_complex(
+-                                 static_cast<std::size_t>(image_size * ofactor * 0.5) + 1);
+-  const std::size_t nu_metal = ((nu + 31) / 32) * 32;
+-  const double pixel_size = 1.0 / static_cast<double>(nu);
+-  const double cell_scale = static_cast<double>(nu_metal) / static_cast<double>(nu);
+-
+-  const std::vector<double> cfu =
+-      kernel->corfunc(input.image_width / 2 + 1, 1.0 / static_cast<double>(nu_metal), 1);
+-  const std::vector<double> cfv =
+-      kernel->corfunc(input.image_height / 2 + 1, 1.0 / static_cast<double>(nu_metal), 1);
+-
+-  // ducc0's 2-D inversion loops the channels and accumulates the corrected
+-  // images, so each channel is gridded, transformed and corrected on its own.
+-  for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+-    const double lambda = kSpeedOfLight / input.frequencies[ch];
++  if (!input.w_gridding) {
++    for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
++      const double lambda = kSpeedOfLight / input.frequencies[ch];
++      GridAccumInput accumulate;
++      fillAccumInput(input, geometry, accumulate);
++      accumulate.visibilities.resize(4 * input.n_rows);
++      double v_max = 0.0;
++      for (std::size_t row = 0; row < input.n_rows; ++row) {
++        double u = input.uvws[3 * row + 0] / lambda;
++        double v = input.uvws[3 * row + 1] / lambda;
++        if (input.flip_u) u = -u;
++        if (input.flip_v) v = -v;
++        v_max = std::max(v_max, std::fabs(v));
++        accumulate.visibilities[4 * row + 0] = static_cast<float>(u * geometry.cell_x);
++        accumulate.visibilities[4 * row + 1] = static_cast<float>(v * geometry.cell_y);
++        const std::complex<float>& value = input.ms[row * input.n_channels + ch];
++        accumulate.visibilities[4 * row + 2] = value.real();
++        accumulate.visibilities[4 * row + 3] = value.imag();
++      }
++      GridAccumResult grid_result;
++      try {
++        grid_result = gridAccumulate(accumulate);
++      } catch (const std::exception& error) {
++        std::fprintf(stderr, "[mx-metal] gridding failed: %s\n", error.what());
++        return false;
++      }
++      std::vector<std::complex<float>> rolled(static_cast<std::size_t>(grid) * grid);
++      rollToDucc0Frame(grid_result.grid, grid, rolled);
++      std::size_t vlim = std::min<std::size_t>(
++          grid / 2, static_cast<std::size_t>(v_max * geometry.cell_y +
++                                             0.5 * static_cast<double>(geometry.kernel->support()) +
++                                             1.0));
++      bool uv_side_fast = true;
++      const std::size_t vlim2 = (image_size + 1) / 2 + (geometry.kernel->support() + 1) / 2;
++      if (vlim2 < vlim) {
++        vlim = vlim2;
++        uv_side_fast = false;
++      }
++      const ducc0::cmav<std::complex<float>, 2> grid_cmav(rolled.data(), {grid, grid});
++      ducc0::vmav<float, 2> hartley({grid, grid});
++      ducc0::detail_gridder::complex2hartley(grid_cmav, hartley, input.n_threads);
++      ducc0::detail_gridder::hartley2_2D(hartley, vlim, uv_side_fast, input.n_threads);
++      for (std::size_t i = 0; i < input.image_width; ++i) {
++        const int icfu = std::abs(static_cast<int>(input.image_width / 2) - static_cast<int>(i));
++        std::size_t i2 = grid - input.image_width / 2 + i;
++        if (i2 >= grid) i2 -= grid;
++        for (std::size_t j = 0; j < input.image_height; ++j) {
++          const int icfv = std::abs(static_cast<int>(input.image_height / 2) - static_cast<int>(j));
++          std::size_t j2 = grid - input.image_height / 2 + j;
++          if (j2 >= grid) j2 -= grid;
++          dirty[i * input.image_height + j] +=
++              static_cast<float>(hartley(i2, j2) * geometry.cfu[icfu] * geometry.cfv[icfv]);
++        }
++      }
++    }
++    return true;
++  }
++
++  // ---------------- w-layers: ducc0's x2dirty w-branch ----------------
++  std::vector<double> w_lambda(static_cast<std::size_t>(input.n_rows) * input.n_channels);
++  double w_min = 1e300, w_max = -1e300;
++  for (std::size_t row = 0; row < input.n_rows; ++row) {
++    for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
++      const double lambda = kSpeedOfLight / input.frequencies[ch];
++      double w = input.uvws[3 * row + 2] / lambda;
++      if (input.flip_w) w = -w;
++      w_lambda[row * input.n_channels + ch] = w;
++      w_min = std::min(w_min, w);
++      w_max = std::max(w_max, w);
++    }
++  }
++  PlaneLayout layout = planeLayout(input, grid, geometry.kernel->support(), w_min, w_max);
++  const double planes_override = debugDouble("MX_METAL_DEBUG_PLANES", 0.0);
++  if (planes_override > 0.0) {
++    layout.nplanes = static_cast<std::size_t>(planes_override);
++    layout.wmin = 0.5 * (w_min + w_max) - 0.5 * static_cast<double>(layout.nplanes - 1) * layout.dw;
++    layout.wshift = layout.dw - 0.5 * static_cast<double>(geometry.kernel->support()) * layout.dw -
++                    layout.wmin;
++  }
++  // A visibility is NOT assigned to one plane: ducc0 spreads it over `supp`
++  // planes with the polynomial kernel's w-weights (x2grid_c evaluates
++  // eval2s(x0, y0, xdw*(w0-in.w), nth, ...)). Hard assignment was the bug that
++  // left the first attempt 670x wrong - the w-interpolation has to be a kernel
++  // spread, exactly like the u/v gridding kernel.
++  const std::size_t support = geometry.kernel->support();
++  const double half_support = 0.5 * static_cast<double>(support);
++  std::vector<std::vector<std::size_t>> plane_items(layout.nplanes);
++  for (std::size_t row = 0; row < input.n_rows; ++row) {
++    for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
++      const double w = w_lambda[row * input.n_channels + ch];
++      long plane = static_cast<long>((w + layout.wshift) / layout.dw);
++      plane = std::max<long>(0, std::min<long>(plane, static_cast<long>(layout.nplanes) - 1));
++      plane_items[static_cast<std::size_t>(plane)].push_back(row * input.n_channels + ch);
++    }
++  }
++  // ducc0's w-tap (TemplateKernel::eval2s): z = (z_off - nth)*2 + (W-1), where
++  // z_off = (w_plane - w_vis)/dw is the distance in PLANES, and the value is the
++  // nth piece of the same polynomial the shader evaluates with poly_sample.
++  // PolynomialKernel::eval() is NOT this: its argument is normalised to [-1,1],
++  // which is why using it put the image out by a factor that no constant fixed.
++  const std::vector<double>& coefficients = geometry.kernel->Coeff();
++  const std::size_t degree = geometry.kernel->degree();
++  auto wWeight = [&](double w_visibility, double w_plane) {
++    const double distance = (w_plane - w_visibility) / layout.dw;
++    if (distance <= -half_support || distance >= half_support) return 0.0;
++    const double xrel = distance + half_support;
++    int nth = static_cast<int>(xrel);
++    if (nth > static_cast<int>(support) - 1) nth = static_cast<int>(support) - 1;
++    const double locx = ((xrel - static_cast<double>(nth)) - 0.5) * 2.0;
++    const std::size_t ofs = static_cast<std::size_t>(nth) * (degree + 1);
++    double value = coefficients[ofs];
++    for (std::size_t j = 1; j <= degree; ++j) value = value * locx + coefficients[ofs + j];
++    return value;
++  };
++
++  std::vector<std::complex<float>> grid_values(static_cast<std::size_t>(grid) * grid);
++  std::vector<double> phases(input.image_height / 2 + 1);
++  const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
++  const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
++  const bool skip_screen = debugDouble("MX_METAL_DEBUG_NOSCREEN", 0.0) > 0.0;
++  for (std::size_t pl = 0; pl < layout.nplanes; ++pl) {
++    const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
++    // Gather from the `support` buckets whose spread can reach this plane, with
++    // the w-kernel weight folded into the visibility.
++    std::vector<std::pair<std::size_t, double>> weighted_items;
++    const long first_bucket = static_cast<long>(pl) - static_cast<long>(support) + 1;
++    for (long bucket = std::max<long>(0, first_bucket); bucket <= static_cast<long>(pl); ++bucket) {
++      if (bucket >= static_cast<long>(layout.nplanes)) break;
++      for (const std::size_t item : plane_items[static_cast<std::size_t>(bucket)]) {
++        const double w = w_lambda[item];
++        const double weight = wWeight(w, w_plane);
++        if (weight != 0.0) weighted_items.emplace_back(item, weight);
++      }
++    }
++    if (weighted_items.empty()) continue;
+     GridAccumInput accumulate;
+-    accumulate.grid_size = nu_metal;
+-    accumulate.support = kernel->support();
+-    accumulate.kernel_degree = kernel->degree();
+-    accumulate.kernel_coefficients.assign(kernel->Coeff().begin(), kernel->Coeff().end());
+-    accumulate.variant = Variant::kPoly;
+-    accumulate.visibilities.resize(4 * input.n_rows);
+-    double v_max = 0.0;
+-    for (std::size_t row = 0; row < input.n_rows; ++row) {
++    fillAccumInput(input, geometry, accumulate);
++    accumulate.visibilities.resize(4 * weighted_items.size());
++    for (std::size_t k = 0; k < weighted_items.size(); ++k) {
++      const std::size_t item = weighted_items[k].first;
++      const double weight = weighted_items[k].second;
++      const std::size_t row = item / input.n_channels;
++      const std::size_t ch = item % input.n_channels;
++      const double lambda = kSpeedOfLight / input.frequencies[ch];
+       double u = input.uvws[3 * row + 0] / lambda;
+       double v = input.uvws[3 * row + 1] / lambda;
+       if (input.flip_u) u = -u;
+       if (input.flip_v) v = -v;
+-      v_max = std::max(std::fabs(v), v_max);
+-      accumulate.visibilities[4 * row + 0] = static_cast<float>(u * cell_scale);
+-      accumulate.visibilities[4 * row + 1] = static_cast<float>(v * cell_scale);
+-      const std::complex<float>& value = input.ms[row * input.n_channels + ch];
+-      accumulate.visibilities[4 * row + 2] = value.real();
+-      accumulate.visibilities[4 * row + 3] = value.imag();
++      accumulate.visibilities[4 * k + 0] = static_cast<float>(u * geometry.cell_x);
++      accumulate.visibilities[4 * k + 1] = static_cast<float>(v * geometry.cell_y);
++      const std::complex<float>& value = input.ms[item];
++      accumulate.visibilities[4 * k + 2] = static_cast<float>(value.real() * weight);
++      accumulate.visibilities[4 * k + 3] = static_cast<float>(value.imag() * weight);
+     }
+     GridAccumResult grid_result;
+     try {
+       grid_result = gridAccumulate(accumulate);
+     } catch (const std::exception& error) {
+-      std::fprintf(stderr, "[mx-metal] inversion2D falling back: %s\n", error.what());
++      std::fprintf(stderr, "[mx-metal] gridding failed: %s\n", error.what());
+       return false;
+     }
+-    if (ch == 0) std::fill(dirty, dirty + input.image_width * input.image_height, 0.0f);
+-
+-    // ducc0's frame is DC-at-0 while the Metal kernels centre the origin: roll by
+-    // half a grid so the Hartley band logic lines up.
+-    std::vector<float> rolled(grid_result.grid.size());
+-    for (std::size_t i = 0; i < nu_metal; ++i) {
+-      const std::size_t si = (i + nu_metal / 2) % nu_metal;
+-      for (std::size_t j = 0; j < nu_metal; ++j) {
+-        const std::size_t sj = (j + nu_metal / 2) % nu_metal;
+-        rolled[2 * (i * nu_metal + j) + 0] = grid_result.grid[2 * (si * nu_metal + sj) + 0];
+-        rolled[2 * (i * nu_metal + j) + 1] = grid_result.grid[2 * (si * nu_metal + sj) + 1];
+-      }
+-    }
++    rollToDucc0Frame(grid_result.grid, grid, grid_values);
+ 
+-    // ducc0's forward chain, verbatim (see grid2dirty_overwrite + grid2dirty_post).
+-    std::size_t vlim = std::min(
+-        nu_metal / 2, static_cast<std::size_t>(static_cast<double>(nu) * v_max * pixel_size +
+-                                               0.5 * static_cast<double>(kernel->support()) + 1.0));
+-    bool uv_side_fast = true;
+-    const std::size_t vlim2 = (image_size + 1) / 2 + (kernel->support() + 1) / 2;
+-    if (vlim2 < vlim) {
+-      vlim = vlim2;
+-      uv_side_fast = false;
+-    }
+-    const ducc0::cmav<std::complex<float>, 2> grid_cmav(
+-        reinterpret_cast<const std::complex<float>*>(rolled.data()), {nu_metal, nu_metal});
+-    ducc0::vmav<float, 2> hartley({nu_metal, nu_metal});
+-    ducc0::detail_gridder::complex2hartley(grid_cmav, hartley, input.n_threads);
+-    ducc0::detail_gridder::hartley2_2D(hartley, vlim, uv_side_fast, input.n_threads);
+-
+-    for (std::size_t i = 0; i < input.image_width; ++i) {
+-      const int icfu = std::abs(static_cast<int>(input.image_width / 2) - static_cast<int>(i));
+-      std::size_t i2 = nu_metal - input.image_width / 2 + i;
+-      if (i2 >= nu_metal) i2 -= nu_metal;
++    const ducc0::cfmav<std::complex<float>> grid_in(grid_values.data(), {grid, grid});
++    ducc0::vfmav<std::complex<float>> grid_out(grid_values.data(), {grid, grid});
++    ducc0::detail_fft::c2c(grid_in, grid_out, {0}, false, 1.0f, input.n_threads);
++    ducc0::detail_fft::c2c(grid_in, grid_out, {1}, false, 1.0f, input.n_threads);
++
++    const double w = w_plane;
++    for (std::size_t i = 0; i <= input.image_width / 2; ++i) {
++      const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
++      std::size_t ix = grid - input.image_width / 2 + i;
++      if (ix >= grid) ix -= grid;
++      std::size_t i2 = input.image_width - i;
++      std::size_t ix2 = grid - input.image_width / 2 + i2;
++      if (ix2 >= grid) ix2 -= grid;
++      for (std::size_t j = 0; j <= input.image_height / 2; ++j) {
++        const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
++        phases[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
++      }
+       for (std::size_t j = 0; j < input.image_height; ++j) {
+-        const int icfv = std::abs(static_cast<int>(input.image_height / 2) - static_cast<int>(j));
+-        std::size_t j2 = nu_metal - input.image_height / 2 + j;
+-        if (j2 >= nu_metal) j2 -= nu_metal;
++        const std::size_t jx = (grid - input.image_height / 2 + j) % grid;
++        const std::size_t j2 = std::min(j, input.image_height - j);
++        const double re = std::cos(phases[j2]);
++        const double im = std::sin(phases[j2]);
++        // ducc0's detail_fft::c2c is unnormalised (backward = N per axis), and
++        // the Hermitian half-plane extraction accounts for the other 2 per
++        // axis, so the whole plane needs 4/grid^2. Measured: without it the
++        // image is exactly grid^2/4 too large, at every grid size.
++        const double norm = 4.0 / (static_cast<double>(grid) * static_cast<double>(grid));
++        const std::complex<float>& low = grid_values[ix * grid + jx];
+         dirty[i * input.image_height + j] +=
+-            static_cast<float>(hartley(i2, j2) * cfu[icfu] * cfv[icfv]);
++            static_cast<float>((low.real() * re - low.imag() * im) * norm);
++        if (i > 0 && i < i2) {
++          const std::complex<float>& high = grid_values[ix2 * grid + jx];
++          dirty[i2 * input.image_height + j] +=
++              static_cast<float>((high.real() * re - high.imag() * im) * norm);
++        }
+       }
+     }
+   }
++
++  // ---------------- ducc0's apply_global_corrections ----------------
++  for (std::size_t i = 0; i < input.image_width; ++i) {
++    const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
++    const int icfu = std::abs(static_cast<int>(input.image_width / 2) - static_cast<int>(i));
++    for (std::size_t j = 0; j < input.image_height; ++j) {
++      const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
++      const double nm1 = nm1Of(l, m);
++      const double correction = geometry.kernel->corfunc((nm1 + layout.nshift) * layout.dw);
++      const int icfv = std::abs(static_cast<int>(input.image_height / 2) - static_cast<int>(j));
++      dirty[i * input.image_height + j] *=
++          static_cast<float>(correction * geometry.cfu[icfu] * geometry.cfv[icfv]);
++    }
++  }
++  const double scale = debugDouble("MX_METAL_DEBUG_SCALE", 1.0);
++  if (scale != 1.0) {
++    for (std::size_t i = 0; i < image_pixels; ++i) dirty[i] = static_cast<float>(dirty[i] * scale);
++  }
+   return true;
+ }
+ 

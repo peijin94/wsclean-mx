@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Tue, 13 Oct 2026 15:39:18 -0400
-Subject: [PATCH 01/15] WGridder::RealImage: zero the padding instead of NaN
+Subject: [PATCH 01/16] WGridder::RealImage: zero the padding instead of NaN
 
 wgridder_float.cpp and wgridder_double.cpp are compiled with -ffast-math.
 Under it, clang drops std::vector<float>(n, quiet_NaN()) to a plain

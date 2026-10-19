@@ -130,6 +130,29 @@ class MetalIntegrationTest(unittest.TestCase):
         # coverage guard is what catches that, so it must stay printed.
         self.assertIn('origins.size()', cpu)
 
+    def test_wlayer_harness_stays_wired(self):
+        # The w-layer bisection harness is what makes that work tractable; keep
+        # it building and keep the fixes it found in place.
+        script = ROOT / 'scripts/metal_wlayer_check.sh'
+        self.assertTrue(script.exists())
+        self.assertTrue(script.stat().st_mode & 0o111)
+        self.assertEqual(subprocess.run(['bash', '-n', str(script)], capture_output=True).returncode, 0)
+        tool = self.read('bench/metal/wlayer_check.cpp')
+        self.assertIn('metal/metalinversion.h', tool)
+        self.assertIn('ms2dirty_bda', tool)
+        impl = self.read('work/wsclean/metal/metalinversion.mm')
+        # 1. kernel-weighted spread over planes, not hard assignment
+        self.assertIn('plane_items', impl)
+        self.assertIn('wWeight', impl)
+        # 2. the FFT normalisation
+        self.assertIn('4.0 / (static_cast<double>(grid)', impl)
+        # 3. ducc0's w-tap formula, and explicitly not PolynomialKernel::eval
+        self.assertIn('z = (z_off - nth)*2 + (W-1)', impl)
+        self.assertIn('the nth piece of the same polynomial', impl)
+        # the wired path must stay 2-D while the scale is open
+        gridder = self.read('work/wsclean/wgridder/wgridder.h')
+        self.assertIn('input.w_gridding = false;', gridder)
+
     def test_gpu_option_is_wired_and_gated(self):
         # -mgpu must exist, reach the w-gridder, and be gated: the backend only
         # runs when it does exactly the same maths as the ducc0 call it replaces.
