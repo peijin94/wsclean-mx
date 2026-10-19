@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Mon, 19 Oct 2026 13:26:45 -0400
+Subject: [PATCH 17/17] Metal: restore the -mgpu call site for the new
+ inversion API
+
+The w-layer work renamed the entry point (inversion2D -> inversion, with
+w_gridding selecting the mode); the gridder call site still used the old one. It
+now passes w_gridding = false explicitly, so -mgpu keeps using the verified 2-D
+path while the w-layer path's remaining 3x scale is open.
+
+diff --git a/wgridder/wgridder.h b/wgridder/wgridder.h
+index 3509731c..358f920b 100644
+--- a/wgridder/wgridder.h
++++ b/wgridder/wgridder.h
+@@ -338,15 +338,15 @@ class WGridder final : public WGridderBase {
+     constexpr bool kAllowNShift = true;
+ #ifdef WSCLEAN_MX_METAL
+     // Experimental Metal path: only taken when it performs exactly the same
+-    // maths as the ducc0 call below (one frequency, w-term negligible, float
+-    // visible data, no image shift). inversion2D refuses otherwise, and the
+-    // ducc0 call then runs untouched.
++    // maths as the ducc0 call below (float visible data, no image shift, and
++    // either a negligible w-term or the w-layer path). inversion() refuses
++    // otherwise, and the ducc0 call then runs untouched.
+     // if constexpr so the float-only body is not instantiated for double or for
+     // the callback/proxy visibility buffers.
+     if constexpr (std::is_same<NumT, float>::value &&
+                   std::is_same<Tms, ducc0::cmav<std::complex<float>, 1>>::value) {
+       if (use_metal_) {
+-        mx::metal::Inversion2DInput input;
++        mx::metal::InversionInput input;
+         input.n_rows = n_rows;
+         input.uvws = uvw;
+         input.frequencies = freq.data();
+@@ -361,8 +361,12 @@ class WGridder final : public WGridderBase {
+         input.m_shift = m_shift_;
+         input.image_width = trimmed_width_;
+         input.image_height = trimmed_height_;
+-        const bool metal_done = mx::metal::inversion2D(input, tdirty.data());
+-        std::fprintf(stderr, "[mx-metal] 2-D inversion %s (%zu rows, %zu x %zu)\n",
++        // w-layers are implemented but still carry an unexplained factor ~3
++        // against ducc0's w-gridded image (docs/metal-plan.md), so the wired path
++        // stays 2-D and refuses where w matters.
++        input.w_gridding = false;
++        const bool metal_done = mx::metal::inversion(input, tdirty.data());
++        std::fprintf(stderr, "[mx-metal] inversion %s (%zu rows, %zu x %zu)\n",
+                      metal_done ? "used" : "refused, falling back to ducc0", n_rows,
+                      trimmed_width_, trimmed_height_);
+         if (metal_done) {

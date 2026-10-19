@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Sun, 18 Oct 2026 22:16:37 -0400
-Subject: [PATCH 08/16] Metal gridding: evaluate ducc0's fitted polynomial
+Subject: [PATCH 08/17] Metal gridding: evaluate ducc0's fitted polynomial
  (poly / poly-h variants)
 
 ducc0's w-gridder does not evaluate exp(beta*((1-v^2)^e0 - 1)) at gridding time:

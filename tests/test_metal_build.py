@@ -162,15 +162,16 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('param == "mgpu"', cli)
         self.assertIn('settings.useGpu = true;', cli)
         gridder = self.read('work/wsclean/wgridder/wgridder.h')
-        self.assertIn('mx::metal::inversion2D(', gridder)
+        self.assertIn('mx::metal::inversion(input, tdirty.data())', gridder)
         self.assertIn('if constexpr (std::is_same<NumT, float>::value', gridder)
         self.assertIn('metal_done ? "used" : "refused, falling back to ducc0"', gridder)
+        self.assertIn('input.w_gridding = false;', gridder)
         impl = self.read('work/wsclean/metal/metalinversion.mm')
         for anchor in ('inversionSupported', 'M_PI * w_max * lambda * lm_sq',
                        'w-term too large for a 2-D inversion', 'n_channels'):
             self.assertIn(anchor, impl, f'{anchor} is part of the 2-D gate')
         header = self.read('work/wsclean/metal/metalinversion.h')
-        self.assertIn('bool inversion2D(const Inversion2DInput& input, float* dirty);', header)
+        self.assertIn('bool inversion(const InversionInput& input, float* dirty);', header)
 
     def test_image_check_keeps_its_chain(self):
         # The image-level harness is the only place the Metal gridding meets
