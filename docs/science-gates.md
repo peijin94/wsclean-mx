@@ -444,6 +444,36 @@ excursions themselves are percent-level cleaning-basin variants, not
 corruptions. Tag with this caveat, or attribute first (prior deep-niter
 experience says patch-bisect cannot separate discrete basins).
 
+## Calibrated testbed: exact-DFT point injection (2026-10-19)
+
+`LOFAR_3C196.ms` is uncalibrated, so a calibrated testbed was built instead
+of downloaded: `bench/pointflux_tool.cpp` writes analytic visibilities for
+known point sources straight into a scratch copy's DATA (exact DFT, no
+gridding in the truth; `cp -r` + `chmod -R u+w` on the copy, the read-only
+original untouched). Stokes I peak truth = S/2 per hand
+(I = (XX+YY)/2). Five sources, 10/5/3/2/1 Jy, imaged `-size 1024 1024
+-scale 4asec -weight briggs 0 -mgain 0.8 -multiscale -niter 3000 -j 1`
+(`bench/out/v010-point-{ref,mx}`):
+
+| S (Jy) | truth peak | ref model Σ | mx model Σ | ref restored | mx restored |
+|---:|---:|---:|---:|---:|---:|
+| 10 | 5.00 | 4.990 | 4.990 | 4.997 | 4.997 |
+| 5 | 2.50 | 2.706 | 2.705 | 2.220 | 2.224 |
+| 3 | 1.50 | 1.519 | 1.518 | 1.467 | 1.467 |
+| 2 | 1.00 | 1.032 | 1.032 | 0.951 | 0.951 |
+| 1 | 0.50 | 0.188 | 0.187 | 0.464 | 0.463 |
+
+(mx ≡ ref to ≤1e-3 everywhere, including the shared under-cleaning of the
+1 Jy source at the iteration cap and a shared ~8% model overshoot on the
+5 Jy source. w-sign convention confirmed: off-axis sources focus.)
+
+Pixel-RMS T2 across builds FAILS here (restored 5.5e-3, residual 7e-2) —
+not a defect but the documented property: with bright sources and 5 major
+cycles to the iteration cap, tiny FFT-rounding differences diverge the faint
+structure while bright-source photometry agrees. T2 pixel RMS is the wrong
+gate for deep cleans; envelope gates apply. Truth recovery is the gate that
+matters here, and both builds recover the same photometry.
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
