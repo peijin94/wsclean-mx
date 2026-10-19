@@ -352,11 +352,25 @@ runs `-channels-out 4` (4 output channels plus the MFS products — 25 images pe
 run), which exercises the multi-channel output path the single-channel 3C196
 field cannot.
 
-| Dataset | Reference reruns | Outcome |
+| Dataset | Reference reruns | Outcome (worst candidate ÷ threshold, six metrics each) |
 |---|---:|---|
-| LOFAR LBA (`lba.MS`) | 3 | **all candidates pass** at the float32 floor (mx ×2, control) |
-| LOFAR HBA (`L258627`) | 6 | mx and control indistinguishable: mx restored-flux deviations 4.2e-6…6.9e-6 against control 4.8e-8…2.4e-5; mx-r3 and the control pass, mx-r1's marginal three-reference failure (2.4e-5 on two integral metrics) sits inside the control's own range |
-| MWA PupA (24 ch, 4 out) | 8 | **chaotic**: candidates (mx **and** the one-ulp control) land exactly on the reference envelope (e.g. 1.124e-4 vs 1.123e-4; 7.016e-2 vs 7.016e-2) — boundary-limited, not mx-specific |
+| LOFAR LBA (`lba.MS`) | 3 | **every candidate passes**: worst mx 0.26, worst control 0.10 — nothing near the floor except at rounding level |
+| LOFAR HBA (`L258627`) | 6 | mx **2.24** and control **2.35** — both trip on the same two metrics (`img-image` and `img-residual` total flux) and the control's excursion is the *larger* one; the other three mx runs and the other control run are ≤ 0.27. A run-level effect on cancelling sums, not an mx effect |
+| MWA PupA (24 ch, 4 out) | 8 | **chaotic**: mx 1.15 and control **1.15** — numerically identical worst values, both on the source-flux-spread metrics; boundary-limited, not mx-specific |
+
+The HBA excursions are worth reading against the arithmetic: a restored or
+residual total flux is a near-cancelling float32 sum over 512² pixels, so its
+accumulation noise is of order √N·ε ≈ 3e-5 relative — *above* the predeclared
+1e-5 floor. Runs whose cancellation happens to be worse than average therefore
+trip the floor by ~2× regardless of which build produced them, which is what the
+one mx run and the one control run do here, on the same two metrics. The floor is
+left as predeclared: it is the criterion the plan fixed, and the control shows
+the excursion is not attributable to the patch stack.
+
+Figures: `external-envelope.png` (each candidate ÷ threshold, per metric; grey
+marks are the field's own run-to-run envelope) and `external-differences.png`
+(reference image, candidate − reference map, histogram per dataset), both by
+`bench/plot_external_gates.py`.
 
 Peak RSS from the same runs, for the cache-budget question: 512² single-channel
 multiscale 97 MiB; 512² with 4 output channels 96 MiB (channel count adds no
