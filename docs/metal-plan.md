@@ -668,3 +668,40 @@ grows across the field).
 
 That is now a two-candidate question with a pixel-level test, which is a much
 better place to stop than "somewhere in the w path".
+
+### w-layers, fourth pass: a measured w-sweep, two invalid test configurations, still not equivalent
+
+Two of my earlier test configurations were themselves wrong, which is worth
+knowing before reading any older number in this document:
+
+* **Near-Nyquist sampling.** With `pixsize = 1/N` and `|u| <= 0.45N` the fringe
+  period is ~2 pixels, so a 0.6 % cell-size difference alone scrambles the
+  pattern. The harness now takes `--pixel-scale` and `--uv-frac` separately; the
+  meaningful configuration is a 7 deg field (`--pixel-scale 0.25`) with 20-pixel
+  fringes (`--uv-frac 0.05`).
+* **Beyond the horizon.** `--pixel-scale 4` gives `l_max = 2 rad`, i.e. the image
+  covers more than the visible hemisphere, so *every* w != 0 case had a huge
+  w-term and the far-field `nm1` branch. Numbers from that configuration mean
+  nothing.
+
+With a sane configuration and `w >= 0` (so no `FixW` conjugation is involved),
+the comparison against ducc0's w-gridded inversion is:
+
+| w_max (lambda) | peak ratio | sum ratio | rel rms |
+|---|---|---|---|
+| 0 | 1.000026 | 1.000020 | 0.82 % |
+| 5 | 1.0516 | 1.0444 | 0.84 % |
+| 50 | 0.6078 | 0.3215 | 1.71 % |
+| 200 | 0.0399 | -0.0243 | 3.69 % |
+
+So the w-path is *approximately* right - the bulk of the field holds together to
+1-4 % across two decades of w - but the bright pixels decorrelate as w grows,
+i.e. the high spatial frequencies are wrong. Setting the plane layout from
+ducc0's `nu` rather than my tile-rounded grid (a 1 % `dw` difference) moved the
+result by 1e-6, so `dw` is not the cause.
+
+**Conclusion for now: not equivalent, not wired.** The 2-D path stays the wired
+one. The next test that would actually localise this is a *plane-level* one:
+dump my grid for one w-plane and compare it with ducc0's before any FFT - that
+separates "my plane grids are wrong" from "my screen is wrong", which the image
+comparison cannot distinguish.

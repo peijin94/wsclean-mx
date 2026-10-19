@@ -35,7 +35,7 @@ struct Data {
   std::size_t rows() const { return values.size(); }
 };
 
-Data makeSynthetic(std::size_t nvis, double max_lambda, double w_max_lambda) {
+Data makeSynthetic(std::size_t nvis, double max_lambda, double w_max_lambda, bool w_positive) {
   std::mt19937_64 random(20261019);
   std::uniform_real_distribution<double> uv(-max_lambda, max_lambda);
   std::uniform_real_distribution<double> w(-w_max_lambda, w_max_lambda);
@@ -44,7 +44,8 @@ Data makeSynthetic(std::size_t nvis, double max_lambda, double w_max_lambda) {
   data.uvw.resize(3 * nvis);
   data.values.resize(nvis);
   for (std::size_t v = 0; v < nvis; ++v) {
-    const double u = uv(random), vv = uv(random), ww = w(random);
+    const double u = uv(random), vv = uv(random);
+    const double ww = w_positive ? std::fabs(w(random)) : w(random);
     data.uvw[3 * v + 0] = u * kSpeedOfLight;  // f = 1 Hz, so u_m = u_lambda * c
     data.uvw[3 * v + 1] = vv * kSpeedOfLight;
     data.uvw[3 * v + 2] = ww * kSpeedOfLight;
@@ -84,6 +85,9 @@ int main(int argc, char** argv) {
   std::size_t image_size = 256;
   double w_max_lambda = 50.0;
   bool two_d = false;
+  double pixel_scale = 1.0;
+  double uv_frac = 0.45;
+  bool w_positive = false;
   for (int i = 1; i < argc; ++i) {
     const std::string argument = argv[i];
     auto value = [&](const char* name) -> const char* {
@@ -99,6 +103,12 @@ int main(int argc, char** argv) {
       image_size = std::strtoull(value("--size"), nullptr, 10);
     } else if (argument == "--w-max") {
       w_max_lambda = std::strtod(value("--w-max"), nullptr);
+    } else if (argument == "--w-positive") {
+      w_positive = true;
+    } else if (argument == "--uv-frac") {
+      uv_frac = std::strtod(value("--uv-frac"), nullptr);
+    } else if (argument == "--pixel-scale") {
+      pixel_scale = std::strtod(value("--pixel-scale"), nullptr);
     } else if (argument == "--2d") {
       two_d = true;
     } else {
@@ -107,10 +117,17 @@ int main(int argc, char** argv) {
     }
   }
 
-  const Data data = makeSynthetic(nvis, 0.45 * static_cast<double>(image_size), w_max_lambda);
+  // pixel_scale > 1 narrows the field (finer pixels), which is needed to sample
+  // the fringes properly: with pixsize = 1/N and |u| up to 0.45N the fringe
+  // period is ~2 pixels, so a 0.5% grid-cell difference alone destroys the
+  // pattern and the comparison measures sampling, not the w algebra.
+  const double pixel_size = pixel_scale / static_cast<double>(image_size);
+  // uv range must respect the uv extent of the chosen pixel size (1/pixsize),
+  // otherwise the visibilities fall outside the grid.
+  const double max_lambda = uv_frac / pixel_size;
+  const Data data = makeSynthetic(nvis, max_lambda, w_max_lambda, w_positive);
   // pixsize = 1/image_size: one wavelength per pixel, which makes the uv cell
   // exactly one wavelength and keeps the comparison free of scale choices.
-  const double pixel_size = 1.0 / static_cast<double>(image_size);
 
   mx::metal::InversionInput input;
   input.n_rows = data.rows();
@@ -150,7 +167,7 @@ int main(int argc, char** argv) {
     ducc0::ms2dirty_bda<float, float>(uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_ma,
                                       weight_ma, mask_ma, pixel_size, pixel_size, 1.0e-4,
                                       /*do_wgridding=*/!two_d, 8, dirty, 0, false, false, false,
-                                      false, 1.1, 2.0, 0.0, 0.0, false);
+                                      false, 1.1, 2.0, 0.0, 0.0, /*allow_nshift=*/true);
     for (std::size_t i = 0; i < image_size * image_size; ++i) reference[i] = dirty.raw(i);
   }
   if (!ok) return 1;
@@ -173,7 +190,7 @@ int main(int argc, char** argv) {
     ducc0::ms2dirty_bda<float, float>(uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_ma,
                                       weight_ma, mask_ma, pixel_size, pixel_size, 1.0e-4,
                                       /*do_wgridding=*/!input.w_gridding, 8, dirty, 0, false,
-                                      false, false, false, 1.1, 2.0, 0.0, 0.0, false);
+                                      false, false, false, 1.1, 2.0, 0.0, 0.0, /*allow_nshift=*/true);
     std::vector<float> other(image_size * image_size);
     for (std::size_t i = 0; i < image_size * image_size; ++i) other[i] = dirty.raw(i);
     compare(other, reference, "ducc0 other path vs this reference:");
