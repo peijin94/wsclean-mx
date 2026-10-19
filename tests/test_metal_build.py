@@ -130,6 +130,22 @@ class MetalIntegrationTest(unittest.TestCase):
         # coverage guard is what catches that, so it must stay printed.
         self.assertIn('origins.size()', cpu)
 
+    def test_image_check_keeps_its_chain(self):
+        # The image-level harness is the only place the Metal gridding meets
+        # ducc0's actual gridding rather than a twin of itself, so its four
+        # matched details must stay in place.
+        script = ROOT / 'scripts/metal_image_check.sh'
+        self.assertTrue(script.exists())
+        self.assertTrue(script.stat().st_mode & 0o111)
+        result = subprocess.run(['bash', '-n', str(script)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('ducc0_image_check.cpp', script.read_text())
+        tool = self.read('bench/metal/ducc0_image_check.cpp')
+        for anchor in ('complex2hartley', 'hartley2_2D', 'corfunc', 'ms2dirty_bda',
+                       'chooseKernel', 'rolled', 'vlim'):
+            self.assertIn(anchor, tool, f'{anchor} is part of the reproduced chain')
+        self.assertIn('kTolerance = 1.0e-3', tool)
+
     def test_split_dispatch_stays_wired(self):
         # The split is where the real-data win came from: one threadgroup per
         # bucket slice instead of per tile. Losing it silently would put the

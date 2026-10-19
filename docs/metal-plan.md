@@ -316,6 +316,47 @@ spread case and should not be quoted alone; on real clustered coverage the
 honest range is 1.7-3.6x, with degridding carrying almost all of it until the
 atomic strategy is replaced.
 
+### Image-level check: chain ported, agreement not yet good enough
+
+Wiring the gridder into wsclean needs the piece the probe never had: turning a
+grid into an image. `bench/metal/ducc0_image_check.cpp`
+(`scripts/metal_image_check.sh`) grids on the GPU and then pushes the grid
+through ducc0's own forward chain - `complex2hartley`, `hartley2_2D`, and the
+inner-window extraction with `krn->corfunc` - and compares the result with
+`ducc0::ms2dirty_bda` on identical data.
+
+Four things had to be matched, each worth recording because each one first
+looked like a broken kernel:
+
+* **DC-at-0 frame.** ducc0's `getpix` uses `frac(u*pixsize)`, so the origin sits
+  at index 0, and `hartley2_2D`'s band logic (only `[0,vlim)` and
+  `[nv-vlim,nv)` get transformed) depends on it. The Metal kernels centre the
+  origin, so the grid is rolled by half a grid first.
+* **The kernel comes from ducc0's cost model, not from "smallest support".**
+  Picking the smallest support gives W=6 where ducc0 picks W=8 at this size, and
+  because the correction comes from the same kernel the whole image lands on a
+  different scale - a uniform ~11% that reads like a missing factor.
+* **The grid geometry follows the chosen kernel**: `nu =
+  2*good_size_complex(nxdirty*ofactor*0.5+1)` with `pixsize = 1/nu` gives one
+  wavelength per cell, so the Metal grid is `nu` cells of one wavelength too
+  (rounded up to the 32-cell tile).
+* **The FFT band uses ducc0's grid size** (`nu`), not the Metal grid size; using
+  the latter multiplies in a `nu_metal/nu` factor.
+
+With all four in place the **peak intensity matches to 5e-5** (20023.2 against
+20024.3), but the full-field agreement is **0.8% rms / 3.8% max** - better than
+the 1e-3 gate but not yet the float32-level agreement the rest of the pipeline
+achieves, and no pixel shift explains it (scanning shifts -1..+1 in both axes
+makes it worse). So the residue is between the Metal kernel's placement/weights
+and ducc0's own gridding, which the probe's float64 twin cannot see because the
+twin shares the Metal convention.
+
+**Status: not wired, deliberately.** Wiring a path with a 0.8% image error would
+bake that error into every `-mgpu` run. The next step is a double-precision CPU
+twin of the Metal kernel inside this harness: if it reproduces ducc0's image, the
+difference is in the GPU kernel; if it shows the same 0.8%, it is in the shared
+placement/weight convention and that is what must be fixed.
+
 ### Split-tile dispatch: the real fix is parallelism, not contention
 
 The 16x gridding/degridding gap looked like atomic contention, and the obvious
