@@ -77,6 +77,15 @@ reasoning and long-form design in `notes.md`.
 - bench/out was trimmed 50.8 GB → 35 GB by removing 68 superseded runs that no
   tracked file cites (`bench/trim_plan.py`, manifest docs/trim-2026-10-18.md);
   every figure input and the current gate evidence are kept.
+- Metal backend (2026-10-18): infrastructure stage lives in the mx tree under
+  `metal/` behind `WSCLEAN_MX_METAL=ON` (OFF by default, so every other build is
+  unchanged). MSL compiles at runtime — no Xcode on this Mac. Build/run with
+  `scripts/metal_build.sh`; the probe's differential test against a float64 CPU
+  twin is what found the float32 placement divergence (u + G/2 rounds at the
+  magnitude of G/2 and moves ~1 in 1e4 visibilities one cell off; centred
+  `round(u)`/`u - round(u)` is exact and fixes it). Numbers and the M1 path are
+  in docs/metal-plan.md; do not quote a GPU speedup before `-mgpu` wiring and
+  the science gates.
 - ReadMsInMemory remains a separate follow-up: its source opens antenna2 using
   ANTENNA1 and assumes WEIGHT_SPECTRUM. Do not infer full CLI in-memory support
   from the passing provider/interface time and allocation tests.
