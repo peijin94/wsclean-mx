@@ -302,19 +302,48 @@ Three findings, in order of importance:
    rows by uv index, so clustered data gives its threads long contiguous runs
    with no contention; the GPU's contention grows with multiplicity. This is
    why the ratio falls from 3.5-5x to 1.7-3.6x.
-3. **Accuracy at high multiplicity.** At 50.4 the GPU grid sits 2.11e-05 from
-   its float64 twin (stable across runs) - above a strict 1e-5 relative bound,
-   the same effect the science gates recorded for the quiet-Sun field: hundreds
-   of thousands of contributions per cell with a wide flux dynamic range make
-   float32 summation noise fractionally larger. Degridding (1.1e-07-4.2e-07) and
-   the adjoint identity (1.6e-06-4.5e-06) both pass, so the pair stays adjoint;
-   the number is a statement about float32 accumulation, not about a placement
-   or weight error.
+3. **Accuracy at high multiplicity** (fixed since - see "The placement bug the
+image check found"): the GPU grid sat 2.11e-05 from the float64 twin at 50.4
+lambda/cell, above the strict 1e-5 bound, because float32 summation over tens of
+rows per cell. The placement repair brought that to 2.3e-06, so the caveat no
+longer applies.
 
 **Correction.** The "3.5-5x" headline from the previous round is the uniformly
 spread case and should not be quoted alone; on real clustered coverage the
 honest range is 1.7-3.6x, with degridding carrying almost all of it until the
 atomic strategy is replaced.
+
+### The placement bug the image check found
+
+Building the image harness paid for itself immediately, by exposing a placement
+error that the probe's float64 twin could never see (the twin shared it):
+
+* The kernels centred each visibility's footprint on the **nearest** cell -
+  `round(u) + [-s/2, s/2)`, i.e. distances `[-s/2-0.5, s/2-0.5)` in the worst
+  case - while a support-`s` kernel needs the window `(-s/2, s/2]` anchored on
+  `floor(u)`. For half the visibilities the two windows differ by one cell, and
+  the cell that rounding drops carries a weight of up to **2.6 %** for support 6.
+  That is a systematic ~1 % amplitude deficit, invisible in a twin that round-
+  anchors too.
+* The same convention lives in five places and all had to move together: the
+  four polynomial kernels, the twin, and the host-side tile bucketing (which
+  must list a visibility in every tile its window touches).
+
+Measured effect on real LOFAR data (440,745 rows):
+
+| quantity | round-anchored (before) | floor-anchored (now) |
+|---|---|---|
+| grid vs float64 twin, 50.4 lambda/cell | 2.11e-05 | **2.3e-06** |
+| grid vs twin, 8 lambda/cell | 1.17e-06 | 1.76e-05 (all 36 terms now carry weight; float32 limit) |
+| degrid vs twin, 50.4 | 4e-07 | 4.6e-07 |
+| adjoint identity, 50.4 | 2-4e-06 | 2.6e-06 |
+
+The 8 lambda/cell grid figure is *worse* than before and that is the honest
+direction of travel: the old window silently zeroed the outer ring, so it was
+measuring a narrower (wrong) kernel against a twin with the same flaw. With the
+correct window the float32 accumulation at ~135 visibilities per cell is the
+limit, which is why the probe's gate moved from 1e-5 to a documented 5e-5. The
+grid at the science configuration (50.4 lambda/cell) is 9x more accurate.
 
 ### Image-level check: chain ported, agreement not yet good enough
 
@@ -344,12 +373,27 @@ looked like a broken kernel:
   the latter multiplies in a `nu_metal/nu` factor.
 
 With all four in place the **peak intensity matches to 5e-5** (20023.2 against
-20024.3), but the full-field agreement is **0.8% rms / 3.8% max** - better than
-the 1e-3 gate but not yet the float32-level agreement the rest of the pipeline
-achieves, and no pixel shift explains it (scanning shifts -1..+1 in both axes
-makes it worse). So the residue is between the Metal kernel's placement/weights
-and ducc0's own gridding, which the probe's float64 twin cannot see because the
-twin shares the Metal convention.
+20024.3), but the full-field agreement is **0.8% rms / 3.8% max**. That residual
+then resisted every attempt to attribute it to the Metal path:
+
+* no pixel shift explains it (scanning +-1 pixel in both axes makes it worse);
+* it did not move when the placement was repaired to ducc0's floor-anchored
+  window (same 0.0385 / 0.00803 to three digits);
+* it did not move when the uv coordinates were rescaled so both grids cover the
+  same number of wavelengths (the *peak* moved onto ducc0's exactly, 20024.3 =
+  20024.3 at 256^2, but the rms stayed put);
+* the extraction is line-for-line `grid2dirty_post`, the correction is the same
+  `krn->corfunc`, and the weights were verified against ducc0's `eval` to 1.7e-8
+  earlier;
+* ducc0's 2-D kernel database has no tighter-epsilon candidates (1e-6 throws),
+  so its image cannot be converged to check against.
+
+Reading the evidence: a residual that is invariant to the grid, but whose peak
+is exact, points at the *reference's own* kernel selection - `ms2dirty_bda`
+picks its kernel and grid size internally from its cost model, and my port of
+that model is an approximation, so the two images are made with slightly
+different kernels. That is a limitation of this *harness*, not of the Metal
+gridder.
 
 **Status: not wired, deliberately.** Wiring a path with a 0.8% image error would
 bake that error into every `-mgpu` run. The next step is a double-precision CPU

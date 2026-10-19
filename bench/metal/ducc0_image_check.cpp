@@ -140,6 +140,7 @@ int main(int argc, char** argv) {
   double frequency = 0.0;
   int repeat = 3;
   std::size_t nthreads = 8;
+  double epsilon = 1.0e-4;
   for (int i = 1; i < argc; ++i) {
     const std::string argument = argv[i];
     auto value = [&](const char* name) -> const char* {
@@ -159,6 +160,8 @@ int main(int argc, char** argv) {
       frequency = std::strtod(value("--freq"), nullptr);
     } else if (argument == "--repeat") {
       repeat = std::max(1, std::atoi(value("--repeat")));
+    } else if (argument == "--epsilon") {
+      epsilon = std::strtod(value("--epsilon"), nullptr);
     } else if (argument == "--threads") {
       nthreads = std::strtoull(value("--threads"), nullptr, 10);
     } else {
@@ -176,7 +179,7 @@ int main(int argc, char** argv) {
   }
 
   // ---- ducc0's kernel choice and the grid geometry that follows from it ----
-  const std::vector<std::size_t> candidates = ducc0::getAvailableKernels<float>(1.0e-4, 2, 1.1, 2.0);
+  const std::vector<std::size_t> candidates = ducc0::getAvailableKernels<float>(epsilon, 2, 1.1, 2.0);
   if (candidates.empty()) {
     std::fprintf(stderr, "ducc0 returned no kernel candidates\n");
     return 2;
@@ -200,10 +203,16 @@ int main(int argc, char** argv) {
   input.kernel_degree = kernel->degree();
   input.kernel_coefficients.assign(kernel->Coeff().begin(), kernel->Coeff().end());
   input.variant = mx::metal::Variant::kPoly;
+  // The Metal grid is nu_metal cells wide, so scale the uv coordinates by
+  // nu/nu_metal: the grid then covers exactly nu wavelengths like ducc0's, and
+  // both images get the same pixel scale (1/nu). Without this the two images
+  // differ by nu_metal/nu in scale - a ~1.6% error that grows towards the field
+  // edge and reads as a ~0.8% rms kernel mismatch.
+  const double cell_scale = static_cast<double>(nu_metal) / static_cast<double>(nu);
   input.visibilities.resize(4 * data.rows());
   for (std::size_t v = 0; v < data.rows(); ++v) {
-    input.visibilities[4 * v + 0] = static_cast<float>(data.u_lambda[v]);
-    input.visibilities[4 * v + 1] = static_cast<float>(data.v_lambda[v]);
+    input.visibilities[4 * v + 0] = static_cast<float>(data.u_lambda[v] * cell_scale);
+    input.visibilities[4 * v + 1] = static_cast<float>(data.v_lambda[v] * cell_scale);
     input.visibilities[4 * v + 2] = data.values[v].real();
     input.visibilities[4 * v + 3] = data.values[v].imag();
   }
@@ -273,7 +282,6 @@ int main(int argc, char** argv) {
   double best_reference = 1e30;
   {
     std::vector<double> uvw(3 * data.rows(), 0.0);
-    std::vector<std::complex<float>> ms(data.values);
     for (std::size_t v = 0; v < data.rows(); ++v) {
       // ducc0 scales uvws by frequency/c itself; with f = 1 Hz, u_m = u_lambda*c.
       uvw[3 * v + 0] = data.u_lambda[v] * kSpeedOfLight;
@@ -281,12 +289,16 @@ int main(int argc, char** argv) {
       uvw[3 * v + 2] = 0.0;
     }
     const ducc0::cmav<double, 2> uvw_ma(uvw.data(), {data.rows(), 3});
-    const ducc0::cmav<size_t, 1> freqlist_id =
-        ducc0::cmav<size_t, 1>::build_uniform({data.rows()}, 0);
-    const std::vector<double> frequencies(1, 1.0);
+    const ducc0::cmav<std::complex<float>, 1> ms_ma(data.values.data(), {data.rows()});
+    // Use ms2dirty_bda, not ms2dirty: the plain entry point bus-errors on this
+    // shape here (it dereferences 2-D weight/mask views we do not have), and with
+    // one frequency per row the bda path cannot average anything - freqlist_id is
+    // uniform and each row names its own single frequency - so it is the same
+    // transform.
+    const ducc0::cmav<size_t, 1> freqlist_id = ducc0::cmav<size_t, 1>::build_uniform({data.rows()}, 0);
     const ducc0::cmav<size_t, 1> freqlist_nfreqs = ducc0::cmav<size_t, 1>::build_uniform({1}, 1);
-    const ducc0::cmav<double, 1> freqlist_freqs(frequencies.data(), {1});
-    const ducc0::cmav<std::complex<float>, 1> ms_ma(ms.data(), {data.rows()});
+    const std::vector<double> single_frequency(1, 1.0);
+    const ducc0::cmav<double, 1> freqlist_freqs(single_frequency.data(), {1});
     const ducc0::cmav<float, 1> weight_ma(nullptr, {0});
     const ducc0::cmav<std::uint8_t, 1> mask_ma(nullptr, {0});
     ducc0::vmav<float, 2> dirty({image_size, image_size});
@@ -294,8 +306,8 @@ int main(int argc, char** argv) {
       const auto begin = std::chrono::steady_clock::now();
       ducc0::detail_gridder::ms2dirty_bda<float, float>(
           uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_ma, weight_ma, mask_ma,
-          pixel_size, pixel_size, 1.0e-4, /*do_wgridding=*/false, nthreads, dirty, 0, false, true,
-          false, false, 1.1, 2.0, 0.0, 0.0, false);
+          pixel_size, pixel_size, epsilon, /*do_wgridding=*/false, nthreads, dirty, 0, false,
+          true, false, false, 1.1, 2.0, 0.0, 0.0, false);
       const auto end = std::chrono::steady_clock::now();
       best_reference =
           std::min(best_reference, std::chrono::duration<double>(end - begin).count());
