@@ -130,6 +130,27 @@ class MetalIntegrationTest(unittest.TestCase):
         # coverage guard is what catches that, so it must stay printed.
         self.assertIn('origins.size()', cpu)
 
+    def test_split_dispatch_stays_wired(self):
+        # The split is where the real-data win came from: one threadgroup per
+        # bucket slice instead of per tile. Losing it silently would put the
+        # gridder back at a third of its speed.
+        shader = self.read('work/wsclean/metal/mxshaders.h')
+        self.assertIn('grid_accumulate_poly_hoisted_split', shader)
+        kernel = shader[shader.index('kernel void grid_accumulate_poly_hoisted_split'):]
+        kernel = kernel[:kernel.index('// Pull model')]
+        self.assertIn('work_items[3 * work_id.x + 0]', kernel)
+        self.assertIn('work_items[3 * work_id.x + 1]', kernel)
+        self.assertIn('work_items[3 * work_id.x + 2]', kernel)
+        self.assertNotIn('bucket_start', kernel, 'the split kernel reads the work list')
+        host = self.read('work/wsclean/metal/metaldevice.mm')
+        self.assertIn('split_target', host)
+        self.assertIn('work_items.push_back', host)
+        self.assertIn('dispatchThreadgroups:MTLSizeMake(items, 1, 1)', host)
+        self.assertIn('std::size_t split_target = 256;', self.read('work/wsclean/metal/metaldevice.h'))
+        probe = self.read('work/wsclean/metal/probe_main.cpp')
+        self.assertIn('--split', probe)
+        self.assertIn('std::size_t split_target = 256;', probe)
+
     def test_every_poly_variant_is_compared_against_the_poly_reference(self):
         # A poly variant missing from this list is compared against the
         # NORMALISED analytic reference and reads as a ~4x error in an exact

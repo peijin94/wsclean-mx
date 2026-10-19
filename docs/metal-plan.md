@@ -316,6 +316,43 @@ spread case and should not be quoted alone; on real clustered coverage the
 honest range is 1.7-3.6x, with degridding carrying almost all of it until the
 atomic strategy is replaced.
 
+### Split-tile dispatch: the real fix is parallelism, not contention
+
+The 16x gridding/degridding gap looked like atomic contention, and the obvious
+knobs were measured in that order. Both of the "contention" hypotheses failed:
+
+* **Fewer threads per tile is worse, not better.** Real data, lpc=8: 256 threads
+  per tile gives 14.5 ms, 128 gives 23.7, 64 gives 39.7, 32 gives 63.5 - the time
+  scales inversely with the thread count.
+* **Removing the atomics (the pull model) is worse still** (see below), because a
+  per-cell owner has to scan the whole tile bucket.
+
+The actual limit is **tile-level parallelism**. With clustered uv coverage all
+440 745 rows land in a handful of tiles, so one threadgroup per tile activates a
+few thousand threads out of the ~128 000 the GPU can run: the kernel is latency
+bound with most of the machine idle. Threads per tile were never the problem.
+
+`--split N` splits each tile's bucket into slices of about N visibilities and
+gives every slice its own threadgroup (`grid_accumulate_poly_hoisted_split`,
+with a flat (tile, begin, end) work list built on the host). Each slice keeps a
+private threadgroup tile and merges once with device atomics, so the merge cost
+stays negligible while the parallelism scales with the slice count.
+
+Real data, 440 745 rows, min of 7 within each of three process runs:
+
+| configuration | baseline (1 threadgroup/tile) | split 1024 | split 256 |
+|---|---:|---:|---:|
+| 50.4 lambda/cell | 28.5-33.9 ms | 9.5-13.4 ms | 9.2-13.1 ms |
+| 8 lambda/cell | 14.0-22.9 ms | 10.2-11.7 ms | 6.8-11.2 ms |
+
+With `split_target = 256` as the default the round trip on real data is 15.9 ms
+at 50.4 and 13.2 ms at 8 lambda/cell, against ducc0's CPU 67.3 / 65.8 ms - so
+**4.2-5.0x on real clustered coverage**, up from the 1.7-3.6x of the unsplit
+kernel. Accuracy is unchanged by the split (the same rel_max values; the
+accumulation order differs only in the last bits, adjoint rel_diff 2-4e-6), and
+uniform synthetic data is unaffected (2.41 ms at 200k with the split default, the
+slice count there being one per tile anyway).
+
 ### Pull model (measured): correct, and scan-bound
 
 The 16x gridding/degridding gap at 50.4 lambda/cell is the atomic CAS merge, so
