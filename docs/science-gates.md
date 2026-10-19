@@ -399,6 +399,26 @@ and `run_revised_metric_gates.sh` are the analysis drivers. `LOFAR_3C196.ms` was
 downloaded from upstream's pinned CI URL and its sha256 verified against
 `upstream/wsclean/tests/CMakeLists.txt` before use; it is kept read-only.
 
+## Basin occupancy (3C196, 15 ref + 14 mx, `bench/out/v010-basin-*`)
+
+Single-linkage clustering of restored-image pairwise rel RMS at 1e-4
+(main basin ~6e-7, excursions ~1e-2):
+
+- main basin: 27 runs — **15/15 ref + 12/14 mx**, mutually ~6e-7;
+- off basin: **mx2 + mx9 only**, 1.251e-2 from main but 6.7e-7 from each
+  other — the same alternate discrete basin twice, not two flukes;
+- rate: 2/14 mx vs 0/15 ref off-basin; Fisher exact one-sided p = 0.22,
+  **not significant**. Cannot claim an mx-specific effect at these n's.
+- off-basin images are scientifically sane: dirty/PSF pass everything,
+  restored source positions exact (0.006 px, no unmatched), restored flux
+  ~1% off, model flux ~2.7% in different discrete components.
+
+Figure: `docs/bench/v010-basin.png` (29×29, by `bench/plot_v010_gates.py`).
+Verdict for the tag decision: the excursion rate is unquantified, but the
+excursions themselves are percent-level cleaning-basin variants, not
+corruptions. Tag with this caveat, or attribute first (prior deep-niter
+experience says patch-bisect cannot separate discrete basins).
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:

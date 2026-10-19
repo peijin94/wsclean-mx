@@ -55,6 +55,11 @@ def wall_seconds(run_dir):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    # Full widened family everywhere: single-run figures use the first pair.
+    REFS = [ROOT / f'bench/out/v010-lofar2-r{i}/reffix-verified' for i in (1, 2, 3, 4, 5)]
+    REFS += [ROOT / f'bench/out/v010-basin-r{i}/reffix-verified' for i in range(1, 11)]
+    MXS = [ROOT / f'bench/out/v010-lofar2-mx{i}/v010-rc1' for i in (1, 2, 3, 4)]
+    MXS += [ROOT / f'bench/out/v010-basin-mx{i}/v010-rc1' for i in range(1, 11)]
     for directory in REFS + MXS:
         assert (directory / 'img-image.fits').exists(), directory
 
@@ -105,7 +110,8 @@ def main():
     figure.savefig(OUT / 'v010-timing.png', dpi=100)
     plt.close(figure)
 
-    # 3. Basin matrix: pairwise rel RMS of the restored image.
+    # 3. Basin matrix: pairwise rel RMS of the restored image over the full
+    # family defined above. Main basin sits ~6e-7, excursions ~1e-2.
     labels = [f'ref{i + 1}' for i in range(len(REFS))] + \
              [f'mx{i + 1}' for i in range(len(MXS))]
     arrays = [cs.read_image(d / 'img-image.fits') for d in REFS + MXS]
@@ -115,16 +121,18 @@ def main():
         for j in range(n):
             diff = arrays[i] - arrays[j]
             matrix[i, j] = float(np.sqrt(np.mean(diff ** 2)) / np.sqrt(np.mean(arrays[j] ** 2)))
-    figure, axis = plt.subplots(figsize=(7.2, 6.2))
+    figure, axis = plt.subplots(figsize=(10.5, 9.0))
     im = axis.imshow(np.log10(np.maximum(matrix, 1e-12)), vmin=-8, vmax=-1)
-    axis.set_xticks(range(n), labels, rotation=45)
-    axis.set_yticks(range(n), labels)
+    axis.set_xticks(range(n), labels, rotation=45, fontsize=7)
+    axis.set_yticks(range(n), labels, fontsize=7)
     for i in range(n):
         for j in range(n):
-            axis.text(j, i, f'{matrix[i, j]:.1e}', ha='center', va='center', fontsize=8,
+            axis.text(j, i, f'{matrix[i, j]:.0e}'.replace('e-0', 'e-'), ha='center',
+                      va='center', fontsize=5,
                       color='white' if matrix[i, j] > 3e-4 else 'black')
-    axis.set_title('3C196 restored-image pairwise rel RMS (log10 scale)\n'
-                   'mx1/mx3/mx4 inside the reference basin (~6e-7); single mx2 excursion', fontsize=11)
+    axis.set_title('3C196 restored-image pairwise rel RMS, 15 ref + 14 mx (log10)\n'
+                   'main basin ~6e-7 (15/15 ref, 12/14 mx); mx2+mx9 share one off-basin '
+                   '(1.3%, Fisher p=0.22, n.s.)', fontsize=11)
     figure.colorbar(im, label='log10 rel RMS')
     figure.tight_layout()
     figure.savefig(OUT / 'v010-basin.png', dpi=100)

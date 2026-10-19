@@ -60,6 +60,11 @@ imaging throughput.
   all four candidate runs pass both the max and the predeclared p95
   criterion against a 50-rerun family (1225 pairs); the only failing
   candidate across nine runs is a perturbed-reference outlier.
+- 3C196 basin occupancy at HEAD (15 ref + 14 mx): 27/29 in one basin at
+  ~6e-7; 2/14 mx share one alternate basin (1.25e-2 away, 6.7e-7 apart),
+  0/15 ref excursions, Fisher p = 0.22 (n.s.). Off-basin images keep exact
+  source positions with ~1% restored-flux difference — cleaning-basin
+  variants, not corruptions. Rate unquantified: tag with this caveat.
 - External fixtures (LOFAR LBA/HBA, MWA PupA, incl. 4-output-channel MWA):
   pass or boundary-limited exactly where the perturbed control is.
 - Native suite: 160 passed / 4 skipped (predeclared) / 869917 assertions;
