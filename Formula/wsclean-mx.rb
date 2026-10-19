@@ -4,9 +4,12 @@
 # Homebrew formula for wsclean-mx: Apple-Silicon optimized WSClean.
 #
 # Status: LOCAL BOTTLE STAGING ONLY — do not publish until 0.1.0 is tagged.
-# Test locally with:
-#   brew install --HEAD --build-bottle ./Formula/wsclean-mx.rb
+# Brew only accepts tap formulas, so stage with:
+#   brew tap-new peijin94/wsclean-mx   (once)
+#   cp Formula/wsclean-mx.rb "$(brew --repo peijin94/wsclean-mx)/Formula/"
+#   brew install --HEAD --build-bottle peijin94/wsclean-mx/wsclean-mx
 #   brew bottle wsclean-mx   # (after install, produces the bottle tarball)
+# This file is the source of truth; the tap copy is disposable.
 #
 # At release time fill in the v0.1.0 tarball url/sha256 below (the `head`
 # line stays for development builds).
