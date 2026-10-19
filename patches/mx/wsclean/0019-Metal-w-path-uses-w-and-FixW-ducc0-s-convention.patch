@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Mon, 19 Oct 2026 13:44:34 -0400
+Subject: [PATCH 19/19] Metal: w-path uses |w| and FixW (ducc0's convention)
+
+ducc0 plans planes on absEffectiveW and folds the sign of w away by negating
+(u,v) and conjugating the visibility (UVW::FixW's return value is the imflip
+factor). The layout now matches (nplanes over |w|, wmin centred on it).
+
+w = 0 still agrees with ducc0's w-gridded image to 1e-5 peak / 1.4e-5 sum; w != 0
+is still wrong (peak 0.06x, negative sum) with the geometry now correct, so the
+remaining fault is in the per-visibility plane/screen bookkeeping. -mgpu keeps
+w_gridding = false.
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 78435e3c..1e0d8519 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -298,16 +298,25 @@ bool inversion(const InversionInput& input, float* dirty) {
+   }
+ 
+   // ---------------- w-layers: ducc0's x2dirty w-branch ----------------
+-  std::vector<double> w_lambda(static_cast<std::size_t>(input.n_rows) * input.n_channels);
++  // ducc0 folds the sign of w away: it uses |w| (absEffectiveW) and compensates
++  // by negating (u,v) and conjugating the visibility (UVW::FixW, whose sign is
++  // then the `imflip` factor). Using the signed range instead puts negative-w
++  // rows in the wrong planes and with the wrong screen - which is exactly why
++  // w = 0 worked and w != 0 was incoherent.
++  const std::size_t item_count = static_cast<std::size_t>(input.n_rows) * input.n_channels;
++  std::vector<double> w_lambda(item_count);
++  std::vector<float> w_sign(item_count);
+   double w_min = 1e300, w_max = -1e300;
+   for (std::size_t row = 0; row < input.n_rows; ++row) {
+     for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+       const double lambda = kSpeedOfLight / input.frequencies[ch];
+       double w = input.uvws[3 * row + 2] / lambda;
+       if (input.flip_w) w = -w;
+-      w_lambda[row * input.n_channels + ch] = w;
+-      w_min = std::min(w_min, w);
+-      w_max = std::max(w_max, w);
++      const std::size_t item = row * input.n_channels + ch;
++      w_sign[item] = (w < 0.0) ? -1.0f : 1.0f;
++      w_lambda[item] = std::fabs(w);
++      w_min = std::min(w_min, w_lambda[item]);
++      w_max = std::max(w_max, w_lambda[item]);
+     }
+   }
+   PlaneLayout layout = planeLayout(input, grid, geometry.kernel->support(), w_min, w_max);
+@@ -409,15 +418,16 @@ bool inversion(const InversionInput& input, float* dirty) {
+       const std::size_t row = item / input.n_channels;
+       const std::size_t ch = item % input.n_channels;
+       const double lambda = kSpeedOfLight / input.frequencies[ch];
+-      double u = input.uvws[3 * row + 0] / lambda;
+-      double v = input.uvws[3 * row + 1] / lambda;
++      const double sign = static_cast<double>(w_sign[item]);
++      double u = sign * input.uvws[3 * row + 0] / lambda;
++      double v = sign * input.uvws[3 * row + 1] / lambda;
+       if (input.flip_u) u = -u;
+       if (input.flip_v) v = -v;
+       accumulate.visibilities[4 * k + 0] = static_cast<float>(u * geometry.cell_x);
+       accumulate.visibilities[4 * k + 1] = static_cast<float>(v * geometry.cell_y);
+       const std::complex<float>& value = input.ms[item];
+       accumulate.visibilities[4 * k + 2] = static_cast<float>(value.real() * weight);
+-      accumulate.visibilities[4 * k + 3] = static_cast<float>(value.imag() * weight);
++      accumulate.visibilities[4 * k + 3] = static_cast<float>(sign * value.imag() * weight);
+     }
+     GridAccumResult grid_result;
+     try {

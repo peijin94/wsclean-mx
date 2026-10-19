@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 10:29:35 -0400
-Subject: [PATCH 14/18] Metal: floor-anchored kernel window (ducc0's placement)
+Subject: [PATCH 14/19] Metal: floor-anchored kernel window (ducc0's placement)
 
 A support-s kernel covers distances (-s/2, s/2], so the footprint must be
 anchored on floor(u): cells floor(u)-s/2+1 .. floor(u)+s/2. Rounding to the

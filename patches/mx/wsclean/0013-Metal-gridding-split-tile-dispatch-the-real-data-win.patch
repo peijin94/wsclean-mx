@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Mon, 19 Oct 2026 09:08:04 -0400
-Subject: [PATCH 13/18] Metal gridding: split-tile dispatch (the real-data win)
+Subject: [PATCH 13/19] Metal gridding: split-tile dispatch (the real-data win)
 
 The 16x gridding/degridding gap on clustered data is not atomic contention. Two
 contention hypotheses were measured and both failed: fewer threads per tile is

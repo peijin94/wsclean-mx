@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Sun, 18 Oct 2026 21:57:46 -0400
-Subject: [PATCH 07/18] Metal gridding: ducc0 kernel parameters, variant
+Subject: [PATCH 07/19] Metal gridding: ducc0 kernel parameters, variant
  benchmark, cost attribution
 
 The kernel now uses ducc0's form and parameters - K(v) = exp(beta*((1-v^2)^e0

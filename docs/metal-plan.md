@@ -627,3 +627,28 @@ sum goes negative - incoherent, so the plane/screen bookkeeping breaks down once
 the visibilities actually differ in w. Next: compare one visibility's plane
 weights against ducc0's, and check the screen for a single synthetic source.
 Until that is clean, `-mgpu` keeps `w_gridding = false`.
+
+### w-layers, third pass: conventions fixed, w != 0 still not right
+
+7. **`|w|` + `FixW`, not the signed range.** ducc0 uses `absEffectiveW` for the
+   plane layout and folds the sign away by negating (u,v) and conjugating the
+   visibility (`UVW::FixW`'s return value is the `imflip` factor). Implemented;
+   the layout now matches ducc0's convention (`nplanes = (wmax-wmin)/dw + supp`
+   over `|w|`, `wmin` centred on the |w| range).
+
+Still not right for w != 0: peak 0.06x and a negative sum. The layout prints
+`nplanes=28, dw=2.48, wmin=-8.52, w=[0.007, 49.995]`, i.e. the planes cover the
+data, so the fault is now in the per-visibility plane/screen bookkeeping rather
+than in the geometry. The next step is a single-visibility test: one row at
+w = 10 lambda, compare my image with ducc0's; that isolates the w algebra from
+the data distribution.
+
+Status summary of the Metal backend, for the record:
+
+| path | state | agreement with ducc0 |
+|---|---|---|
+| gridding/degridding kernels | verified | 2.3e-06 grid, 4.6e-07 degrid, 2.6e-06 adjoint @50.4 lambda/cell |
+| speed, kernels | verified | 4.2-5.0x vs ducc0's CPU w-gridder on real uv coverage |
+| 2-D inversion (w negligible) | verified, wired behind `-mgpu` | 5e-5 peak, 0.8% rms field |
+| w-layer inversion | w = 0 matches, w != 0 wrong | 1e-5 peak / 1.4e-5 sum at w = 0; incoherent at w != 0 |
+| w-layer speed | measured | 2x SLOWER (1.13 s vs 0.56 s) - full per-plane FFTs |
