@@ -143,3 +143,65 @@ Conclusions, all measured rather than assumed:
 Absolute throughput is not comparable with the first baseline (1 M visibilities:
 11.6 ms then, 4.3 ms now) because both the kernel formula and the codegen
 changed; every comparison above is within a single binary.
+
+## Matching ducc0's actual kernel, 2026-10-19
+
+ducc0 does not evaluate `exp(beta ((1-v^2)^e0 - 1))` at gridding time: it
+approximates it with W piecewise polynomials of degree D and evaluates those.
+So the kernel a Metal port must reproduce is *their polynomial*, not the
+analytic formula.
+
+`bench/metal/ducc0_kernel_tool.cpp` (built/run by `scripts/metal_kernel_coeffs.sh`)
+links ducc0's `math/gridding_kernel.cc`, replicates its kernel-database
+selection, and writes W, D, the row's `beta_norm`/`e0` and the W*(D+1)
+coefficients. Two lessons from building it:
+
+* **Several database rows share (W, oversample, ndim, single precision) with
+  different fits**, so replicating ducc0's exact selection loop matters: their
+  loop keeps the LAST row with the smallest support (`W <= Wmin`, with `Wmin`
+  starting at `Wmax<T>()`). A loop that kept the first such row selected a
+  different kernel, and the harness's analytic reference then described a
+  *different* function - which showed up as a bogus 3.5e-2 "fit error" until
+  the selection was mirrored and the row's beta/e0 were read back from the
+  extracted file instead of being hard-coded.
+* wsclean's default `-wgridder-accuracy` is **1e-4**, which selects the W=6
+  row (index 340): `beta_norm = 2.1074562920464412`, `e0 = 0.52062149047851569`,
+  row epsilon 2.1e-5 - the same parameters the harness had derived from the
+  database listing.
+
+Verification of the shader's evaluation convention against ducc0's own
+`PolynomialKernel::eval` over 200001 points: **exact (0 difference)** with the
+double-precision coefficients, 1.7e-8 with the float32 coefficients the
+shader carries (which is also what ducc0's own float kernels store).
+
+With those coefficients the probe gained `poly` (36 polynomial evaluations per
+visibility) and `poly-h` (the 1D samples hoisted into registers, 6+6 per
+visibility). Measured, min of 5, three consecutive runs agreeing:
+
+| variant | kernel | throughput | rel_max vs its own reference |
+|---|---:|---:|---:|
+| analytic | 2.33 ms | 86 Mvis/s | 4.9e-7 |
+| hoisted | 3.44 ms | 58 Mvis/s | 4.0e-6 |
+| packed | 3.44 ms | 58 Mvis/s | 4.0e-6 |
+| **poly** | 5.64 ms | 35 Mvis/s | **1.5e-7** |
+| poly-h | 4.23 ms | 47 Mvis/s | 5.0e-6 |
+| costprobe | 1.62 ms | 123 Mvis/s | (timing only) |
+
+* The polynomial reproduces ducc0's kernel to 1.5e-7 - the best agreement of
+  any variant, because a Horner evaluation has no beta-amplified error.
+* ducc0's polynomial deviates from the analytic kernel by only **1.6e-8 where
+  the kernel is significant** (3.2e-6 at the very support edge, where it
+  contributes nothing) - so the analytic-formula variants were the same kernel
+  shape all along, and the row's EPS column (2.1e-5) is an aliasing budget, not
+  a pointwise bound.
+* The polynomial is nonetheless *slower* on this GPU (5.6 ms vs 2.3 ms): 36
+  Horner chains cost more than 12 evaluations of the hardware's fast-math
+  `pow`/`exp`. Hoisting helps within the polynomial family (4.2 ms, 1.3x
+  faster than `poly`) while it hurt the analytic family - consistent with the
+  earlier finding that the compiler already hoists when the kernel is cheap.
+  `poly-h` is therefore the wiring candidate: accurate to 5e-6 against ducc0's
+  convention and 1.3x faster than the unhoisted polynomial.
+* Measurement hygiene: one intermediate run measured the analytic variant at
+  1.19 ms (half its repeated value) with a negative cost-attribution share.
+  Three consecutive repeats agree on 2.33 ms, so that run is treated as an
+  outlier and the repeated numbers are the record.

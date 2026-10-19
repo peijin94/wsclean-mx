@@ -1,0 +1,610 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Sun, 18 Oct 2026 22:16:37 -0400
+Subject: [PATCH 8/8] Metal gridding: evaluate ducc0's fitted polynomial (poly
+ / poly-h variants)
+
+ducc0's w-gridder does not evaluate exp(beta*((1-v^2)^e0 - 1)) at gridding time:
+it approximates it with W piecewise polynomials of degree D and evaluates those.
+This adds the variant that does the same, so the Metal kernel can be numerically
+equivalent to the gridder it would replace.
+
+* poly_sample implements ducc0's convention (normalise by the support, interval
+  selection, local coordinate in [-1,1], Horner in the interval's monomials).
+* grid_accumulate_poly evaluates 36 samples per visibility; the cached
+  coefficients arrive as a buffer, and there is no per-visibility normalisation
+  because ducc0 divides the kernel out of the image with a correction function.
+* grid_accumulate_poly_hoisted keeps the 6+6 1D samples in registers.
+
+Measured (min of 5, three consecutive runs agreeing): poly 5.64 ms (35 Mvis/s)
+with rel_max 1.5e-7 against ducc0's convention - the best agreement of any
+variant, since a Horner chain has no beta-amplified float32 error; poly-h
+4.23 ms (47 Mvis/s, 1.3x faster than poly, rel_max 5.0e-6). Both slower than the
+analytic form (2.33 ms), because 36 Horner chains cost more than 12 fast-math
+pow/exp evaluations on this GPU. poly-h is the wiring candidate.
+
+The probe gains --kernel-coeffs and reads the row's beta_norm/e0 from the file
+rather than hard-coding them, so the analytic reference always describes the
+same kernel as the coefficients.
+
+diff --git a/metal/metaldevice.h b/metal/metaldevice.h
+index 7045a878..2f752a72 100644
+--- a/metal/metaldevice.h
++++ b/metal/metaldevice.h
+@@ -38,6 +38,8 @@ enum class Variant {
+   kHoisted,   // support-6 specialization: 6+6 weights per visibility in registers
+   kPacked,    // kHoisted reading bucket-ordered contiguous visibility data
+   kCostProbe,  // timing ablation: same memory/atomic pattern, no kernel math
++  kPoly,       // ducc0's fitted piecewise polynomial, no per-visibility normalisation
++  kPolyHoisted,  // kPoly with the 1D samples hoisted into registers
+ };
+ 
+ const char* variantName(Variant variant);
+@@ -48,6 +50,10 @@ struct GridAccumInput {
+   float beta = kDucc0BetaNorm * 6.0f;
+   float e0 = kDucc0E0;
+   Variant variant = Variant::kHoisted;
++  // ducc0's fitted kernel, required by Variant::kPoly: W intervals of
++  // (degree+1) monomial coefficients in the local coordinate, interval-major.
++  std::vector<float> kernel_coefficients;
++  std::size_t kernel_degree = 0;
+   // Visibilities: 4 floats each (u, v in grid coordinates, then re, im).
+   std::vector<float> visibilities;
+ };
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index df42a364..ceec385b 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -124,6 +124,8 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+     case Variant::kHoisted: return "hoisted";
+     case Variant::kPacked: return "packed";
+     case Variant::kCostProbe: return "costprobe";
++    case Variant::kPoly: return "poly";
++    case Variant::kPolyHoisted: return "poly-h";
+   }
+   return "unknown";
+ }
+@@ -148,10 +150,16 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     if (input.variant == Variant::kHoisted) kernel_name = "grid_accumulate_hoisted";
+     if (input.variant == Variant::kPacked) kernel_name = "grid_accumulate_hoisted_packed";
+     if (input.variant == Variant::kCostProbe) kernel_name = "grid_accumulate_cost_probe";
++    if (input.variant == Variant::kPoly) kernel_name = "grid_accumulate_poly";
++    if (input.variant == Variant::kPolyHoisted) kernel_name = "grid_accumulate_poly_hoisted";
+     if ((input.variant == Variant::kHoisted || input.variant == Variant::kPacked) &&
+         input.support != 6) {
+       fail("the hoisted variants are specialized for support 6");
+     }
++    if ((input.variant == Variant::kPoly || input.variant == Variant::kPolyHoisted) &&
++        input.kernel_coefficients.empty()) {
++      fail("Variant::kPoly needs kernel_coefficients (see bench/metal/ducc0_kernel_tool.cpp)");
++    }
+     const auto host_begin = std::chrono::steady_clock::now();
+     const TileBuckets buckets = bucketVisibilities(input);
+     std::vector<float> packed;
+@@ -210,7 +218,21 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     const unsigned support = static_cast<unsigned>(input.support);
+     const float beta = input.beta;
+     const float e0 = input.e0;
+-    if (input.variant == Variant::kPacked) {
++    if (input.variant == Variant::kPoly || input.variant == Variant::kPolyHoisted) {
++      [encoder setBuffer:visibility_buffer offset:0 atIndex:0];
++      [encoder setBuffer:start_buffer offset:0 atIndex:1];
++      [encoder setBuffer:item_buffer offset:0 atIndex:2];
++      [encoder setBuffer:grid_buffer offset:0 atIndex:3];
++      const unsigned degree = static_cast<unsigned>(input.kernel_degree);
++      [encoder setBytes:input.kernel_coefficients.data()
++                 length:input.kernel_coefficients.size() * sizeof(float)
++                atIndex:4];
++      [encoder setBytes:&degree length:sizeof(degree) atIndex:5];
++      [encoder setBytes:&grid_size length:sizeof(grid_size) atIndex:6];
++      [encoder setBytes:&centre length:sizeof(centre) atIndex:7];
++      [encoder setBytes:&tiles_row length:sizeof(tiles_row) atIndex:8];
++      [encoder setBytes:&support length:sizeof(support) atIndex:9];
++    } else if (input.variant == Variant::kPacked) {
+       [encoder setBuffer:visibility_buffer offset:0 atIndex:0];
+       [encoder setBuffer:start_buffer offset:0 atIndex:1];
+       [encoder setBuffer:grid_buffer offset:0 atIndex:2];
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index 0bb45530..1e0fd680 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -425,6 +425,183 @@ kernel void grid_accumulate_cost_probe(device const float* visibilities,
+   }
+ }
+ 
++// ducc0's fitted gridding kernel: W piecewise polynomials of degree D in the
++// local coordinate. The convention below reproduces ducc0's
++// FunctionApproximator/PolynomialKernel::eval exactly (verified against their
++// code by bench/metal/ducc0_kernel_tool.cpp: 0 difference with the
++// double-precision coefficients, 1.1e-8 with the float32 ones the float
++// kernels store). x is the offset in CELLS; normalising by the support gives
++// ducc0's [-1,1] domain.
++inline float poly_sample(float x, constant float* coefficients, uint degree, uint support) {
++  // NB: `half` is a reserved type name in MSL - hence half_support.
++  const float half_support = 0.5f * float(support);
++  if (x <= -half_support || x >= half_support) return 0.0f;
++  const float xnorm = x / half_support;
++  const float xrel = half_support * (xnorm + 1.0f);
++  int nth = int(xrel);
++  nth = min(nth, int(support) - 1);
++  const float locx = ((xrel - float(nth)) - 0.5f) * 2.0f;
++  const uint ofs = uint(nth) * (degree + 1u);
++  float value = coefficients[ofs];
++  for (uint i = 1u; i <= degree; ++i) value = value * locx + coefficients[ofs + i];
++  return value;
++}
++
++// Same tiled structure as the generic kernel, but the weights come from
++// ducc0's polynomial and there is NO per-visibility normalisation: ducc0
++// divides the kernel out of the image afterwards with a correction function, so
++// its gridding kernel is used raw. This is the variant that can be wired into
++// the w-gridder.
++kernel void grid_accumulate_poly(device const float* visibilities,
++                                 device const uint* bucket_start,
++                                 device const uint* bucket_items,
++                                 device atomic_uint* grid,
++                                 constant float* coefficients,
++                                 constant uint& degree,
++                                 constant uint& grid_size,
++                                 constant int& centre,
++                                 constant uint& tiles_per_row,
++                                 constant uint& support,
++                                 uint2 tid2 [[thread_position_in_threadgroup]],
++                                 uint2 tile_id [[threadgroup_position_in_grid]],
++                                 uint tid [[thread_index_in_threadgroup]]) {
++  threadgroup atomic_uint tile[(kTile * kTile) * 2];
++  for (uint i = tid; i < kTile * kTile; i += kThreads) {
++    atomic_store_explicit(&tile[2 * i], 0u, memory_order_relaxed);
++    atomic_store_explicit(&tile[2 * i + 1], 0u, memory_order_relaxed);
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++
++  const uint tile_index = tile_id.y * tiles_per_row + tile_id.x;
++  const uint begin = bucket_start[tile_index];
++  const uint end = bucket_start[tile_index + 1];
++  const int half_support = int(support) / 2;
++  const int tile_x0 = int(tile_id.x) * int(kTile);
++  const int tile_y0 = int(tile_id.y) * int(kTile);
++
++  for (uint item = begin + tid; item < end; item += kThreads) {
++    const uint visibility = bucket_items[item];
++    const float u = visibilities[4 * visibility + 0];
++    const float v = visibilities[4 * visibility + 1];
++    const float2 value = float2(visibilities[4 * visibility + 2],
++                                visibilities[4 * visibility + 3]);
++    const float rounded_u = round(u);
++    const float rounded_v = round(v);
++    const int i0 = int(rounded_u) + centre;
++    const int j0 = int(rounded_v) + centre;
++    const float fx = u - rounded_u;
++    const float fy = v - rounded_v;
++
++    for (int jy = -half_support; jy < half_support; ++jy) {
++      const int cy = j0 + jy - tile_y0;
++      if (cy < 0 || cy >= int(kTile)) continue;
++      const float wy = poly_sample(fy - float(jy), coefficients, degree, support);
++      if (wy == 0.0f) continue;
++      for (int jx = -half_support; jx < half_support; ++jx) {
++        const int cx = i0 + jx - tile_x0;
++        if (cx < 0 || cx >= int(kTile)) continue;
++        const float weight =
++            poly_sample(fx - float(jx), coefficients, degree, support) * wy;
++        const uint cell = 2 * (cy * int(kTile) + cx);
++        atomic_add_float(&tile[cell], weight * value.x);
++        atomic_add_float(&tile[cell + 1], weight * value.y);
++      }
++    }
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++
++  for (uint i = tid; i < kTile * kTile; i += kThreads) {
++    const float re = as_type<float>(atomic_load_explicit(&tile[2 * i], memory_order_relaxed));
++    const float im =
++        as_type<float>(atomic_load_explicit(&tile[2 * i + 1], memory_order_relaxed));
++    if (re == 0.0f && im == 0.0f) continue;
++    const uint cx = tile_x0 + i % kTile;
++    const uint cy = tile_y0 + i / kTile;
++    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
++    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++  }
++}
++
++// poly with the 1D samples hoisted into registers: 6+6 polynomial evaluations
++// per visibility instead of 36. No normalisation (ducc0 convention).
++kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
++                                        device const uint* bucket_start,
++                                        device const uint* bucket_items,
++                                        device atomic_uint* grid,
++                                        constant float* coefficients,
++                                        constant uint& degree,
++                                        constant uint& grid_size,
++                                        constant int& centre,
++                                        constant uint& tiles_per_row,
++                                        constant uint& support,
++                                        uint tid [[thread_index_in_threadgroup]],
++                                        uint2 tile_id [[threadgroup_position_in_grid]]) {
++  threadgroup atomic_uint tile[(kTile * kTile) * 2];
++  for (uint i = tid; i < kTile * kTile; i += kThreads) {
++    atomic_store_explicit(&tile[2 * i], 0u, memory_order_relaxed);
++    atomic_store_explicit(&tile[2 * i + 1], 0u, memory_order_relaxed);
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++
++  const uint tile_index = tile_id.y * tiles_per_row + tile_id.x;
++  const uint begin = bucket_start[tile_index];
++  const uint end = bucket_start[tile_index + 1];
++  const int tile_x0 = int(tile_id.x) * int(kTile);
++  const int tile_y0 = int(tile_id.y) * int(kTile);
++
++  for (uint item = begin + tid; item < end; item += kThreads) {
++    const uint visibility = bucket_items[item];
++    const float u = visibilities[4 * visibility + 0];
++    const float v = visibilities[4 * visibility + 1];
++    const float2 value = float2(visibilities[4 * visibility + 2],
++                                visibilities[4 * visibility + 3]);
++    const float rounded_u = round(u);
++    const float rounded_v = round(v);
++    const int i0 = int(rounded_u) + centre;
++    const int j0 = int(rounded_v) + centre;
++    const float fx = u - rounded_u;
++    const float fy = v - rounded_v;
++
++    float wx[kSupport];
++    float wy[kSupport];
++#pragma clang loop unroll(full)
++    for (int j = 0; j < int(kSupport); ++j) {
++      const float offset = float(j - kHalfSupport);
++      wx[j] = poly_sample(fx - offset, coefficients, degree, support);
++      wy[j] = poly_sample(fy - offset, coefficients, degree, support);
++    }
++
++#pragma clang loop unroll(full)
++    for (int jy = 0; jy < int(kSupport); ++jy) {
++      const int cy = j0 + jy - kHalfSupport - tile_y0;
++      if (cy < 0 || cy >= int(kTile)) continue;
++      const float wy_val = wy[jy];
++      if (wy_val == 0.0f) continue;
++#pragma clang loop unroll(full)
++      for (int jx = 0; jx < int(kSupport); ++jx) {
++        const int cx = i0 + jx - kHalfSupport - tile_x0;
++        if (cx < 0 || cx >= int(kTile)) continue;
++        const float weight = wx[jx] * wy_val;
++        const uint cell = 2 * (cy * int(kTile) + cx);
++        atomic_add_float(&tile[cell], weight * value.x);
++        atomic_add_float(&tile[cell + 1], weight * value.y);
++      }
++    }
++  }
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++
++  for (uint i = tid; i < kTile * kTile; i += kThreads) {
++    const float re = as_type<float>(atomic_load_explicit(&tile[2 * i], memory_order_relaxed));
++    const float im =
++        as_type<float>(atomic_load_explicit(&tile[2 * i + 1], memory_order_relaxed));
++    if (re == 0.0f && im == 0.0f) continue;
++    const uint cx = tile_x0 + i % kTile;
++    const uint cy = tile_y0 + i / kTile;
++    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
++    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++  }
++}
++
+ )MSL";
+ 
+ }  // namespace mx::metal
+diff --git a/metal/probe_main.cpp b/metal/probe_main.cpp
+index f1159f8f..4d433df2 100644
+--- a/metal/probe_main.cpp
++++ b/metal/probe_main.cpp
+@@ -16,8 +16,14 @@
+ // no contribution must be exactly zero, and every cell the twin finds non-zero
+ // must be non-zero on the GPU.
+ //
+-// Usage: mx-metal-probe [--variant analytic|hoisted|packed|all] [--repeat N]
+-//                       [--nvis N] [--grid G] [--support S] [--quiet] [--dump P]
++// The poly variant additionally needs ducc0's fitted coefficients, produced by
++// bench/metal/ducc0_kernel_tool.cpp (see scripts/metal_kernel_coeffs.sh) and
++// passed with --kernel-coeffs; its reference grid uses those same coefficients
++// with ducc0's convention and no per-visibility normalisation.
++//
++// Usage: mx-metal-probe [--variant analytic|hoisted|packed|poly|costprobe|all]
++//                       [--kernel-coeffs FILE] [--repeat N] [--nvis N]
++//                       [--grid G] [--support S] [--quiet] [--dump P]
+ 
+ #include "metal/metaldevice.h"
+ 
+@@ -39,6 +45,7 @@ struct Options {
+   std::size_t support = 6;
+   float beta = mx::metal::kDucc0BetaNorm * 6.0f;
+   float e0 = mx::metal::kDucc0E0;
++  std::string kernel_coefficients_file;
+   int repeat = 1;
+   bool quiet = false;
+   bool all_variants = true;
+@@ -46,6 +53,83 @@ struct Options {
+   std::string dump_prefix;  // when set, write visibilities and both grids
+ };
+ 
++// Loads ducc0's fitted kernel coefficients written by ducc0_kernel_tool.
++bool loadKernelCoefficients(const std::string& path, std::size_t expected_support,
++                            std::vector<float>& coefficients, std::size_t& degree,
++                            double& beta_norm, double& e0) {
++  FILE* file = std::fopen(path.c_str(), "r");
++  if (file == nullptr) {
++    std::fprintf(stderr, "mx-metal-probe: cannot read %s\n", path.c_str());
++    return false;
++  }
++  char line[4096];
++  std::size_t expected = 0;
++  while (std::fgets(line, sizeof(line), file) != nullptr) {
++    char keyword[64];
++    if (std::sscanf(line, "%63s", keyword) != 1) continue;
++    if (keyword[0] == '#') continue;
++    if (std::strcmp(keyword, "support") == 0) {
++      std::size_t support = 0;
++      std::sscanf(line, "%*s %zu", &support);
++      if (support != expected_support) {
++        std::fprintf(stderr, "mx-metal-probe: kernel file support %zu != --support %zu\n",
++                     support, expected_support);
++        std::fclose(file);
++        return false;
++      }
++    } else if (std::strcmp(keyword, "degree") == 0) {
++      std::sscanf(line, "%*s %zu", &degree);
++    } else if (std::strcmp(keyword, "beta_norm") == 0) {
++      std::sscanf(line, "%*s %lf", &beta_norm);
++    } else if (std::strcmp(keyword, "e0") == 0) {
++      std::sscanf(line, "%*s %lf", &e0);
++    } else if (std::strcmp(keyword, "coefficients") == 0) {
++      std::sscanf(line, "%*s %zu", &expected);
++      coefficients.clear();
++      coefficients.reserve(expected);
++    } else if (std::strcmp(keyword, "interval") == 0) {
++      // "interval <n> <c0> <c1> ...": consume the interval index first, or it
++      // would be pushed as a coefficient and shift every later value.
++      char* cursor = line + std::strlen("interval");
++      char* index_end = nullptr;
++      (void)std::strtol(cursor, &index_end, 10);
++      char* number = index_end;
++      while (number != nullptr && *number != '\0' && coefficients.size() < expected) {
++        char* end = nullptr;
++        const double value = std::strtod(number, &end);
++        if (end == number) break;
++        coefficients.push_back(static_cast<float>(value));
++        number = end;
++      }
++    }
++  }
++  std::fclose(file);
++  if (coefficients.size() != expected || expected == 0) {
++    std::fprintf(stderr, "mx-metal-probe: coefficient count %zu != declared %zu\n",
++                 coefficients.size(), expected);
++    return false;
++  }
++  return true;
++}
++
++// ducc0's fitted polynomial, in double, using the float32 coefficients the GPU
++// carries: the reference for the poly variant (ducc0's convention, no
++// per-visibility normalisation).
++double polySample(const std::vector<float>& coefficients, std::size_t support,
++                  std::size_t degree, double x) {
++  const double half = 0.5 * static_cast<double>(support);
++  if (x <= -half || x >= half) return 0.0;
++  const double xnorm = x / half;
++  const double xrel = half * (xnorm + 1.0);
++  long nth = static_cast<long>(xrel);
++  if (nth > static_cast<long>(support) - 1) nth = static_cast<long>(support) - 1;
++  const double locx = ((xrel - static_cast<double>(nth)) - 0.5) * 2.0;
++  const std::size_t ofs = static_cast<std::size_t>(nth) * (degree + 1);
++  double value = coefficients[ofs];
++  for (std::size_t i = 1; i <= degree; ++i) value = value * locx + coefficients[ofs + i];
++  return value;
++}
++
+ // ducc0's exponential-of-semicircle kernel in double: the reference the float32
+ // GPU path is compared against.
+ double esKernel(double x, double support, double beta, double e0) {
+@@ -56,10 +140,20 @@ double esKernel(double x, double support, double beta, double e0) {
+ }
+ 
+ // The reference implementation of the same accumulation, in double precision.
++enum class ReferenceKernel { kAnalytic, kPolynomial };
++
+ std::vector<double> referenceGrid(const Options& options,
+-                                  const std::vector<float>& visibilities) {
++                                  const std::vector<float>& visibilities,
++                                  ReferenceKernel kernel, bool normalise,
++                                  const std::vector<float>& polynomial = {},
++                                  std::size_t polynomial_degree = 0) {
+   const std::size_t g = options.grid;
+   const int half = static_cast<int>(options.support) / 2;
++  auto weight = [&](double x) {
++    return kernel == ReferenceKernel::kPolynomial
++               ? polySample(polynomial, options.support, polynomial_degree, x)
++               : esKernel(x, options.support, options.beta, options.e0);
++  };
+   const long centre_index = static_cast<long>(g) / 2;
+   std::vector<double> grid(2 * g * g, 0.0);
+   for (std::size_t v = 0; v + 3 < visibilities.size(); v += 4) {
+@@ -76,25 +170,25 @@ std::vector<double> referenceGrid(const Options& options,
+     double wx[16], wy[16];
+     double sum_x = 0.0, sum_y = 0.0;
+     for (int j = 0; j < static_cast<int>(options.support); ++j) {
+-      wx[j] = esKernel(fx - (j - half), static_cast<double>(options.support), options.beta,
+-                       options.e0);
+-      wy[j] = esKernel(fy - (j - half), static_cast<double>(options.support), options.beta,
+-                       options.e0);
++      wx[j] = weight(fx - (j - half));
++      wy[j] = weight(fy - (j - half));
+       sum_x += wx[j];
+       sum_y += wy[j];
+     }
+-    if (sum_x == 0.0 || sum_y == 0.0) continue;
++    if (normalise && (sum_x == 0.0 || sum_y == 0.0)) continue;
++    const double scale_x = normalise ? 1.0 / sum_x : 1.0;
++    const double scale_y = normalise ? 1.0 / sum_y : 1.0;
+     for (int jy = 0; jy < static_cast<int>(options.support); ++jy) {
+       const long cy = j0 + jy - half;
+       if (cy < 0 || cy >= static_cast<long>(g)) continue;
+       for (int jx = 0; jx < static_cast<int>(options.support); ++jx) {
+         const long cx = i0 + jx - half;
+         if (cx < 0 || cx >= static_cast<long>(g)) continue;
+-        const double weight = (wx[jx] / sum_x) * (wy[jy] / sum_y);
++        const double cell_weight = (wx[jx] * scale_x) * (wy[jy] * scale_y);
+         grid[2 * (static_cast<std::size_t>(cy) * g + static_cast<std::size_t>(cx))] +=
+-            weight * static_cast<double>(visibilities[v + 2]);
++            cell_weight * static_cast<double>(visibilities[v + 2]);
+         grid[2 * (static_cast<std::size_t>(cy) * g + static_cast<std::size_t>(cx)) + 1] +=
+-            weight * static_cast<double>(visibilities[v + 3]);
++            cell_weight * static_cast<double>(visibilities[v + 3]);
+       }
+     }
+   }
+@@ -176,6 +270,8 @@ Options parseOptions(int argc, char** argv) {
+       }
+     } else if (argument == "--quiet") {
+       options.quiet = true;
++    } else if (argument == "--kernel-coeffs") {
++      options.kernel_coefficients_file = value("--kernel-coeffs");
+     } else if (argument == "--dump") {
+       options.dump_prefix = value("--dump");
+     } else {
+@@ -257,11 +353,31 @@ int main(int argc, char** argv) {
+     if (!kernel_passed) return 1;
+   }
+ 
++  std::vector<float> kernel_coefficients;
++  std::size_t kernel_degree = 0;
++  // The file carries the row's own beta_norm/e0: use them so the analytic
++  // reference describes the SAME kernel the coefficients belong to (several
++  // ducc0 rows share W=6/oversample 2 with different fits).
++  double beta_norm = options.beta / static_cast<double>(options.support);
++  double e0 = options.e0;
++  if (!options.kernel_coefficients_file.empty() &&
++      !loadKernelCoefficients(options.kernel_coefficients_file, options.support,
++                              kernel_coefficients, kernel_degree, beta_norm, e0)) {
++    return 2;
++  }
++  if (options.variant == mx::metal::Variant::kPoly && kernel_coefficients.empty() &&
++      !options.all_variants) {
++    std::fprintf(stderr, "mx-metal-probe: --variant poly needs --kernel-coeffs\n");
++    return 2;
++  }
++
+   mx::metal::GridAccumInput input;
+   input.grid_size = options.grid;
+   input.support = options.support;
+-  input.beta = options.beta;
+-  input.e0 = options.e0;
++  input.beta = static_cast<float>(beta_norm * static_cast<double>(options.support));
++  input.e0 = static_cast<float>(e0);
++  input.kernel_coefficients = kernel_coefficients;
++  input.kernel_degree = kernel_degree;
+ 
+   std::mt19937_64 random(20261018);  // fixed seed: the probe is a test
+   std::uniform_real_distribution<float> uv(-0.45f * static_cast<float>(options.grid),
+@@ -293,7 +409,46 @@ int main(int argc, char** argv) {
+     return 0;
+   }
+ 
+-  const std::vector<double> reference = referenceGrid(options, input.visibilities);
++  Options effective = options;
++  effective.beta = input.beta;
++  effective.e0 = input.e0;
++  const std::vector<double> reference = referenceGrid(effective, input.visibilities,
++                                                      ReferenceKernel::kAnalytic, true);
++  std::vector<double> reference_poly;
++  if (!kernel_coefficients.empty()) {
++    reference_poly = referenceGrid(effective, input.visibilities,
++                                   ReferenceKernel::kPolynomial, false, kernel_coefficients,
++                                   kernel_degree);
++    // How far ducc0's fitted polynomial sits from the analytic kernel it
++    // approximates: reported separately where the kernel is significant
++    // (>= 1e-3 of peak, where it shapes the grid) and over the whole support,
++    // with the location of the worst tail deviation.
++    double fit_significant = 0.0, fit_tail = 0.0, fit_tail_x = 0.0, fit_significant_x = 0.0;
++    for (int j = -static_cast<int>(options.support) / 2;
++         j < static_cast<int>(options.support) / 2; ++j) {
++      for (int step = 0; step <= 2000; ++step) {
++        const double f = -0.5 + static_cast<double>(step) / 2000.0;
++        const double x = f - static_cast<double>(j);
++        const double analytic = esKernel(x, static_cast<double>(effective.support),
++                                         effective.beta, effective.e0);
++        const double deviation =
++            std::fabs(polySample(kernel_coefficients, options.support, kernel_degree, x) -
++                      analytic);
++        if (deviation > fit_tail) {
++          fit_tail = deviation;
++          fit_tail_x = x;
++        }
++        if (analytic >= 1.0e-3 && deviation > fit_significant) {
++          fit_significant = deviation;
++          fit_significant_x = x;
++        }
++      }
++    }
++    std::printf("kernel_fit poly_vs_analytic significant_max_abs=%.3g at x=%.4f "
++                "full_support_max_abs=%.3g at x=%.4f (ducc0's own fit error; their EPS "
++                "column is the aliasing budget 2.1e-5, not a pointwise bound)\n",
++                fit_significant, fit_significant_x, fit_tail, fit_tail_x);
++  }
+ 
+   struct Row {
+     mx::metal::Variant variant;
+@@ -306,10 +461,19 @@ int main(int argc, char** argv) {
+   std::vector<mx::metal::Variant> variants;
+   if (options.all_variants) {
+     variants = {mx::metal::Variant::kAnalytic, mx::metal::Variant::kHoisted,
+-                mx::metal::Variant::kPacked, mx::metal::Variant::kCostProbe};
++                mx::metal::Variant::kPacked};
++    if (!kernel_coefficients.empty()) {
++      variants.push_back(mx::metal::Variant::kPoly);
++      variants.push_back(mx::metal::Variant::kPolyHoisted);
++    }
++    variants.push_back(mx::metal::Variant::kCostProbe);
+   } else {
+     variants = {options.variant};
+   }
++  if (options.variant == mx::metal::Variant::kPoly && kernel_coefficients.empty()) {
++    std::fprintf(stderr, "mx-metal-probe: --variant poly needs --kernel-coeffs\n");
++    return 2;
++  }
+ 
+   std::vector<Row> rows;
+   for (const mx::metal::Variant variant : variants) {
+@@ -319,13 +483,17 @@ int main(int argc, char** argv) {
+       mx::metal::GridAccumInput run_input = input;
+       run_input.variant = variant;
+       const mx::metal::GridAccumResult gpu = mx::metal::gridAccumulate(run_input);
++      const bool polynomial_reference = variant == mx::metal::Variant::kPoly ||
++                                        variant == mx::metal::Variant::kPolyHoisted;
++      const std::vector<double>& reference_for_variant =
++          polynomial_reference ? reference_poly : reference;
+       // The minimum kernel time over repeats is the stable estimate.
+       if (repeat == 0 || gpu.gpu_seconds < row.gpu_seconds) {
+         row.gpu_seconds = gpu.gpu_seconds;
+         row.wall_seconds = gpu.wall_seconds;
+         row.host_seconds = gpu.host_seconds;
+       }
+-      row.check = checkGrid(gpu.grid, reference);
++      row.check = checkGrid(gpu.grid, reference_for_variant);
+       if (!options.dump_prefix.empty() && repeat == 0 && variant == variants.front()) {
+         writeFile(options.dump_prefix + "-vis.f32", input.visibilities.data(),
+                   input.visibilities.size() * sizeof(float));
+@@ -350,12 +518,12 @@ int main(int argc, char** argv) {
+   }
+ 
+   if (!options.quiet) {
+-    std::printf("device=%s working_set=%.1fGiB grid=%zu support=%zu beta=%.4f e0=%.5f "
++    std::printf("device=%s working_set=%.1fGiB grid=%zu support=%zu beta=%.6f e0=%.6f "
+                 "nvis=%zu tiles=32x32\n",
+                 info.name.c_str(),
+                 static_cast<double>(info.recommended_working_set) / (1u << 30), options.grid,
+-                options.support, static_cast<double>(options.beta),
+-                static_cast<double>(options.e0), input.visibilities.size() / 4);
++                options.support, static_cast<double>(input.beta),
++                static_cast<double>(input.e0), input.visibilities.size() / 4);
+   }
+   bool all_passed = true;
+   for (const Row& row : rows) {

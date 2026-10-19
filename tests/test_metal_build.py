@@ -46,6 +46,32 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('Metal probe absent', text,
                       'a build without the flag must say so rather than pass silently')
 
+    def test_kernel_extraction_script_stays_wired(self):
+        script = ROOT / 'scripts/metal_kernel_coeffs.sh'
+        self.assertTrue(script.exists())
+        self.assertTrue(script.stat().st_mode & 0o111, 'must be executable')
+        result = subprocess.run(['bash', '-n', str(script)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = script.read_text()
+        # wsclean's default -wgridder-accuracy; the row it selects is documented
+        # in docs/metal-plan.md and must stay the default here too.
+        self.assertIn('EPSILON=1e-4', text)
+        self.assertIn('ducc0_kernel_tool.cpp', text)
+        for source in ('gridding_kernel.cc', 'gl_integrator.cc', 'threading.cc',
+                       'string_utils.cc', 'mav.cc'):
+            self.assertIn(source, text, f'{source} must be linked into the extractor')
+
+    def test_probe_reads_row_parameters_from_the_coefficient_file(self):
+        source = self.read('work/wsclean/metal/probe_main.cpp')
+        # Hard-coding beta/e0 while the coefficients come from a file previously
+        # compared two different ducc0 kernels.
+        self.assertIn('beta_norm', source)
+        self.assertIn('loadKernelCoefficients', source)
+        self.assertIn('--kernel-coeffs', source)
+        shader = self.read('work/wsclean/metal/mxshaders.h')
+        self.assertIn('poly_sample', shader)
+        self.assertIn('grid_accumulate_poly_hoisted', shader)
+
     def test_probe_keeps_its_differential_assertions(self):
         source = self.read('work/wsclean/metal/probe_main.cpp')
         for anchor in ('referenceGrid', 'kTolerance', 'mismatched_zero', 'missed_significant'):
