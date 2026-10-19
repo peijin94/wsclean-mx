@@ -652,3 +652,19 @@ Status summary of the Metal backend, for the record:
 | 2-D inversion (w negligible) | verified, wired behind `-mgpu` | 5e-5 peak, 0.8% rms field |
 | w-layer inversion | w = 0 matches, w != 0 wrong | 1e-5 peak / 1.4e-5 sum at w = 0; incoherent at w != 0 |
 | w-layer speed | measured | 2x SLOWER (1.13 s vs 0.56 s) - full per-plane FFTs |
+
+### Single-visibility probe: the peak is exact, the fringe field is not
+
+One synthetic row at w = 5.95 lambda isolates the w algebra from the data
+distribution. The eight plane weights come out as a proper kernel ladder
+(0.0005, 0.039, 0.340, 0.890, 0.890, 0.340, 0.039, 0.0005) and the image **peak
+matches ducc0 exactly** (ratio 1.000000) - but the field does not: rms differs by
+100% and the worst pixel is off by a factor of -2. So the plane weights and the
+screen are right, and the fault is downstream: the per-pixel extraction of the
+plane into the image (the Hermitian mirror over i and the `j2 = min(j, H-j)`
+phase reuse), or the uv->cell scale (my cell is 0.727 lambda against ducc0's
+0.731 because the grid is rounded up to 352 cells, a 0.5% frequency error that
+grows across the field).
+
+That is now a two-candidate question with a pixel-level test, which is a much
+better place to stop than "somewhere in the w path".
