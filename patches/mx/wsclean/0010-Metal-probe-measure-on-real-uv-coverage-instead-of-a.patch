@@ -1,0 +1,225 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Mon, 19 Oct 2026 08:11:04 -0400
+Subject: [PATCH 10/10] Metal probe: measure on real uv coverage instead of a
+ synthetic spread
+
+The synthetic uniform uv spread is the easy case for a gridding kernel: its
+footprints rarely collide, so tile atomics go uncontended. Real LOFAR coverage
+clusters - LOFAR_3C196.ms has 621 250 rows over ~20 000 distinct footprint
+origins at the 4-arcsec configuration - and it is the clustered case that the
+kernel has to survive.
+
+* metal/uvw_file.h reads a casacore taql dump of UVW/DATA/FLAG (shared with the
+  ducc0 CPU baseline, so both are timed on the same rows), drops flagged and
+  non-finite rows, and reports the counts.
+* mx-metal-probe --op realdata takes --uvw-file/--freq/--lambda-per-cell, scales
+  metres to grid cells exactly as the CPU tool does, and reuses the round-trip
+  measurement plus both differential checks.
+
+Measured (440 745 usable rows): at 50.4 lambda/cell the grid disagrees with its
+float64 twin by 2.11e-05, above the strict 1e-5 bound, because tens of rows per
+cell with a wide flux dynamic range push float32 summation noise up - the same
+effect the quiet-Sun science gate recorded. Degridding (4e-07) and the adjoint
+identity (4.5e-06) still pass, so the pair stays adjoint.
+
+diff --git a/metal/probe_main.cpp b/metal/probe_main.cpp
+index 3f297d11..6939098d 100644
+--- a/metal/probe_main.cpp
++++ b/metal/probe_main.cpp
+@@ -26,6 +26,7 @@
+ //                       [--grid G] [--support S] [--quiet] [--dump P]
+ 
+ #include "metal/metaldevice.h"
++#include "metal/uvw_file.h"  // real uv coverage from a casacore taql dump
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -46,7 +47,10 @@ struct Options {
+   float beta = mx::metal::kDucc0BetaNorm * 6.0f;
+   float e0 = mx::metal::kDucc0E0;
+   std::string kernel_coefficients_file;
+-  std::string op = "grid";  // grid | roundtrip
++  std::string op = "grid";  // grid | roundtrip | realdata
++  std::string uvw_file;          // realdata: taql dump of UVW/DATA/FLAG
++  double frequency_hz = 0.0;     // realdata: metres -> wavelengths
++  double lambda_per_cell = 1.0;  // realdata: grid geometry to test
+   int repeat = 1;
+   bool quiet = false;
+   bool all_variants = true;
+@@ -387,9 +391,15 @@ Options parseOptions(int argc, char** argv) {
+       }
+     } else if (argument == "--quiet") {
+       options.quiet = true;
++    } else if (argument == "--uvw-file") {
++      options.uvw_file = value("--uvw-file");
++    } else if (argument == "--freq") {
++      options.frequency_hz = std::strtod(value("--freq"), nullptr);
++    } else if (argument == "--lambda-per-cell") {
++      options.lambda_per_cell = std::strtod(value("--lambda-per-cell"), nullptr);
+     } else if (argument == "--op") {
+       options.op = value("--op");
+-      if (options.op != "grid" && options.op != "roundtrip") {
++      if (options.op != "grid" && options.op != "roundtrip" && options.op != "realdata") {
+         std::fprintf(stderr, "mx-metal-probe: unknown op %s\n", options.op.c_str());
+         std::exit(2);
+       }
+@@ -502,6 +512,29 @@ int main(int argc, char** argv) {
+   input.kernel_coefficients = kernel_coefficients;
+   input.kernel_degree = kernel_degree;
+ 
++  if (options.op == "realdata") {
++    // Real uv coverage (LOFAR 3C196): the synthetic uniform spread is easy for
++    // both the gridder and the gridding kernel, while real data cluster into a
++    // few cells, where atomic contention is worst.
++    if (options.uvw_file.empty() || options.frequency_hz <= 0.0) {
++      std::fprintf(stderr, "mx-metal-probe: --op realdata needs --uvw-file and --freq\n");
++      return 2;
++    }
++    const mxbench::RealVisibilitySet set = mxbench::LoadUvwFile(options.uvw_file);
++    const double metres_to_cells =
++        options.frequency_hz / mxbench::kSpeedOfLight / options.lambda_per_cell;
++    input.visibilities.resize(4 * set.rows.size());
++    for (std::size_t v = 0; v < set.rows.size(); ++v) {
++      const mxbench::RealVisibility& row = set.rows[v];
++      input.visibilities[4 * v + 0] = static_cast<float>(row.u_m * metres_to_cells);
++      input.visibilities[4 * v + 1] = static_cast<float>(row.v_m * metres_to_cells);
++      input.visibilities[4 * v + 2] = row.re;
++      input.visibilities[4 * v + 3] = row.im;
++    }
++    std::printf("realdata file=%s rows=%zu freq=%.6g lambda_per_cell=%.6g grid=%zu support=%zu\n",
++                options.uvw_file.c_str(), set.rows.size(), options.frequency_hz,
++                options.lambda_per_cell, options.grid, options.support);
++  } else {
+   std::mt19937_64 random(20261018);  // fixed seed: the probe is a test
+   std::uniform_real_distribution<float> uv(-0.45f * static_cast<float>(options.grid),
+                                            0.45f * static_cast<float>(options.grid));
+@@ -526,6 +559,7 @@ int main(int argc, char** argv) {
+     input.visibilities[4 * (options.nvis + k) + 2] = 1.0f;
+     input.visibilities[4 * (options.nvis + k) + 3] = -0.5f;
+   }
++  }
+ 
+   if (!info.available) {
+     std::printf("metal_probe status=SKIP reason=no-metal-device\n");
+@@ -535,9 +569,9 @@ int main(int argc, char** argv) {
+   Options effective = options;
+   effective.beta = input.beta;
+   effective.e0 = input.e0;
+-  if (options.op == "roundtrip") {
++  if (options.op == "roundtrip" || options.op == "realdata") {
+     if (kernel_coefficients.empty()) {
+-      std::fprintf(stderr, "mx-metal-probe: --op roundtrip needs --kernel-coeffs\n");
++      std::fprintf(stderr, "mx-metal-probe: --op %s needs --kernel-coeffs\n", options.op.c_str());
+       return 2;
+     }
+     return runRoundTrip(options, info, kernel_coefficients, kernel_degree, input);
+diff --git a/metal/uvw_file.h b/metal/uvw_file.h
+new file mode 100644
+index 00000000..e3aa43f3
+--- /dev/null
++++ b/metal/uvw_file.h
+@@ -0,0 +1,103 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Copyright (C) 2026 Peijin Zhang
++//
++// Reader for the case-I visibility dump that both the Metal probe and the
++// ducc0 CPU baseline use, so that the two are compared on the same data - real
++// LOFAR uv coverage rather than a synthetic uniform spread. The dump is
++// produced with casacore's taql:
++//
++//   taql "select UVW[0] as u, UVW[1] as v, UVW[2] as w, \
++//         real(DATA[0,0]) as xr, imag(DATA[0,0]) as xi, FLAG[0,0] as f0, \
++//         real(DATA[1,0]) as yr, imag(DATA[1,0]) as yi from <ms>" > dump.txt
++//
++// taql prints a short prose header and tab-separated rows; NaN-valued rows are
++// common in LOFAR data (they carry the flagging), so both are handled here and
++// the counts are reported.
++//
++// UVW is in metres: every consumer must scale by frequency/c to get
++// wavelengths, and by its own lambda-per-cell to get grid cells.
++#ifndef MX_UVW_FILE_H
++#define MX_UVW_FILE_H
++
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <fstream>
++#include <sstream>
++#include <string>
++#include <vector>
++
++namespace mxbench {
++
++struct RealVisibility {
++  double u_m, v_m, w_m;
++  float re, im;
++  bool flagged;
++};
++
++struct RealVisibilitySet {
++  std::vector<RealVisibility> rows;
++  std::size_t total = 0;      // rows in the file
++  std::size_t flagged = 0;    // dropped because the flag was set
++  std::size_t nonfinite = 0;  // dropped because a value was NaN or inf
++};
++
++inline RealVisibilitySet LoadUvwFile(const std::string& path) {
++  std::ifstream in(path);
++  if (!in) {
++    std::fprintf(stderr, "cannot open %s\n", path.c_str());
++    std::exit(2);
++  }
++  RealVisibilitySet set;
++  std::string line;
++  while (std::getline(in, line)) {
++    // A data row starts with a number; the header lines do not.
++    const char* begin = line.c_str();
++    char* end = nullptr;
++    const double u = std::strtod(begin, &end);
++    if (end == begin) continue;
++    std::istringstream fields(line);
++    RealVisibility row{};
++    std::string token;
++    int index = 0;
++    bool ok = true;
++    while (fields >> token) {
++      if (index < 3) {
++        char* stop = nullptr;
++        const double value = std::strtod(token.c_str(), &stop);
++        if (stop == token.c_str()) { ok = false; break; }
++        (&row.u_m)[index] = value;
++      } else if (index == 3 || index == 4) {
++        const double value = std::strtod(token.c_str(), nullptr);
++        (index == 3 ? row.re : row.im) = static_cast<float>(value);
++      } else if (index == 5) {
++        row.flagged = (token == "true" || token == "1");
++      }
++      ++index;
++    }
++    ++set.total;
++    const bool finite = std::isfinite(row.u_m) && std::isfinite(row.v_m) && std::isfinite(row.w_m) &&
++                        std::isfinite(row.re) && std::isfinite(row.im);
++    if (row.flagged) {
++      ++set.flagged;
++      continue;
++    }
++    if (!finite) {
++      ++set.nonfinite;
++      continue;
++    }
++    if (!ok) continue;
++    set.rows.push_back(row);
++  }
++  std::fprintf(stderr,
++               "[uvw] %s: %zu rows, %zu usable (%zu flagged, %zu non-finite dropped)\n",
++               path.c_str(), set.total, set.rows.size(), set.flagged, set.nonfinite);
++  return set;
++}
++
++// Wavelengths from metres: lambda = metres * frequency / c.
++inline constexpr double kSpeedOfLight = 299792458.0;
++
++}  // namespace mxbench
++
++#endif

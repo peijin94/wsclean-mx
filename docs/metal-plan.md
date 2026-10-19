@@ -269,11 +269,76 @@ correction, while the kernel does one 2D plane. The kernel-vs-kernel table above
 supersedes it; the stage figure stays useful only as a bound on what the pipeline
 could recover if the whole stage were offloaded.
 
+### Real uv coverage: the synthetic spread flattered the GPU
+
+The table above uses uniformly spread synthetic uv points, which is the easy
+case. Real LOFAR coverage clusters: for `LOFAR_3C196.ms` at 138.477 MHz the
+621 250 rows collapse to 20 519 distinct footprint origins at the 4-arcsec
+configuration (about 21 visibilities per cell) and 130 197 at 25 arcsec. Both
+tools now read the same dump (a `taql` extract of `UVW`/`DATA[0,0]`/`FLAG[0,0]`,
+621 250 rows of which 440 745 are usable; `work/wsclean/metal/uvw_file.h`),
+scale it identically (`--lambda-per-cell`, the wavelength size of one grid cell)
+and are timed on the same rows.
+
+| configuration | rows | GPU grid | GPU degrid | GPU total | CPU total | CPU/GPU |
+|---|---:|---:|---:|---:|---:|---:|
+| 50.4 lambda/cell (wsclean 4 arcsec benchmark) | 440 745 | 33.4-37.9 ms | 2.0-2.3 ms | 35.7-40.1 ms | 67.3 ms | **1.7-1.9x** |
+| 8 lambda/cell (LOFAR 25 arcsec typical) | 440 745 | 15.5-24.1 ms | 2.7-3.4 ms | 18.5-27.5 ms | 65.8 ms | **2.4-3.6x** |
+
+(min of 5, three repeat runs; the clustered case has 25-35 % run-to-run
+variance, so ranges are the honest form of these numbers.)
+
+Three findings, in order of importance:
+
+1. **The atomic accumulation is the bottleneck on real data.** At 50.4, GPU
+   degridding is 2.0-2.3 ms while gridding the same rows is 33.4-37.9 ms - a
+   factor of ~16 for the same footprint arithmetic, because degridding has no
+   atomics (one thread per visibility) and gridding funnels every visibility
+   through the tile CAS merge. Uniform data hid this: its footprints rarely
+   collide. Fixing it means the pull model - bucket visibilities per tile and
+   let a threadgroup own a tile exclusively, as ducc0's CPU gridder does with
+   its sorted ranges - rather than pushing into shared cells.
+2. **Clustering costs the CPU much less than the GPU.** ducc0's gridder sorts
+   rows by uv index, so clustered data gives its threads long contiguous runs
+   with no contention; the GPU's contention grows with multiplicity. This is
+   why the ratio falls from 3.5-5x to 1.7-3.6x.
+3. **Accuracy at high multiplicity.** At 50.4 the GPU grid sits 2.11e-05 from
+   its float64 twin (stable across runs) - above a strict 1e-5 relative bound,
+   the same effect the science gates recorded for the quiet-Sun field: hundreds
+   of thousands of contributions per cell with a wide flux dynamic range make
+   float32 summation noise fractionally larger. Degridding (1.1e-07-4.2e-07) and
+   the adjoint identity (1.6e-06-4.5e-06) both pass, so the pair stays adjoint;
+   the number is a statement about float32 accumulation, not about a placement
+   or weight error.
+
+**Correction.** The "3.5-5x" headline from the previous round is the uniformly
+spread case and should not be quoted alone; on real clustered coverage the
+honest range is 1.7-3.6x, with degridding carrying almost all of it until the
+atomic strategy is replaced.
+
 ### Resolved: standalone ducc0 CPU baseline
 
+Reproducing the real-data runs (both tools take the same two flags):
+
+```
+deps/install/bin/taql -ps -m 2000000 -o dump.txt \
+  "select UVW[0] as u, UVW[1] as v, UVW[2] as w, real(DATA[0,0]) as xr, \
+   imag(DATA[0,0]) as xi, FLAG[0,0] as f0 from LOFAR_3C196.ms"
+mx-metal-probe --op realdata --uvw-file dump.txt --freq 138.477e6 --lambda-per-cell 8 ...
+scripts/metal_cpu_baseline.sh --uvw-file dump.txt --freq 138.477e6 --lambda-per-cell 8 ...
+```
+
+Two traps worth remembering: `taql` prints **only the first 50 rows** unless
+given `-ps -m N` (a 621 250-row dump silently became 54 lines the first time),
+and the Homebrew `casacore` in `/opt/homebrew/bin` is linked against a removed
+`libhdf5.310.dylib`, so the project's own `deps/install/bin/taql` is the one to
+use in scripts and background jobs (interactive shells happen to resolve
+`/usr/local/bin/taql`, which works).
+
 `bench/metal/ducc0_wgridder_tool.cpp` (built and run by
-`scripts/metal_cpu_baseline.sh`) times ducc0's own w-gridder on the same
-synthetic data, which is what the table above uses. Getting it to run took
+`scripts/metal_cpu_baseline.sh`) times ducc0's own w-gridder, on the same
+synthetic data or on the same real dump as the Metal probe, and is the CPU side
+of both tables above. Getting it to run took
 three separate fixes, each recorded in the tool's header because each one
 produces a *crash rather than a wrong answer*:
 

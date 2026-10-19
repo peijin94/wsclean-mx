@@ -109,7 +109,26 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('dirty2ms_bda', tool)
         self.assertIn('kSigmaMin = 1.1', tool)
         self.assertIn('kSigmaMax = 2.0', tool, 'the uv extent here explodes the w-plane count')
-        self.assertIn('pixel_size = 1.0 / static_cast<double>(grid)', tool)
+        self.assertIn('pixel_size = 1.0 / (lambda_per_cell * static_cast<double>(nu))', tool)
+
+    def test_realdata_mode_stays_wired(self):
+        # The real-uv-coverage measurement changed the headline number, so the
+        # path that produces it must not rot: probe op, loader, and the shared
+        # flags on both tools.
+        probe = self.read('work/wsclean/metal/probe_main.cpp')
+        for anchor in ('realdata', '--uvw-file', '--freq', '--lambda-per-cell',
+                       'LoadUvwFile'):
+            self.assertIn(anchor, probe)
+        loader = self.read('work/wsclean/metal/uvw_file.h')
+        for anchor in ('flagged', 'nonfinite', 'kSpeedOfLight', 'RealVisibility'):
+            self.assertIn(anchor, loader)
+        cpu = self.read('bench/metal/ducc0_wgridder_tool.cpp')
+        for anchor in ('--uvw-file', '--freq', '--lambda-per-cell', 'uvw_file.h',
+                       'distinct_footprint_origins', 'lambda_per_cell'):
+            self.assertIn(anchor, cpu)
+        # A wrong pixel size or scaling collapses the data into one cell; the
+        # coverage guard is what catches that, so it must stay printed.
+        self.assertIn('origins.size()', cpu)
 
 
 if __name__ == '__main__':

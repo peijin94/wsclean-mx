@@ -40,7 +40,7 @@ fi
 # -march=native matters: without a SIMD width ducc0 selects scalar paths and the
 # baseline is much slower than what wsclean's own build does.
 "$CXX" -std=c++20 -O3 -DNDEBUG -march=native "${OMP_FLAGS[@]+"${OMP_FLAGS[@]}"}" \
-  "-I$ROOT/deps/src/schaapcommon/external" \
+  "-I$ROOT/deps/src/schaapcommon/external" "-I$ROOT/work/wsclean/metal" \
   "$ROOT/bench/metal/ducc0_wgridder_tool.cpp" \
   "$DUCC0/math/gridding_kernel.cc" "$DUCC0/math/gl_integrator.cc" \
   "$DUCC0/infra/threading.cc" "$DUCC0/infra/string_utils.cc" "$DUCC0/infra/mav.cc" \
