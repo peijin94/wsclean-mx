@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 13:44:34 -0400
-Subject: [PATCH 19/20] Metal: w-path uses |w| and FixW (ducc0's convention)
+Subject: [PATCH 19/21] Metal: w-path uses |w| and FixW (ducc0's convention)
 
 ducc0 plans planes on absEffectiveW and folds the sign of w away by negating
 (u,v) and conjugating the visibility (UVW::FixW's return value is the imflip

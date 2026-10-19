@@ -1,0 +1,227 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Mon, 19 Oct 2026 15:19:19 -0400
+Subject: [PATCH 21/21] Metal: parameterise the kernels for odd support (ducc0
+ selects W=7)
+
+The cost-model fix moved the geometry to supp 7 / nu 378 / nplanes 125, which
+exposed two hardcoded assumptions: gridAccumulate validated support%2==0, and
+the MSL kernels baked in kSupport=6 / kHalfSupport=3. Now the constants are
+substituted per call (mslSource(support)) and the window anchor is
+kLowestOffset=(W-1)/2, correct for both parities: W=6 -> -2..+3, W=7 -> -3..+3.
+
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index 582215e9..a1feba73 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -23,6 +23,30 @@ namespace {
+   throw std::runtime_error("mx::metal: " + message);
+ }
+ 
++std::string replaceAll(std::string text, const std::string& from, const std::string& to) {
++  std::size_t pos = 0;
++  while ((pos = text.find(from, pos)) != std::string::npos) {
++    text.replace(pos, from.size(), to);
++    pos += to.size();
++  }
++  return text;
++}
++
++// The MSL kernels are compiled from a source string, so the support constants
++// are substituted per call. ducc0's cost model selects odd supports too (W=7 for
++// a small field with w-gridding), and a W=6-hardcoded kernel silently produced a
++// decorrelated image.
++std::string mslSource(std::size_t support) {
++  std::string source = kGridAccumulateMSL;
++  source = replaceAll(source, "constant uint kSupport = 6;",
++                      "constant uint kSupport = " + std::to_string(support) + ";");
++  source = replaceAll(source, "constant int kHalfSupport = 3;",
++                      "constant int kHalfSupport = " + std::to_string(support / 2) + ";");
++  source = replaceAll(source, "constant int kLowestOffset = 2;",
++                      "constant int kLowestOffset = " + std::to_string((support - 1) / 2) + ";");
++  return source;
++}
++
+ std::string nsString(NSString* string) {
+   if (string == nil) return {};
+   const char* utf8 = [string UTF8String];
+@@ -51,8 +75,12 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+   if (input.grid_size == 0 || input.grid_size % tile != 0) {
+     fail("grid size must be a positive multiple of the tile size");
+   }
+-  if (input.support == 0 || input.support % 2 != 0) {
+-    fail("support must be a positive even number");
++  // ducc0's cost model sometimes selects an ODD support (e.g. W=7 for a small
++  // field with w-gridding), so odd counts must be allowed: the window is
++  // (-W/2, W/2] with floor anchoring, which is well defined for odd W, and the
++  // shader evaluates poly_sample at continuous arguments.
++  if (input.support < 2) {
++    fail("support must be at least 2");
+   }
+   if (input.visibilities.size() % 4 != 0) {
+     fail("visibility array must hold four floats per visibility");
+@@ -174,8 +202,9 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     const std::size_t tiles = tiles_per_row * tiles_per_row;
+ 
+     NSError* error = nil;
++    const std::string metal_source = mslSource(input.support);
+     id<MTLLibrary> library =
+-        [device newLibraryWithSource:[NSString stringWithUTF8String:kGridAccumulateMSL]
++        [device newLibraryWithSource:[NSString stringWithUTF8String:metal_source.c_str()]
+                              options:nil
+                                error:&error];
+     if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
+@@ -349,8 +378,9 @@ DegridResult gridDegrid(const std::vector<float>& u_v, const std::vector<float>&
+ 
+     const std::size_t count = u_v.size() / 4;
+     NSError* error = nil;
++    const std::string metal_source = mslSource(support);
+     id<MTLLibrary> library =
+-        [device newLibraryWithSource:[NSString stringWithUTF8String:kGridAccumulateMSL]
++        [device newLibraryWithSource:[NSString stringWithUTF8String:metal_source.c_str()]
+                              options:nil
+                                error:&error];
+     if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
+@@ -424,8 +454,9 @@ KernelProbeResult evalEsKernel(const std::vector<float>& arguments, float suppor
+     if (arguments.empty()) return {};
+ 
+     NSError* error = nil;
++    const std::string metal_source = mslSource(static_cast<std::size_t>(support));
+     id<MTLLibrary> library =
+-        [device newLibraryWithSource:[NSString stringWithUTF8String:kGridAccumulateMSL]
++        [device newLibraryWithSource:[NSString stringWithUTF8String:metal_source.c_str()]
+                              options:nil
+                                error:&error];
+     if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index 924335c7..680073f2 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -187,6 +187,10 @@ kernel void grid_accumulate(device const float* visibilities,  // u, v, re, im
+ // any even support.
+ constant uint kSupport = 6;
+ constant int kHalfSupport = 3;
++// Anchor of the kernel window: cells are floor(x) - kLowestOffset ..
++// floor(x) + kHalfSupport, i.e. the support spans (-W/2, W/2] and works
++// for odd W too (W=7: -3..+3, W=6: -2..+3).
++constant int kLowestOffset = 2;
+ 
+ // Hoisted variant: each 1D weight is evaluated once per visibility and kept in
+ // a register, instead of being recomputed for every cell of the support (the
+@@ -236,7 +240,7 @@ kernel void grid_accumulate_hoisted(device const float* visibilities,  // u,v,re
+     float sum_x = 0.0f, sum_y = 0.0f;
+ #pragma clang loop unroll(full)
+     for (int j = 0; j < int(kSupport); ++j) {
+-      const float offset = float(j - kHalfSupport + 1);
++      const float offset = float(j - kLowestOffset);
+       wx[j] = es_kernel_ducc0(fx - offset, float(kSupport), beta, e0);
+       wy[j] = es_kernel_ducc0(fy - offset, float(kSupport), beta, e0);
+       sum_x += wx[j];
+@@ -248,13 +252,13 @@ kernel void grid_accumulate_hoisted(device const float* visibilities,  // u,v,re
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kHalfSupport + 1 - tile_y0;
++      const int cy = j0 + jy - kLowestOffset - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_scaled = wy[jy] * inv_y;
+       if (wy_scaled == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kHalfSupport + 1 - tile_x0;
++        const int cx = i0 + jx - kLowestOffset - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * inv_x * wy_scaled;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+@@ -319,7 +323,7 @@ kernel void grid_accumulate_hoisted_packed(device const float* packed_visibiliti
+     float sum_x = 0.0f, sum_y = 0.0f;
+ #pragma clang loop unroll(full)
+     for (int j = 0; j < int(kSupport); ++j) {
+-      const float offset = float(j - kHalfSupport + 1);
++      const float offset = float(j - kLowestOffset);
+       wx[j] = es_kernel_ducc0(fx - offset, float(kSupport), beta, e0);
+       wy[j] = es_kernel_ducc0(fy - offset, float(kSupport), beta, e0);
+       sum_x += wx[j];
+@@ -331,13 +335,13 @@ kernel void grid_accumulate_hoisted_packed(device const float* packed_visibiliti
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kHalfSupport + 1 - tile_y0;
++      const int cy = j0 + jy - kLowestOffset - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_scaled = wy[jy] * inv_y;
+       if (wy_scaled == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kHalfSupport + 1 - tile_x0;
++        const int cx = i0 + jx - kLowestOffset - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * inv_x * wy_scaled;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+@@ -580,20 +584,20 @@ kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
+     float wy[kSupport];
+ #pragma clang loop unroll(full)
+     for (int j = 0; j < int(kSupport); ++j) {
+-      const float offset = float(j - kHalfSupport + 1);
++      const float offset = float(j - kLowestOffset);
+       wx[j] = poly_sample(fx - offset, coefficients, degree, support);
+       wy[j] = poly_sample(fy - offset, coefficients, degree, support);
+     }
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kHalfSupport + 1 - tile_y0;
++      const int cy = j0 + jy - kLowestOffset - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_val = wy[jy];
+       if (wy_val == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kHalfSupport + 1 - tile_x0;
++        const int cx = i0 + jx - kLowestOffset - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * wy_val;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+@@ -670,20 +674,20 @@ kernel void grid_accumulate_poly_hoisted_split(device const float* visibilities,
+     float wy[kSupport];
+ #pragma clang loop unroll(full)
+     for (int j = 0; j < int(kSupport); ++j) {
+-      const float offset = float(j - kHalfSupport + 1);
++      const float offset = float(j - kLowestOffset);
+       wx[j] = poly_sample(fx - offset, coefficients, degree, support);
+       wy[j] = poly_sample(fy - offset, coefficients, degree, support);
+     }
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kHalfSupport + 1 - tile_y0;
++      const int cy = j0 + jy - kLowestOffset - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_val = wy[jy];
+       if (wy_val == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kHalfSupport + 1 - tile_x0;
++        const int cx = i0 + jx - kLowestOffset - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * wy_val;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+diff --git a/wgridder/wgridder.h b/wgridder/wgridder.h
+index 358f920b..5e136499 100644
+--- a/wgridder/wgridder.h
++++ b/wgridder/wgridder.h
+@@ -361,9 +361,10 @@ class WGridder final : public WGridderBase {
+         input.m_shift = m_shift_;
+         input.image_width = trimmed_width_;
+         input.image_height = trimmed_height_;
+-        // w-layers are implemented but still carry an unexplained factor ~3
+-        // against ducc0's w-gridded image (docs/metal-plan.md), so the wired path
+-        // stays 2-D and refuses where w matters.
++        // The w-layer path runs end to end inside wsclean but is still not
++        // numerically equivalent (docs/metal-plan.md, "w-layers, fifth pass"):
++        // correct power, decorrelated image, and 4.5x slower than ducc0. The
++        // wired path therefore stays 2-D and refuses wherever w matters.
+         input.w_gridding = false;
+         const bool metal_done = mx::metal::inversion(input, tdirty.data());
+         std::fprintf(stderr, "[mx-metal] inversion %s (%zu rows, %zu x %zu)\n",
