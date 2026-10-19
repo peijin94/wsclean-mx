@@ -28,6 +28,8 @@ fi
   "-I$ROOT/work/wsclean" "-I$ROOT/work/wsclean/metal" "-I$ROOT/deps/src/schaapcommon/external" "-I$DUCC0" \
   "$ROOT/bench/metal/wlayer_check.cpp" \
   "$ROOT/work/wsclean/metal/metaldevice.mm" "$ROOT/work/wsclean/metal/metalinversion.mm" \
+  
+  "$DUCC0/wgridder/wgridder.cc" \
   "$DUCC0/math/gridding_kernel.cc" "$DUCC0/math/gl_integrator.cc" \
   "$DUCC0/infra/threading.cc" "$DUCC0/infra/string_utils.cc" "$DUCC0/infra/mav.cc" \
   -framework Metal -framework Foundation \

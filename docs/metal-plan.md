@@ -705,3 +705,31 @@ one. The next test that would actually localise this is a *plane-level* one:
 dump my grid for one w-plane and compare it with ducc0's before any FFT - that
 separates "my plane grids are wrong" from "my screen is wrong", which the image
 comparison cannot distinguish.
+
+### Root cause of the w-layer failure: the cost model was the 2-D one
+
+ducc0 can print its own w-plane layout (`verbosity=1`), which settled this in one
+comparison:
+
+```
+ducc0: grid=(392x392x8) supp=7 dw=41.4668  (wmax-wmin)/dw=1.2057
+mine:  grid=352         supp=8 dw=46.4428  nplanes=9
+```
+
+`nm1min` matched exactly (-0.0157), so the screen geometry was always right. The
+*kernel and grid* were not: my port of `getNuNv()` omitted the w-gridding terms -
+ducc0 multiplies `fftcost` by `nplanes` and `gridcost` by `supp` when w-gridding,
+and divides `fftcost` by `sigmoid(nthreads, 6, 2)`. Without them the cost model
+optimises for the 2-D case and picks supp 8 / nu 350 instead of supp 7 / nu 392,
+which makes the plane spacing `dw` **12% wrong**. The w-interpolation is
+quantised on `dw`, so that error grows with w - which is exactly the measured
+sweep (0.8% field rms at w = 5, 1.7% at 50, 3.7% at 200, bright pixels
+decorrelating) - and it also explains the residual 0.8% in the 2-D images that
+had been blamed on "the reference choosing a different kernel": it was never a
+different kernel, it was a different grid (350 vs 392 cells, i.e. a different uv
+truncation).
+
+Fixed by porting the cost model exactly. wsclean builds and links with it; the
+standalone w-layer harness still needs ducc0's FFT object on its link line (the
+vendored copy ships no `fftnd.cc`, so `detail_fft::c2c<float>` does not resolve
+there - wsclean resolves it through schaapcommon's ducc0 target).

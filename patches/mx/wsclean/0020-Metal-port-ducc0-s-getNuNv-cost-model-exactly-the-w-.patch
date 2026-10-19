@@ -1,0 +1,209 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Mon, 19 Oct 2026 14:50:41 -0400
+Subject: [PATCH 20/20] Metal: port ducc0's getNuNv cost model exactly (the
+ w-layer root cause)
+
+The cost model was missing the w-gridding terms ducc0 applies: fftcost *=
+nplanes and gridcost *= supp when w-gridding, plus fftcost /= sigmoid(nthreads,
+6, 2). Without them the kernel choice is a 2-D optimum, and ducc0's own verbose
+output shows what that costs:
+
+  ducc0: grid=(392x392x8) supp=7 dw=41.4668  (wmax-wmin)/dw=1.2057
+  mine:  grid=352         supp=8 dw=46.4428  nplanes=9
+
+nm1min matched (-0.0157) so the screen geometry was right; the kernel and grid
+were not, making dw 12% wrong. That is the root cause of the w-layer failure -
+the w-interpolation is quantised on dw, so a 12% error grows with w (0.8% field
+rms at w=5, 3.7% at w=200, peaks decorrelated) - and it also explains the
+residual 0.8% in the 2-D images, which was two different grids rather than two
+different kernels.
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 1e0d8519..bb3ce85e 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -33,36 +33,63 @@ double debugDouble(const char* name, double fallback) {
+   return std::strtod(value, nullptr);
+ }
+ 
+-// ducc0's getNuNv() cost model, restricted to the 2-D kernel family.
++// ducc0's getNuNv() cost model, ported exactly. The w-gridding terms matter:
++// ducc0 multiplies fftcost by nplanes and gridcost by supp when w-gridding, and
++// divides fftcost by a thread sigmoid. Leaving them out (as this did) selects a
++// different kernel AND a different grid - supp 8 / nu 350 instead of supp 7 /
++// nu 392 - which makes the w-plane spacing dw 12% wrong and the w-interpolation
++// collapse as w grows. It also explained the residual 0.8% in the 2-D images:
++// two different grids, not two different kernels.
++double sigmoidScaling(double x, double m, double s) {
++  const double x2 = x - 1.0, m2 = m - 1.0;
++  return 1.0 + x2 / std::pow(1.0 + std::pow(x2 / m2, s), 1.0 / s);
++}
++
+ std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t image_size,
+-                         std::size_t rows, double& ofactor_out) {
++                         std::size_t rows, std::size_t nthreads, bool w_gridding, double nm1min,
++                         double nm1max, double w_range, double& ofactor_out, std::size_t& nu_out) {
+   constexpr double kNrefFft = 2048.0, kCostRefFft = 0.0693;
+-  constexpr std::size_t kSimdWidth = 4;  // float, NEON
+-  constexpr double kNthreads = 8.0;      // ducc0's reference thread count
++  constexpr std::size_t kSimdWidth = 4;  // mysimd<float>::size() on NEON
+   const double log_term_ref = std::log(kNrefFft * kNrefFft);
++  const double nshift = -0.5 * (nm1max + nm1min);
+   std::size_t best = candidates.front();
+   double best_cost = 1e300, best_ofactor = 0.0;
++  std::size_t best_nu = 0;
+   for (const std::size_t index : candidates) {
+     const ducc0::KernelParams& params = ducc0::getKernel(index);
+     if (params.ofactor <= 0.0) continue;
+     const std::size_t supp = params.W;
+     const std::size_t nvec = (supp + kSimdWidth - 1) / kSimdWidth;
+-    const std::size_t nu = 2 * ducc0::good_size_complex(
+-                                   static_cast<std::size_t>(image_size * params.ofactor * 0.5) + 1);
+-    double fft_cost = static_cast<double>(nu) / kNrefFft * static_cast<double>(nu) / kNrefFft *
+-                      (std::log(static_cast<double>(nu * nu)) / log_term_ref) * kCostRefFft;
++    std::size_t nu = 2 * ducc0::good_size_complex(
++                             static_cast<std::size_t>(image_size * params.ofactor * 0.5) + 1);
++    nu = std::max<std::size_t>(nu, 16);
++    const std::size_t nv = nu;
++    const double log_term = std::log(static_cast<double>(nu * nv)) / log_term_ref;
++    double fft_cost = static_cast<double>(nu) / kNrefFft * static_cast<double>(nv) / kNrefFft *
++                      log_term * kCostRefFft;
+     double grid_cost = 2.2e-10 * static_cast<double>(rows) *
+                        static_cast<double>(supp * nvec * kSimdWidth +
+                                            (2 * nvec + 1) * (supp + 3) * kSimdWidth);
+-    grid_cost /= kNthreads;
++    if (w_gridding) {
++      const double amplitude =
++          std::max(std::fabs(nm1max + nshift), std::fabs(nm1min + nshift));
++      const double dw = 0.5 / params.ofactor / std::max(amplitude, 1e-30);
++      const double nplanes = w_range / dw + static_cast<double>(supp);
++      fft_cost *= nplanes;
++      grid_cost *= static_cast<double>(supp);
++    }
++    grid_cost /= static_cast<double>(nthreads);
++    fft_cost /= sigmoidScaling(static_cast<double>(nthreads), 6.0, 2.0);
+     const double cost = fft_cost + grid_cost;
+     if (cost < best_cost) {
+       best_cost = cost;
+       best = index;
+       best_ofactor = params.ofactor;
++      best_nu = nu;
+     }
+   }
+   ofactor_out = best_ofactor;
++  nu_out = best_nu;
+   return best;
+ }
+ 
+@@ -174,16 +201,31 @@ struct Geometry {
+   std::shared_ptr<ducc0::PolynomialKernel> kernel;
+ };
+ 
+-bool makeGeometry(const InversionInput& input, std::size_t& image_size, Geometry& out) {
++bool makeGeometry(const InversionInput& input, bool w_gridding, double w_range,
++                  std::size_t& image_size, Geometry& out) {
+   const std::vector<std::size_t> candidates =
+       ducc0::getAvailableKernels<float>(input.epsilon, 2, 1.1, 2.0);
+   if (candidates.empty()) return false;
+   image_size = std::max(input.image_width, input.image_height);
++  // nm1 range over the whole image (even in l,m, so corners are not enough),
++  // needed by the cost model whenever w-gridding is on.
++  const double nx0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
++  const double ny0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
++  double nm1min = 1e300, nm1max = -1e300;
++  for (std::size_t i = 0; i < input.image_width; ++i) {
++    const double l = nx0 + static_cast<double>(i) * input.pixel_size_x;
++    for (std::size_t j = 0; j < input.image_height; ++j) {
++      const double m = ny0 + static_cast<double>(j) * input.pixel_size_y;
++      const double value = nm1Of(l, m);
++      nm1min = std::min(nm1min, value);
++      nm1max = std::max(nm1max, value);
++    }
++  }
+   double ofactor = 0.0;
+-  const std::size_t index = chooseKernel(candidates, image_size, input.n_rows, ofactor);
++  const std::size_t index = chooseKernel(candidates, image_size, input.n_rows, input.n_threads,
++                                         w_gridding, nm1min, nm1max, w_range, ofactor, out.nu);
+   out.kernel = ducc0::selectKernel(index);
+   if (!out.kernel) return false;
+-  out.nu = 2 * ducc0::good_size_complex(static_cast<std::size_t>(image_size * ofactor * 0.5) + 1);
+   out.grid = ((out.nu + 31) / 32) * 32;
+   // ducc0's cell is 1/(pixsize*nu) wavelengths; ours covers the same uv extent
+   // with grid cells, so a visibility's cell coordinate is u_lambda*pixsize*grid.
+@@ -231,7 +273,42 @@ bool inversion(const InversionInput& input, float* dirty) {
+   }
+   std::size_t image_size = 0;
+   Geometry geometry;
+-  if (!makeGeometry(input, image_size, geometry)) {
++  // |w| extremes and per-row sign, needed by the cost model and the layout.
++  const std::size_t item_count = static_cast<std::size_t>(input.n_rows) * input.n_channels;
++  std::vector<double> w_lambda;
++  std::vector<float> w_sign;
++  double w_min = 0.0, w_max = 0.0;
++  if (input.w_gridding) {
++    // by negating (u,v) and conjugating the visibility (UVW::FixW, whose sign is
++    // then the `imflip` factor). Using the signed range instead puts negative-w
++    // rows in the wrong planes and with the wrong screen - which is exactly why
++    // w = 0 worked and w != 0 was incoherent.
++    const std::size_t item_count = static_cast<std::size_t>(input.n_rows) * input.n_channels;
++    std::vector<double> w_lambda(item_count);
++    std::vector<float> w_sign(item_count);
++    double w_min = 1e300, w_max = -1e300;
++    for (std::size_t row = 0; row < input.n_rows; ++row) {
++      for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
++        const double lambda = kSpeedOfLight / input.frequencies[ch];
++        double w = input.uvws[3 * row + 2] / lambda;
++        if (input.flip_w) w = -w;
++        const std::size_t item = row * input.n_channels + ch;
++        w_sign[item] = (w < 0.0) ? -1.0f : 1.0f;
++        w_lambda[item] = std::fabs(w);
++        w_min = std::min(w_min, w_lambda[item]);
++        w_max = std::max(w_max, w_lambda[item]);
++      }
++    }
++    // The plane layout must use ducc0's ofactor (nu / image_size), not my grid's:
++    // nu_metal = 352 vs nu = 350 is a 1% difference in dw, and a 1% error in the
++    // plane spacing makes the w-interpolation drift with w - 5% peak error at
++    // w = 5 lambda growing to ~100% at w = 200, which is exactly what the sweep
++    // measured. The grid stays nu_metal (the kernel tile), the DISCRETISATION is
++    // ducc0's.
++
++  }
++
++  if (!makeGeometry(input, input.w_gridding, w_max - w_min, image_size, geometry)) {
+     std::fprintf(stderr, "[mx-metal] refused: no usable gridding kernel\n");
+     return false;
+   }
+@@ -297,29 +374,7 @@ bool inversion(const InversionInput& input, float* dirty) {
+     return true;
+   }
+ 
+-  // ---------------- w-layers: ducc0's x2dirty w-branch ----------------
+-  // ducc0 folds the sign of w away: it uses |w| (absEffectiveW) and compensates
+-  // by negating (u,v) and conjugating the visibility (UVW::FixW, whose sign is
+-  // then the `imflip` factor). Using the signed range instead puts negative-w
+-  // rows in the wrong planes and with the wrong screen - which is exactly why
+-  // w = 0 worked and w != 0 was incoherent.
+-  const std::size_t item_count = static_cast<std::size_t>(input.n_rows) * input.n_channels;
+-  std::vector<double> w_lambda(item_count);
+-  std::vector<float> w_sign(item_count);
+-  double w_min = 1e300, w_max = -1e300;
+-  for (std::size_t row = 0; row < input.n_rows; ++row) {
+-    for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+-      const double lambda = kSpeedOfLight / input.frequencies[ch];
+-      double w = input.uvws[3 * row + 2] / lambda;
+-      if (input.flip_w) w = -w;
+-      const std::size_t item = row * input.n_channels + ch;
+-      w_sign[item] = (w < 0.0) ? -1.0f : 1.0f;
+-      w_lambda[item] = std::fabs(w);
+-      w_min = std::min(w_min, w_lambda[item]);
+-      w_max = std::max(w_max, w_lambda[item]);
+-    }
+-  }
+-  PlaneLayout layout = planeLayout(input, grid, geometry.kernel->support(), w_min, w_max);
++  PlaneLayout layout = planeLayout(input, geometry.nu, geometry.kernel->support(), w_min, w_max);
+   const double planes_override = debugDouble("MX_METAL_DEBUG_PLANES", 0.0);
+   if (planes_override > 0.0) {
+     layout.nplanes = static_cast<std::size_t>(planes_override);

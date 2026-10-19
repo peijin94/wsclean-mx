@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
     ducc0::vmav<float, 2> dirty({image_size, image_size});
     ducc0::ms2dirty_bda<float, float>(uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_ma,
                                       weight_ma, mask_ma, pixel_size, pixel_size, 1.0e-4,
-                                      /*do_wgridding=*/!two_d, 8, dirty, 0, false, false, false,
+                                      /*do_wgridding=*/!two_d, 8, dirty, /*verbosity=*/1, false, false, false,
                                       false, 1.1, 2.0, 0.0, 0.0, /*allow_nshift=*/true);
     for (std::size_t i = 0; i < image_size * image_size; ++i) reference[i] = dirty.raw(i);
   }
