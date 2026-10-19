@@ -1,0 +1,535 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Mon, 19 Oct 2026 10:49:29 -0400
+Subject: [PATCH 15/15] Metal: -mgpu wiring and a refusing 2-D gate
+
+Adds metal/metalinversion.{h,mm}: the 2-D inversion (GPU gridding + ducc0's own
+forward chain) as a library usable by the gridder, plus a -mgpu setting that
+routes WGridder::AddInversionMsImplementation through it.
+
+The backend refuses unless it does exactly the same maths as the ducc0 call it
+replaces: Metal present, no image shift, and the Fresnel criterion
+pi*|w|*lambda*(l^2+m^2) <= 0.1 rad at the image corners. Every refusal reports
+why. Multi-channel data is handled like ducc0's 2-D path: one grid, chain and
+correction per channel, accumulated into the image.
+
+Measured on the real sets it refuses everywhere - LOFAR 3C196 has w_max = 495 km
+(6.8 rad of w-error even at a 4 arcmin field); the MWA snapshot gives 0.70 rad.
+A 2-D backend cannot serve a real wide-field image, so the next milestone is
+w-layers.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9dcb7a6d..f0d24d9b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -469,6 +469,12 @@ if(WSCLEAN_MX_METAL)
+   endif()
+   enable_language(OBJCXX)
+   add_subdirectory(metal)
++  # The gridder sources live in the wsclean-object OBJECT library, so the define
++  # has to be on that target; the static/shared libs only need the link.
++  target_compile_definitions(wsclean-object PUBLIC WSCLEAN_MX_METAL=1)
++  # so the gridder can #include "metal/metalinversion.h"
++  target_include_directories(wsclean-object PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
++  target_link_libraries(wsclean-lib PUBLIC mx-metal)
+ endif()
+ 
+ if(MPI_FOUND)
+diff --git a/main/commandline.cpp b/main/commandline.cpp
+index cfb34a23..7601c709 100644
+--- a/main/commandline.cpp
++++ b/main/commandline.cpp
+@@ -297,6 +297,11 @@ Options can be:
+    Sets the IDG mode. Default: cpu. Hybrid is recommended when a GPU is available.
+ 
+   ** GRIDDER-SPECIFIC SETTINGS **
++-mgpu
++Use the experimental Apple Metal backend for gridding when the data allow an
++exact 2-D inversion (single frequency, negligible w-term). Falls back to the CPU
++otherwise. mx fork only, macOS only.
++
+ -wstack-nwlayers <nwlayers>
+    Number of w-layers to use. Default: minimum suggested #w-layers for first MS.
+ -wstack-nwlayers-factor <factor>
+@@ -753,6 +758,9 @@ bool CommandLine::ParseWithoutValidation(WSClean& wsclean, int argc, const char*
+       settings.pixelScaleY = settings.pixelScaleX;
+     }
+     // == w-stacking-specific parameters ==
++    else if (param == "mgpu") {
++      settings.useGpu = true;
++    }
+     else if (param == "nwlayers" || param == "wstack-nwlayers") {
+       CheckDeprecated(is_slave, param, "wstack-nwlayers");
+       IncArgi(argi, argc);
+diff --git a/main/settings.h b/main/settings.h
+index e70caed4..2e38a6fc 100644
+--- a/main/settings.h
++++ b/main/settings.h
+@@ -52,6 +52,9 @@ class Settings {
+   size_t paddedImageWidth = 0, paddedImageHeight = 0;
+   size_t trimmedImageWidth = 0, trimmedImageHeight = 0;
+   bool hasShift = false;
++  // mx fork: route the w-gridder's inversion through the Metal 2-D backend when
++  // it can do exactly the same maths (single frequency, negligible w).
++  bool useGpu = false;
+   double shiftRA = 0.0, shiftDec = 0.0;
+   double imagePadding = 1.2;
+   size_t widthForNWCalculation = 0, heightForNWCalculation = 0;
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 7170ef20..51300d6c 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -6,9 +6,16 @@
+ # The kernels are compiled from source at runtime, so no metallib toolchain is
+ # required; only the Metal and Foundation frameworks are linked.
+ 
+-add_library(mx-metal STATIC metaldevice.mm)
++add_library(mx-metal STATIC metaldevice.mm metalinversion.mm)
+ target_include_directories(mx-metal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+-set_source_files_properties(metaldevice.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++# ducc0 is vendored inside schaapcommon; the inversion chain needs its headers
++# (complex2hartley, hartley2_2D, PolynomialKernel).
++if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
++  # ducc0's headers are rooted at external/ (as "ducc0/fft/...", not
++  # "fft/..."), matching the include the wgridder target uses.
++  target_include_directories(mx-metal PUBLIC "${SCHAAPCOMMON_SOURCE_DIR}/external")
++endif()
++set_source_files_properties(metaldevice.mm metalinversion.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+ 
+ find_library(MX_METAL_FRAMEWORK Metal REQUIRED)
+ find_library(MX_FOUNDATION_FRAMEWORK Foundation REQUIRED)
+diff --git a/metal/metalinversion.h b/metal/metalinversion.h
+new file mode 100644
+index 00000000..e8369cad
+--- /dev/null
++++ b/metal/metalinversion.h
+@@ -0,0 +1,61 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Copyright (C) 2026 Peijin Zhang
++//
++// Metal-backed 2-D inversion: the same operation ducc0's ms2dirty() performs
++// with do_wgridding=false, but the gridding step runs on the GPU.
++//
++// Why only 2-D: ducc0's w-gridding loops w-planes and applies a w-screen per
++// plane, which the Metal kernels do not do yet. The gate
++// inversion2DSupported() therefore refuses whenever the w-term matters, and the
++// caller falls back to ducc0. That keeps the integration honest - a run is
++// either doing exactly the same maths as the CPU path or it is not using this
++// code at all.
++//
++// The forward chain is ducc0's own (complex2hartley, hartley2_2D, and the
++// inner-window extraction with krn->corfunc), so only the accumulation is new.
++
++#ifndef MX_METAL_METALINVERSION_H
++#define MX_METAL_METALINVERSION_H
++
++#include <complex>
++#include <cstddef>
++#include <vector>
++
++namespace mx::metal {
++
++struct Inversion2DInput {
++  std::size_t n_rows = 0;
++  const double* uvws = nullptr;            // (n_rows, 3), metres
++  const double* frequencies = nullptr;     // (n_channels), Hz, ascending
++  std::size_t n_channels = 0;
++  const std::complex<float>* ms = nullptr;  // (n_rows * n_channels), row-major
++  double pixel_size_x = 0.0;           // radians
++  double pixel_size_y = 0.0;
++  double epsilon = 1.0e-4;
++  std::size_t n_threads = 1;
++  // ducc0's conventions at the wsclean call site: flip_v = true, others false.
++  bool flip_u = false;
++  bool flip_v = true;
++  bool flip_w = false;
++  double l_shift = 0.0;
++  double m_shift = 0.0;
++  std::size_t image_width = 0;
++  std::size_t image_height = 0;
++};
++
++// True when this data set and configuration can be done by the Metal path:
++// a Metal device, one frequency, and a w-term small enough that the 2-D
++// approximation is below the gridding accuracy. The w threshold is the standard
++// Fresnel criterion, pi*|w|*lambda*(l^2+m^2)_max < 0.1 rad, evaluated at the
++// image corners.
++bool inversion2DSupported(const Inversion2DInput& input);
++
++// Fills `dirty` (image_width * image_height, row-major) with the dirty image.
++// Returns false if the Metal path could not be used; the caller must then fall
++// back. On success the result matches ducc0's 2-D inversion to the accuracy
++// documented in docs/metal-plan.md.
++bool inversion2D(const Inversion2DInput& input, float* dirty);
++
++}  // namespace mx::metal
++
++#endif
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+new file mode 100644
+index 00000000..2a22ac1c
+--- /dev/null
++++ b/metal/metalinversion.mm
+@@ -0,0 +1,234 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Copyright (C) 2026 Peijin Zhang
++
++#include "metalinversion.h"
++
++#include "metaldevice.h"
++
++#include "ducc0/fft/fftnd_impl.h"
++#include "ducc0/math/gridding_kernel.h"
++#include "ducc0/wgridder/wgridder_impl.h"
++
++#include <algorithm>
++#include <cmath>
++#include <complex>
++#include <cstdio>
++#include <exception>
++#include <vector>
++
++namespace mx::metal {
++namespace {
++
++constexpr double kSpeedOfLight = 299792458.0;
++
++// ducc0's getNuNv() cost model, restricted to the 2-D kernel family: minimise
++// fftcost(nu,nv) + gridcost(nvis,supp). Choosing the kernel by "smallest
++// support" instead selects a different W, and because the grid correction comes
++// from the same kernel object the whole image then lands on a different scale.
++std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t image_size,
++                         std::size_t rows, double node_epsilon, double& ofactor_out) {
++  constexpr double kNrefFft = 2048.0, kCostRefFft = 0.0693;
++  constexpr std::size_t kSimdWidth = 4;  // float, NEON
++  constexpr double kNthreads = 8.0;      // ducc0's reference thread count
++  const double log_term_ref = std::log(kNrefFft * kNrefFft);
++  std::size_t best = candidates.front();
++  double best_cost = 1e300, best_ofactor = 0.0;
++  for (const std::size_t index : candidates) {
++    const ducc0::KernelParams& params = ducc0::getKernel(index);
++    if (params.ofactor <= 0.0) continue;
++    const std::size_t supp = params.W;
++    const std::size_t nvec = (supp + kSimdWidth - 1) / kSimdWidth;
++    const std::size_t nu = 2 * ducc0::good_size_complex(
++                                   static_cast<std::size_t>(image_size * params.ofactor * 0.5) + 1);
++    double fft_cost = static_cast<double>(nu) / kNrefFft * static_cast<double>(nu) / kNrefFft *
++                      (std::log(static_cast<double>(nu * nu)) / log_term_ref) * kCostRefFft;
++    double grid_cost = 2.2e-10 * static_cast<double>(rows) *
++                       static_cast<double>(supp * nvec * kSimdWidth +
++                                           (2 * nvec + 1) * (supp + 3) * kSimdWidth);
++    grid_cost /= kNthreads;
++    (void)node_epsilon;
++    const double cost = fft_cost + grid_cost;
++    if (cost < best_cost) {
++      best_cost = cost;
++      best = index;
++      best_ofactor = params.ofactor;
++    }
++  }
++  ofactor_out = best_ofactor;
++  return best;
++}
++
++}  // namespace
++
++namespace {
++
++bool supported(const Inversion2DInput& input, const char** why) {
++  if (input.n_rows == 0 || input.uvws == nullptr || input.ms == nullptr) {
++    *why = "no rows";
++    return false;
++  }
++  if (input.frequencies == nullptr || input.n_channels == 0) {
++    *why = "no frequency list";
++    return false;
++  }
++  if (input.frequencies[0] <= 0.0 || input.pixel_size_x <= 0.0 || input.pixel_size_y <= 0.0) {
++    *why = "zero frequency or pixel size";
++    return false;
++  }
++  if (input.image_width == 0 || input.image_height == 0) {
++    *why = "empty image";
++    return false;
++  }
++  // The 2-D path does not implement ducc0's image shift yet; refuse rather than
++  // silently produce a shifted image.
++  if (std::fabs(input.l_shift) > 1e-12 || std::fabs(input.m_shift) > 1e-12) {
++    *why = "image shift not implemented";
++    return false;
++  }
++  if (!deviceInfo().available) {
++    *why = "no Metal device";
++    return false;
++  }
++  // Fresnel criterion: ignoring w blurs the image by ~pi*|w|*lambda*(l^2+m^2).
++  // Require that to stay below 0.1 rad at the image corners.
++  // Worst case over the band: the longest wavelength has the largest w-term.
++  double lambda = 0.0;
++  for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
++    lambda = std::max(lambda, kSpeedOfLight / input.frequencies[ch]);
++  }
++  const double l_max = 0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
++  const double m_max = 0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
++  const double lm_sq = l_max * l_max + m_max * m_max;
++  double w_max = 0.0;
++  for (std::size_t row = 0; row < input.n_rows; ++row) {
++    w_max = std::max(w_max, std::fabs(input.uvws[3 * row + 2]));
++  }
++  const double w_error = M_PI * w_max * lambda * lm_sq;
++  if (w_error > 0.1) {
++    std::fprintf(stderr,
++                 "[mx-metal] w-gate: w_max=%.1f m lambda=%.2f m l_max=%.3g rad "
++                 "lm_sq=%.3g error=%.3g rad\n",
++                 w_max, lambda, l_max, lm_sq, w_error);
++    *why = "w-term too large for a 2-D inversion";
++    return false;
++  }
++  return true;
++}
++
++}  // namespace
++
++bool inversion2DSupported(const Inversion2DInput& input) {
++  const char* why = "";
++  return supported(input, &why);
++}
++
++
++bool inversion2D(const Inversion2DInput& input, float* dirty) {
++  const char* why = "";
++  if (!supported(input, &why)) {
++    std::fprintf(stderr, "[mx-metal] refused: %s\n", why);
++    return false;
++  }
++
++  // ducc0's kernel choice, then the grid geometry that follows from it. With
++  // pixsize = 1/nu one grid cell is one wavelength; the Metal grid must cover
++  // the same number of wavelengths, so its cells are slightly wider when the
++  // tile rounding adds cells.
++  const std::vector<std::size_t> candidates =
++      ducc0::getAvailableKernels<float>(input.epsilon, 2, 1.1, 2.0);
++  if (candidates.empty()) return false;
++  double ofactor = 0.0;
++  const std::size_t image_size = std::max(input.image_width, input.image_height);
++  const std::size_t index =
++      chooseKernel(candidates, image_size, input.n_rows, input.epsilon, ofactor);
++  const std::shared_ptr<ducc0::PolynomialKernel> kernel = ducc0::selectKernel(index);
++  if (!kernel) return false;
++  const std::size_t nu = 2 * ducc0::good_size_complex(
++                                 static_cast<std::size_t>(image_size * ofactor * 0.5) + 1);
++  const std::size_t nu_metal = ((nu + 31) / 32) * 32;
++  const double pixel_size = 1.0 / static_cast<double>(nu);
++  const double cell_scale = static_cast<double>(nu_metal) / static_cast<double>(nu);
++
++  const std::vector<double> cfu =
++      kernel->corfunc(input.image_width / 2 + 1, 1.0 / static_cast<double>(nu_metal), 1);
++  const std::vector<double> cfv =
++      kernel->corfunc(input.image_height / 2 + 1, 1.0 / static_cast<double>(nu_metal), 1);
++
++  // ducc0's 2-D inversion loops the channels and accumulates the corrected
++  // images, so each channel is gridded, transformed and corrected on its own.
++  for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
++    const double lambda = kSpeedOfLight / input.frequencies[ch];
++    GridAccumInput accumulate;
++    accumulate.grid_size = nu_metal;
++    accumulate.support = kernel->support();
++    accumulate.kernel_degree = kernel->degree();
++    accumulate.kernel_coefficients.assign(kernel->Coeff().begin(), kernel->Coeff().end());
++    accumulate.variant = Variant::kPoly;
++    accumulate.visibilities.resize(4 * input.n_rows);
++    double v_max = 0.0;
++    for (std::size_t row = 0; row < input.n_rows; ++row) {
++      double u = input.uvws[3 * row + 0] / lambda;
++      double v = input.uvws[3 * row + 1] / lambda;
++      if (input.flip_u) u = -u;
++      if (input.flip_v) v = -v;
++      v_max = std::max(std::fabs(v), v_max);
++      accumulate.visibilities[4 * row + 0] = static_cast<float>(u * cell_scale);
++      accumulate.visibilities[4 * row + 1] = static_cast<float>(v * cell_scale);
++      const std::complex<float>& value = input.ms[row * input.n_channels + ch];
++      accumulate.visibilities[4 * row + 2] = value.real();
++      accumulate.visibilities[4 * row + 3] = value.imag();
++    }
++    GridAccumResult grid_result;
++    try {
++      grid_result = gridAccumulate(accumulate);
++    } catch (const std::exception& error) {
++      std::fprintf(stderr, "[mx-metal] inversion2D falling back: %s\n", error.what());
++      return false;
++    }
++    if (ch == 0) std::fill(dirty, dirty + input.image_width * input.image_height, 0.0f);
++
++    // ducc0's frame is DC-at-0 while the Metal kernels centre the origin: roll by
++    // half a grid so the Hartley band logic lines up.
++    std::vector<float> rolled(grid_result.grid.size());
++    for (std::size_t i = 0; i < nu_metal; ++i) {
++      const std::size_t si = (i + nu_metal / 2) % nu_metal;
++      for (std::size_t j = 0; j < nu_metal; ++j) {
++        const std::size_t sj = (j + nu_metal / 2) % nu_metal;
++        rolled[2 * (i * nu_metal + j) + 0] = grid_result.grid[2 * (si * nu_metal + sj) + 0];
++        rolled[2 * (i * nu_metal + j) + 1] = grid_result.grid[2 * (si * nu_metal + sj) + 1];
++      }
++    }
++
++    // ducc0's forward chain, verbatim (see grid2dirty_overwrite + grid2dirty_post).
++    std::size_t vlim = std::min(
++        nu_metal / 2, static_cast<std::size_t>(static_cast<double>(nu) * v_max * pixel_size +
++                                               0.5 * static_cast<double>(kernel->support()) + 1.0));
++    bool uv_side_fast = true;
++    const std::size_t vlim2 = (image_size + 1) / 2 + (kernel->support() + 1) / 2;
++    if (vlim2 < vlim) {
++      vlim = vlim2;
++      uv_side_fast = false;
++    }
++    const ducc0::cmav<std::complex<float>, 2> grid_cmav(
++        reinterpret_cast<const std::complex<float>*>(rolled.data()), {nu_metal, nu_metal});
++    ducc0::vmav<float, 2> hartley({nu_metal, nu_metal});
++    ducc0::detail_gridder::complex2hartley(grid_cmav, hartley, input.n_threads);
++    ducc0::detail_gridder::hartley2_2D(hartley, vlim, uv_side_fast, input.n_threads);
++
++    for (std::size_t i = 0; i < input.image_width; ++i) {
++      const int icfu = std::abs(static_cast<int>(input.image_width / 2) - static_cast<int>(i));
++      std::size_t i2 = nu_metal - input.image_width / 2 + i;
++      if (i2 >= nu_metal) i2 -= nu_metal;
++      for (std::size_t j = 0; j < input.image_height; ++j) {
++        const int icfv = std::abs(static_cast<int>(input.image_height / 2) - static_cast<int>(j));
++        std::size_t j2 = nu_metal - input.image_height / 2 + j;
++        if (j2 >= nu_metal) j2 -= nu_metal;
++        dirty[i * input.image_height + j] +=
++            static_cast<float>(hartley(i2, j2) * cfu[icfu] * cfv[icfv]);
++      }
++    }
++  }
++  return true;
++}
++
++}  // namespace mx::metal
+diff --git a/wgridder/wgridder.h b/wgridder/wgridder.h
+index b6cf6b16..3509731c 100644
+--- a/wgridder/wgridder.h
++++ b/wgridder/wgridder.h
+@@ -2,6 +2,10 @@
+ #define WSCLEAN_WGRIDDER_H_
+ 
+ #include "wgridderbase.h"
++#ifdef WSCLEAN_MX_METAL
++#include "metal/metalinversion.h"
++#include <cstdio>
++#endif
+ 
+ namespace wsclean {
+ /**
+@@ -176,6 +180,7 @@ class WGridder final : public WGridderBase {
+   double epsilon_;
+   std::vector<NumT> image_;
+   size_t verbosity_;
++  bool use_metal_ = false;
+ 
+  public:
+   /** Construct a new gridder with given settings.
+@@ -189,7 +194,8 @@ class WGridder final : public WGridderBase {
+    */
+   WGridder(size_t width, size_t height, size_t trimmed_width, size_t trimmed_height,
+            double pixel_size_x, double pixel_size_y, double l_shift, double m_shift,
+-           size_t n_threads, double epsilon = 1e-4, size_t verbosity = 0);
++           size_t n_threads, double epsilon = 1e-4, size_t verbosity = 0,
++           bool use_metal = false);
+ 
+   WGridder(const WGridder &) = delete;
+   WGridder &operator=(const WGridder &) = delete;
+@@ -330,6 +336,42 @@ class WGridder final : public WGridderBase {
+     constexpr bool kFlipW = false;
+     constexpr bool kDivideByN = false;
+     constexpr bool kAllowNShift = true;
++#ifdef WSCLEAN_MX_METAL
++    // Experimental Metal path: only taken when it performs exactly the same
++    // maths as the ducc0 call below (one frequency, w-term negligible, float
++    // visible data, no image shift). inversion2D refuses otherwise, and the
++    // ducc0 call then runs untouched.
++    // if constexpr so the float-only body is not instantiated for double or for
++    // the callback/proxy visibility buffers.
++    if constexpr (std::is_same<NumT, float>::value &&
++                  std::is_same<Tms, ducc0::cmav<std::complex<float>, 1>>::value) {
++      if (use_metal_) {
++        mx::metal::Inversion2DInput input;
++        input.n_rows = n_rows;
++        input.uvws = uvw;
++        input.frequencies = freq.data();
++        input.n_channels = freq.shape(0);
++        input.ms = reinterpret_cast<const std::complex<float> *>(ms.data());
++        input.pixel_size_x = pixel_size_x_;
++        input.pixel_size_y = pixel_size_y_;
++        input.epsilon = epsilon_;
++        input.n_threads = n_threads_;
++        input.flip_v = kFlipV;
++        input.l_shift = l_shift_;
++        input.m_shift = m_shift_;
++        input.image_width = trimmed_width_;
++        input.image_height = trimmed_height_;
++        const bool metal_done = mx::metal::inversion2D(input, tdirty.data());
++        std::fprintf(stderr, "[mx-metal] 2-D inversion %s (%zu rows, %zu x %zu)\n",
++                     metal_done ? "used" : "refused, falling back to ducc0", n_rows,
++                     trimmed_width_, trimmed_height_);
++        if (metal_done) {
++          for (size_t k = 0; k < trimmed_width_ * trimmed_height_; ++k) image_[k] += tdirty.raw(k);
++          return;
++        }
++      }
++    }
++#endif
+     auto freqlist_id = ducc0::cmav<size_t, 1>::build_uniform({n_rows}, 0);
+     auto freqlist_nfreqs = ducc0::cmav<size_t, 1>::build_uniform({1}, freq.shape(0));
+     ducc0::ms2dirty_bda<NumT, NumT>(
+diff --git a/wgridder/wgridder_implementation.h b/wgridder/wgridder_implementation.h
+index 756dc6f0..4ed7c21c 100644
+--- a/wgridder/wgridder_implementation.h
++++ b/wgridder/wgridder_implementation.h
+@@ -30,7 +30,7 @@ namespace wsclean {
+ template <typename NumT>
+ WGridder<NumT>::WGridder(size_t width, size_t height, size_t trimmed_width, size_t trimmed_height,
+                          double pixel_size_x, double pixel_size_y, double l_shift, double m_shift,
+-                         size_t n_threads, double epsilon, size_t verbosity)
++                         size_t n_threads, double epsilon, size_t verbosity, bool use_metal)
+     : width_(width),
+       height_(height),
+       trimmed_width_(trimmed_width),
+@@ -41,7 +41,8 @@ WGridder<NumT>::WGridder(size_t width, size_t height, size_t trimmed_width, size
+       l_shift_(l_shift),
+       m_shift_(m_shift),
+       epsilon_(epsilon),
+-      verbosity_(verbosity) {
++      verbosity_(verbosity),
++      use_metal_(use_metal) {
+   MR_assert(verbosity <= 2, "verbosity must be 0, 1, or 2");
+ }
+ 
+diff --git a/wgridder/wgriddingmsgridder.cpp b/wgridder/wgriddingmsgridder.cpp
+index 22547f38..644a865c 100644
+--- a/wgridder/wgriddingmsgridder.cpp
++++ b/wgridder/wgriddingmsgridder.cpp
+@@ -1,5 +1,7 @@
+ #include "wgriddingmsgridder.h"
+ 
++#include <cstdio>
++
+ #include "wgridder.h"
+ 
+ #include "../gridding/msgriddermanager.h"
+@@ -65,11 +67,13 @@ std::unique_ptr<WGridderBase> WGriddingMSGridder::MakeGridder(size_t width, size
+   if (accuracy_ <= 1.01e-5) {
+     return std::make_unique<WGridder<double>>(ActualInversionWidth(), ActualInversionHeight(),
+                                               width, height, ActualPixelSizeX(), ActualPixelSizeY(),
+-                                              LShift(), MShift(), resources_.NCpus(), accuracy_, 0);
++                                              LShift(), MShift(), resources_.NCpus(), accuracy_, 0,
++                                              false);
+   } else {
+     return std::make_unique<WGridder<float>>(ActualInversionWidth(), ActualInversionHeight(), width,
+                                              height, ActualPixelSizeX(), ActualPixelSizeY(),
+-                                             LShift(), MShift(), resources_.NCpus(), accuracy_, 0);
++                                             LShift(), MShift(), resources_.NCpus(), accuracy_, 0,
++                                             GetSettings().useGpu);
+   }
+ }
+ 

@@ -130,6 +130,25 @@ class MetalIntegrationTest(unittest.TestCase):
         # coverage guard is what catches that, so it must stay printed.
         self.assertIn('origins.size()', cpu)
 
+    def test_gpu_option_is_wired_and_gated(self):
+        # -mgpu must exist, reach the w-gridder, and be gated: the backend only
+        # runs when it does exactly the same maths as the ducc0 call it replaces.
+        settings = self.read('work/wsclean/main/settings.h')
+        self.assertIn('bool useGpu = false;', settings)
+        cli = self.read('work/wsclean/main/commandline.cpp')
+        self.assertIn('param == "mgpu"', cli)
+        self.assertIn('settings.useGpu = true;', cli)
+        gridder = self.read('work/wsclean/wgridder/wgridder.h')
+        self.assertIn('mx::metal::inversion2D(', gridder)
+        self.assertIn('if constexpr (std::is_same<NumT, float>::value', gridder)
+        self.assertIn('metal_done ? "used" : "refused, falling back to ducc0"', gridder)
+        impl = self.read('work/wsclean/metal/metalinversion.mm')
+        for anchor in ('inversion2DSupported', 'M_PI * w_max * lambda * lm_sq',
+                       'w-term too large for a 2-D inversion', 'n_channels'):
+            self.assertIn(anchor, impl, f'{anchor} is part of the 2-D gate')
+        header = self.read('work/wsclean/metal/metalinversion.h')
+        self.assertIn('bool inversion2D(const Inversion2DInput& input, float* dirty);', header)
+
     def test_image_check_keeps_its_chain(self):
         # The image-level harness is the only place the Metal gridding meets
         # ducc0's actual gridding rather than a twin of itself, so its four
