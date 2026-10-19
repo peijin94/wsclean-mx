@@ -537,3 +537,33 @@ carries 495 km of w, i.e. 2.3e5 wavelengths, and even a 4 arcmin field leaves
 GPU and apply ducc0's `grid2dirty_post2` w-screen per plane. Until that exists
 the Metal backend cannot contribute to a real wide-field image, and `-mgpu`
 honestly does nothing but log its refusal.
+
+### w-layers: first attempt, measured wrong, reverted
+
+Implemented ducc0's w-gridding structure on the Metal path: bucket (row, channel)
+into w-planes with ducc0's layout (`dw = 0.5/ofactor/max|nm1+nshift|`,
+`nplanes`, `wshift`), grid each plane on the GPU, 2-D backward FFT, apply the
+w-screen on extraction, accumulate, then `apply_global_corrections`. It builds,
+it runs end to end inside wsclean (`-mgpu` selected the Metal path on 603,750
+LOFAR rows), and the image is **wrong**: peak 4.3e4 against the CPU's 0.57, rms
+47 against 0.07 - a factor of 670, and incoherent rather than a clean scale,
+which points at the extraction/phase rather than at a single missing
+normalisation.
+
+Not committed. `-mgpu` is back to the verified 2-D path, where it refuses with
+"w-term too large" (670 rad for this field) and falls back to ducc0.
+
+Two things the attempt did establish:
+
+* The wiring is sound: the plane bucketing, per-plane GPU gridding and the
+  largest-effect plumbing (a 1408^2 grid per plane) all execute inside wsclean
+  without disturbing the CPU path.
+* **Full 2-D FFTs per plane are the wrong shape for speed.** The w-layer run took
+  1.13 s of inversion against ducc0's 0.56 s - 2x slower - because ducc0 only
+  transforms the bands a plane actually uses (`uranges`/`vranges`) plus the two
+  half-bands needed for the image window. Even a correct implementation needs
+  that trick before it can be faster than the CPU.
+
+Next: debug it in `bench/metal/ducc0_image_check.cpp` against
+`ms2dirty(do_wgridding=true)` on synthetic w != 0 data, where the reference is
+pinned and iterations cost seconds, and only then wire it back.
