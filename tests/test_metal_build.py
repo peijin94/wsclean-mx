@@ -144,8 +144,10 @@ class MetalIntegrationTest(unittest.TestCase):
         # 1. kernel-weighted spread over planes, not hard assignment
         self.assertIn('plane_items', impl)
         self.assertIn('wWeight', impl)
-        # 2. the FFT normalisation
-        self.assertIn('4.0 / (static_cast<double>(grid)', impl)
+        # 2. the whole-image nm1 scan (corners alone give nm1min == nm1max and
+        #    a dw 50x too large), and no bogus FFT normalisation factor
+        self.assertIn('Scan the WHOLE image', impl)
+        self.assertNotIn('4.0 / (static_cast<double>(grid)', impl)
         # 3. ducc0's w-tap formula, and explicitly not PolynomialKernel::eval
         self.assertIn('z = (z_off - nth)*2 + (W-1)', impl)
         self.assertIn('nth piece of the same polynomial', impl)

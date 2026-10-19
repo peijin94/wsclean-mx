@@ -599,3 +599,31 @@ found four distinct defects, three now fixed:
 `-mgpu` therefore still uses the verified 2-D path. The harness, the debug hooks
 (`MX_METAL_DEBUG_PLANES`, `MX_METAL_DEBUG_NOSCREEN`, `MX_METAL_DEBUG_SCALE`) and
 the three fixes stay in the tree so the next pass starts from measurements.
+
+### w-layers, second pass: w = 0 now matches; w != 0 still incoherent
+
+Two more bugs, both found by instrumenting rather than guessing:
+
+5. **`nm1min/nm1max` must be scanned over the whole image.** They were taken
+   from the four corners, but `nm1 = sqrt(1-l^2-m^2)-1` is *even* in l and m, so
+   all four corners return the same value: `nshift = -nm1`, an `amplitude` of
+   ~0.003 instead of ~0.15, and `dw` **50x too large**. The planes then sit far
+   outside the kernel's support and the weights extrapolate (one plane summed to
+   1.8e3 per 2e3 visibilities). ducc0 scans the whole image in `prep()` - do the
+   same.
+6. **The `4/grid^2` "FFT normalisation" was compensation, not physics.** It was
+   masking bug 5. With the scan fixed, the image came out exactly `4/grid^2` too
+   *small*, i.e. `detail_fft::c2c` backwards is already scaled correctly for this
+   extraction. Removed.
+
+Measured after both: at w = 0 my w-path image agrees with ducc0's w-gridded
+image to **1e-5 in peak and 1.4e-5 in sum**, and 0.8% rms over the field - the
+same level as the 2-D harness, i.e. at the reference-kernel caveat rather than
+at a bug. (ducc0's own 2-D and w-gridded paths agree to 1.9e-5 at w = 0, which is
+what pinned the remaining error on my side.)
+
+**Still broken: w != 0.** With w_max = 50 lambda the peak drops to 0.026x and the
+sum goes negative - incoherent, so the plane/screen bookkeeping breaks down once
+the visibilities actually differ in w. Next: compare one visibility's plane
+weights against ducc0's, and check the screen for a single synthetic source.
+Until that is clean, `-mgpu` keeps `w_gridding = false`.

@@ -1,0 +1,136 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Mon, 19 Oct 2026 13:38:39 -0400
+Subject: [PATCH 18/18] Metal: w-path - whole-image nm1 scan, drop the false
+ normalisation
+
+Two more bugs, both found by instrumenting:
+- nm1min/nm1max came from the four corners, but nm1 is even in l and m, so all
+  four agree: nshift = -nm1, amplitude ~0.003 instead of ~0.15, dw 50x too large,
+  and the plane weights extrapolate (1.8e3 summed weight for 2e3 visibilities).
+  ducc0 scans the whole image in prep().
+- the 4/grid^2 'FFT normalisation' was compensating for that; with the scan fixed
+  the image was exactly 4/grid^2 too small, i.e. detail_fft::c2c backwards is
+  already scaled correctly here. Removed.
+
+At w = 0 the w-path now agrees with ducc0's w-gridded image to 1e-5 in peak and
+1.4e-5 in sum (0.8% rms over the field - the reference-kernel caveat, not a bug).
+w != 0 is still incoherent (peak 0.026x, negative sum), so -mgpu keeps
+w_gridding = false.
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 0af67d5c..78435e3c 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -87,11 +87,16 @@ PlaneLayout planeLayout(const InversionInput& input, std::size_t grid, std::size
+   PlaneLayout layout;
+   const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
+   const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
++  // Scan the WHOLE image, like ducc0's prep(). nm1 is even in l and m, so the
++  // four corners all return the same value: taking only corners then gives
++  // nm1min == nm1max, nshift = -nm1, and an `amplitude` of ~0 instead of ~0.15,
++  // which makes dw 50x too large and the plane weights extrapolate wildly. That
++  // was the last factor.
+   double nm1min = 1e300, nm1max = -1e300;
+-  for (int ci = 0; ci < 2; ++ci) {
+-    const double l = x0 + ci * static_cast<double>(input.image_width - 1) * input.pixel_size_x;
+-    for (int cj = 0; cj < 2; ++cj) {
+-      const double m = y0 + cj * static_cast<double>(input.image_height - 1) * input.pixel_size_y;
++  for (std::size_t i = 0; i < input.image_width; ++i) {
++    const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
++    for (std::size_t j = 0; j < input.image_height; ++j) {
++      const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+       const double value = nm1Of(l, m);
+       nm1min = std::min(nm1min, value);
+       nm1max = std::max(nm1max, value);
+@@ -320,6 +325,16 @@ bool inversion(const InversionInput& input, float* dirty) {
+   // spread, exactly like the u/v gridding kernel.
+   const std::size_t support = geometry.kernel->support();
+   const double half_support = 0.5 * static_cast<double>(support);
++  if (debugDouble("MX_METAL_DEBUG_LAYOUT", 0.0) > 0.0) {
++    std::fprintf(stderr,
++                 "[mx-metal] layout grid=%zu nu=%zu ofactor=%.4f dw=%.4f nplanes=%zu wmin=%.3f "
++                 "wshift=%.3f nshift=%.4f w=[%.3f,%.3f]\n",
++                 grid, geometry.nu,
++                 static_cast<double>(grid) / static_cast<double>(std::max(input.image_width,
++                                                                          input.image_height)),
++                 layout.dw, layout.nplanes, layout.wmin, layout.wshift, layout.nshift, w_min,
++                 w_max);
++  }
+   std::vector<std::vector<std::size_t>> plane_items(layout.nplanes);
+   for (std::size_t row = 0; row < input.n_rows; ++row) {
+     for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+@@ -336,16 +351,26 @@ bool inversion(const InversionInput& input, float* dirty) {
+   // which is why using it put the image out by a factor that no constant fixed.
+   const std::vector<double>& coefficients = geometry.kernel->Coeff();
+   const std::size_t degree = geometry.kernel->degree();
+-  auto wWeight = [&](double w_visibility, double w_plane) {
+-    const double distance = (w_plane - w_visibility) / layout.dw;
+-    if (distance <= -half_support || distance >= half_support) return 0.0;
+-    const double xrel = distance + half_support;
+-    int nth = static_cast<int>(xrel);
+-    if (nth > static_cast<int>(support) - 1) nth = static_cast<int>(support) - 1;
+-    const double locx = ((xrel - static_cast<double>(nth)) - 0.5) * 2.0;
+-    const std::size_t ofs = static_cast<std::size_t>(nth) * (degree + 1);
++  // ducc0's eval2s, exactly: the piece index is the PLANE OFFSET
++  // (nth = p0 - minplane), not something derived from a fractional coordinate,
++  // and the polynomial argument is z = 2*(z_off - nth) + (W-1). Deriving nth
++  // from xrel = distance + W/2 picks the neighbouring piece and the weights come
++  // out wrong by a factor that varies smoothly with w - which is what the
++  // stubborn ~3x was.
++  auto wWeight = [&](double w_visibility, double w_plane, std::size_t plane) {
++    const long minplane = static_cast<long>((w_visibility + layout.wshift) / layout.dw);
++    const long nth = static_cast<long>(plane) - minplane;
++    if (nth < 0 || nth >= static_cast<long>(support)) return 0.0;
++    double z = 2.0 * ((w_plane - w_visibility) / layout.dw - static_cast<double>(nth)) +
++               static_cast<double>(support - 1);
++    long piece = nth;
++    if (piece >= static_cast<long>(support)) {
++      z = -z;
++      piece = static_cast<long>(support) - 1 - piece;
++    }
++    const std::size_t ofs = static_cast<std::size_t>(piece) * (degree + 1);
+     double value = coefficients[ofs];
+-    for (std::size_t j = 1; j <= degree; ++j) value = value * locx + coefficients[ofs + j];
++    for (std::size_t j = 1; j <= degree; ++j) value = value * z + coefficients[ofs + j];
+     return value;
+   };
+ 
+@@ -364,11 +389,17 @@ bool inversion(const InversionInput& input, float* dirty) {
+       if (bucket >= static_cast<long>(layout.nplanes)) break;
+       for (const std::size_t item : plane_items[static_cast<std::size_t>(bucket)]) {
+         const double w = w_lambda[item];
+-        const double weight = wWeight(w, w_plane);
++        const double weight = wWeight(w, w_plane, pl);
+         if (weight != 0.0) weighted_items.emplace_back(item, weight);
+       }
+     }
+     if (weighted_items.empty()) continue;
++    if (debugDouble("MX_METAL_DEBUG_WEIGHTS", 0.0) > 0.0) {
++      double sum = 0.0;
++      for (const auto& wi : weighted_items) sum += wi.second;
++      std::fprintf(stderr, "[mx-metal] plane %zu/%zu w=%.3f items=%zu wsum=%.4f\n", pl,
++                   layout.nplanes, w_plane, weighted_items.size(), sum);
++    }
+     GridAccumInput accumulate;
+     fillAccumInput(input, geometry, accumulate);
+     accumulate.visibilities.resize(4 * weighted_items.size());
+@@ -419,11 +450,12 @@ bool inversion(const InversionInput& input, float* dirty) {
+         const std::size_t j2 = std::min(j, input.image_height - j);
+         const double re = std::cos(phases[j2]);
+         const double im = std::sin(phases[j2]);
+-        // ducc0's detail_fft::c2c is unnormalised (backward = N per axis), and
+-        // the Hermitian half-plane extraction accounts for the other 2 per
+-        // axis, so the whole plane needs 4/grid^2. Measured: without it the
+-        // image is exactly grid^2/4 too large, at every grid size.
+-        const double norm = 4.0 / (static_cast<double>(grid) * static_cast<double>(grid));
++        // No FFT normalisation factor: ducc0's detail_fft::c2c backwards transform
++        // is already scaled correctly for this extraction. An earlier 4/grid^2
++        // here was compensating for the corner-only nm1 scan, and removing that
++        // bug left the image exactly 4/grid^2 too small - which is how the two
++        // were disentangled.
++        constexpr double norm = 1.0;
+         const std::complex<float>& low = grid_values[ix * grid + jx];
+         dirty[i * input.image_height + j] +=
+             static_cast<float>((low.real() * re - low.imag() * im) * norm);

@@ -155,5 +155,28 @@ int main(int argc, char** argv) {
   }
   if (!ok) return 1;
   compare(mine, reference, "vs ducc0 w-gridded:");
+
+  // Sanity: what does ducc0's own w-gridded path give against its 2-D path on
+  // the same data? (At w = 0 they must agree; at w != 0 they must not.)
+  {
+    std::vector<double> uvw(data.uvw);
+    const ducc0::cmav<double, 2> uvw_ma(uvw.data(), {data.rows(), 3});
+    const ducc0::cmav<size_t, 1> freqlist_id =
+        ducc0::cmav<size_t, 1>::build_uniform({data.rows()}, 0);
+    const ducc0::cmav<size_t, 1> freqlist_nfreqs = ducc0::cmav<size_t, 1>::build_uniform({1}, 1);
+    const std::vector<double> freqs(1, frequency);
+    const ducc0::cmav<double, 1> freqlist_freqs(freqs.data(), {1});
+    const ducc0::cmav<std::complex<float>, 1> ms_ma(data.values.data(), {data.rows()});
+    const ducc0::cmav<float, 1> weight_ma(nullptr, {0});
+    const ducc0::cmav<std::uint8_t, 1> mask_ma(nullptr, {0});
+    ducc0::vmav<float, 2> dirty({image_size, image_size});
+    ducc0::ms2dirty_bda<float, float>(uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_ma,
+                                      weight_ma, mask_ma, pixel_size, pixel_size, 1.0e-4,
+                                      /*do_wgridding=*/!input.w_gridding, 8, dirty, 0, false,
+                                      false, false, false, 1.1, 2.0, 0.0, 0.0, false);
+    std::vector<float> other(image_size * image_size);
+    for (std::size_t i = 0; i < image_size * image_size; ++i) other[i] = dirty.raw(i);
+    compare(other, reference, "ducc0 other path vs this reference:");
+  }
   return 0;
 }
