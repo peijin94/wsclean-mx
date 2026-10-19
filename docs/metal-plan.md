@@ -205,3 +205,62 @@ visibility). Measured, min of 5, three consecutive runs agreeing:
   1.19 ms (half its repeated value) with a negative cost-attribution share.
   Three consecutive repeats agree on 2.33 ms, so that run is treated as an
   outlier and the repeated numbers are the record.
+
+## Round trip (grid + degrid), 2026-10-19
+
+The w-gridder does both directions, so the probe now measures both plus the
+property that ties them together.
+
+* `grid_degrid_poly` is the adjoint operation: one thread per visibility, no
+  atomics, no tiles, summing the 6x6 neighbourhood with the same ducc0
+  polynomial weights. The grid buffer is read as plain floats (the gridding
+  kernel published it through atomics; the merge is complete by then).
+* `--op roundtrip` measures both directions, checks each against its double
+  twin, and checks the adjoint identity `<G x, Y> = <x, D Y>` with an
+  independent random grid `Y`.
+
+| quantity (603 814 visibilities, 1024², poly-h, min of 5) | value |
+|---|---:|
+| gridding kernel | 12.60 ms |
+| degridding kernel | 10.10 ms |
+| round trip | 22.70 ms (26.6 Mvis/s) |
+| gridding vs its twin | rel_max 3.0e-6 |
+| degridding vs its twin | rel_max 2.7e-7 |
+| adjoint identity | rel_diff 4e-8 |
+| round trip vs scalar double twin | 10.2x |
+
+The adjoint identity is the useful new correctness property: it fails if the
+degridding weights or the index mapping differ from the gridding ones in any
+way, and at 4e-8 it says the pair is exactly adjoint to float32 precision.
+
+### Improvement evaluation
+
+The honest comparison point is the stage this replaces, measured with the
+project's own tools on this machine:
+
+* **CPU**: `mx-p11` wsclean with `-gridder wgridder` on `LOFAR_3C196.ms`,
+  1024², `-niter 0`, 8 threads: whole run 0.80 s with wsclean's own timer
+  reporting **inversion 484 ms** for 603 814 visibilities.
+* **GPU**: the gridding kernel alone takes **12.6 ms** for the same visibility
+  count, and the round trip 22.7 ms.
+
+So the gridding work that dominates the inversion stage (see the profile table
+at the top) is around **38x faster on the GPU** than in the stage that contains
+it. Three caveats keep this from being a wsclean speedup claim: the CPU figure
+is a whole stage (it includes the FFT and the measurement-set read), the GPU
+figure is a kernel (no FFT, no I/O, no w-planes - the synthetic data have w=0),
+and nothing here has been wired into the pipeline. It is a bound on what the
+wiring can recover, not a result.
+
+### Parked: standalone ducc0 CPU baseline
+
+`bench/metal/ducc0_wgridder_tool.cpp` times ducc0's own `ms2dirty`/`dirty2ms`
+on the same synthetic data, which would be the cleanest CPU comparison. It
+compiles (needs `-march=native`, OpenMP from Homebrew libomp, both wgridder
+headers plus `fftnd_impl.h`, and 2D `ms`/weights/mask views - a 1D `ms` trips a
+static assertion and an empty weight view segfaults), but **crashes with the
+parameters tried so far**: the uv/pixel-size mapping needs wsclean's own
+convention (its per-channel `f/c` scaling in `ffact` and the pixel size it
+passes), which is not yet replicated. The stage-level comparison above stands on
+its own; this tool is parked with the crash recorded rather than left as a
+silent gap.

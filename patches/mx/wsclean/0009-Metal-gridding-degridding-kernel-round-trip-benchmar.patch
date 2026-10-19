@@ -1,0 +1,361 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: wsclean-mx <wsclean-mx@localhost>
+Date: Sun, 18 Oct 2026 22:28:11 -0400
+Subject: [PATCH 9/9] Metal gridding: degridding kernel, round-trip benchmark
+ and adjoint check
+
+The w-gridder runs both directions, so the harness now covers both and the
+property that ties them together.
+
+* grid_degrid_poly (MSL) is the adjoint operation: one thread per visibility, no
+  atomics, no tiles, summing the 6x6 neighbourhood with the same ducc0
+  polynomial weights; the grid is read as plain floats (the gridding kernel's
+  atomic merge is complete by then).
+* metaldevice gains gridDegrid() (arbitrary grid in, values out), so the probe
+  can feed it a grid the gridding kernel did not produce.
+* mx-metal-probe --op roundtrip measures both directions against their float64
+  twins and checks the adjoint identity <G x, Y> = <x, D Y> against an
+  independent random grid.
+
+Measured (603 814 visibilities, 1024^2, poly-h, min of 5): gridding 12.60 ms,
+degridding 10.10 ms, round trip 22.70 ms (26.6 Mvis/s); gridding rel_max 3.0e-6,
+degridding rel_max 2.7e-7, adjoint identity rel_diff 4e-8, round trip 10.2x a
+scalar double twin.
+
+diff --git a/metal/metaldevice.h b/metal/metaldevice.h
+index 2f752a72..c401ccb3 100644
+--- a/metal/metaldevice.h
++++ b/metal/metaldevice.h
+@@ -84,6 +84,20 @@ struct KernelProbeResult {
+ 
+ KernelProbeResult evalEsKernel(const std::vector<float>& arguments, float support, float beta);
+ 
++// Degridding: grid -> visibilities, the adjoint of gridAccumulate's
++// accumulation. `grid` is 2*G*G floats (re/im interleaved); `u_v` holds u,v per
++// visibility (4 floats each). Returns 2 floats per visibility.
++struct DegridResult {
++  std::vector<float> values;
++  double gpu_seconds = 0.0;
++  double wall_seconds = 0.0;
++};
++
++DegridResult gridDegrid(const std::vector<float>& u_v, const std::vector<float>& grid,
++                        std::size_t grid_size, std::size_t support,
++                        const std::vector<float>& kernel_coefficients,
++                        std::size_t kernel_degree);
++
+ // Host-side bucketing of visibilities into per-tile item lists (CSR). Exposed
+ // so tests can check the assignment independently of any GPU.
+ struct TileBuckets {
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index ceec385b..6d883097 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -278,6 +278,87 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+   }
+ }
+ 
++DegridResult gridDegrid(const std::vector<float>& u_v, const std::vector<float>& grid,
++                        std::size_t grid_size, std::size_t support,
++                        const std::vector<float>& kernel_coefficients,
++                        std::size_t kernel_degree) {
++  @autoreleasepool {
++    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
++    if (device == nil) fail("no Metal device is available");
++    if (u_v.size() % 4 != 0) fail("u/v array must hold four floats per visibility");
++    if (grid.size() != 2 * grid_size * grid_size) fail("grid buffer has the wrong size");
++    if (kernel_coefficients.empty()) fail("degridding needs kernel coefficients");
++
++    const std::size_t count = u_v.size() / 4;
++    NSError* error = nil;
++    id<MTLLibrary> library =
++        [device newLibraryWithSource:[NSString stringWithUTF8String:kGridAccumulateMSL]
++                             options:nil
++                               error:&error];
++    if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
++    id<MTLFunction> function = [library newFunctionWithName:@"grid_degrid_poly"];
++    if (function == nil) fail("kernel function 'grid_degrid_poly' is missing");
++    id<MTLComputePipelineState> pipeline =
++        [device newComputePipelineStateWithFunction:function error:&error];
++    if (pipeline == nil) fail("pipeline creation failed: " + nsString([error localizedDescription]));
++
++    id<MTLBuffer> input_buffer = nil;
++    if (!u_v.empty()) {
++      input_buffer = [device newBufferWithBytes:u_v.data()
++                                        length:u_v.size() * sizeof(float)
++                                       options:MTLResourceStorageModeShared];
++    }
++    id<MTLBuffer> output_buffer =
++        [device newBufferWithLength:2 * count * sizeof(float)
++                            options:MTLResourceStorageModeShared];
++    id<MTLBuffer> grid_buffer = [device newBufferWithBytes:grid.data()
++                                                    length:grid.size() * sizeof(float)
++                                                   options:MTLResourceStorageModeShared];
++
++    id<MTLCommandQueue> queue = [device newCommandQueue];
++    id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
++    id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
++    [encoder setComputePipelineState:pipeline];
++    [encoder setBuffer:input_buffer offset:0 atIndex:0];
++    [encoder setBuffer:output_buffer offset:0 atIndex:1];
++    [encoder setBuffer:grid_buffer offset:0 atIndex:2];
++    const unsigned degree = static_cast<unsigned>(kernel_degree);
++    const unsigned size = static_cast<unsigned>(grid_size);
++    const int centre = static_cast<int>(grid_size) / 2;
++    const unsigned support_unsigned = static_cast<unsigned>(support);
++    const unsigned count_unsigned = static_cast<unsigned>(count);
++    [encoder setBytes:kernel_coefficients.data()
++               length:kernel_coefficients.size() * sizeof(float)
++              atIndex:3];
++    [encoder setBytes:&degree length:sizeof(degree) atIndex:4];
++    [encoder setBytes:&size length:sizeof(size) atIndex:5];
++    [encoder setBytes:&centre length:sizeof(centre) atIndex:6];
++    [encoder setBytes:&support_unsigned length:sizeof(support_unsigned) atIndex:7];
++    [encoder setBytes:&count_unsigned length:sizeof(count_unsigned) atIndex:8];
++    if (count > 0) {
++      [encoder dispatchThreads:MTLSizeMake(count, 1, 1)
++          threadsPerThreadgroup:MTLSizeMake(std::min<std::size_t>(count, 256), 1, 1)];
++    }
++    [encoder endEncoding];
++    const auto begin = std::chrono::steady_clock::now();
++    [command_buffer commit];
++    [command_buffer waitUntilCompleted];
++    const auto end = std::chrono::steady_clock::now();
++    if ([command_buffer status] != MTLCommandBufferStatusCompleted) {
++      fail("degridding failed: " + nsString([[command_buffer error] localizedDescription]));
++    }
++
++    DegridResult result;
++    result.values.resize(2 * count);
++    if (count > 0) {
++      std::memcpy(result.values.data(), [output_buffer contents], 2 * count * sizeof(float));
++    }
++    result.gpu_seconds = [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
++    result.wall_seconds = std::chrono::duration<double>(end - begin).count();
++    return result;
++  }
++}
++
+ KernelProbeResult evalEsKernel(const std::vector<float>& arguments, float support, float beta) {
+   @autoreleasepool {
+     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index 1e0fd680..d5dcc49d 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -602,6 +602,52 @@ kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
+   }
+ }
+ 
++// Degridding: grid -> visibilities, the adjoint of the gridding accumulation.
++// Each thread owns one visibility and sums its 6x6 neighbourhood of the grid,
++// so no atomics are needed and there is no tile structure to pay for. The
++// kernel weights are ducc0's polynomial, read from the grid buffer as plain
++// floats (the gridding kernel published them through atomics; the merge is
++// complete by the time this runs).
++kernel void grid_degrid_poly(device const float* visibilities_in,  // u, v
++                             device float* visibilities_out,       // re, im
++                             device const float* grid,             // 2 * G * G
++                             constant float* coefficients,
++                             constant uint& degree,
++                             constant uint& grid_size,
++                             constant int& centre,
++                             constant uint& support,
++                             constant uint& count,
++                             uint index [[thread_position_in_grid]]) {
++  if (index >= count) return;
++  const float u = visibilities_in[4 * index + 0];
++  const float v = visibilities_in[4 * index + 1];
++  const float rounded_u = round(u);
++  const float rounded_v = round(v);
++  const int i0 = int(rounded_u) + centre;
++  const int j0 = int(rounded_v) + centre;
++  const float fx = u - rounded_u;
++  const float fy = v - rounded_v;
++  const int half_support = int(support) / 2;
++
++  float2 value = float2(0.0f, 0.0f);
++  for (int jy = -half_support; jy < half_support; ++jy) {
++    const int cy = j0 + jy;
++    if (cy < 0 || cy >= int(grid_size)) continue;
++    const float wy = poly_sample(fy - float(jy), coefficients, degree, support);
++    if (wy == 0.0f) continue;
++    for (int jx = -half_support; jx < half_support; ++jx) {
++      const int cx = i0 + jx;
++      if (cx < 0 || cx >= int(grid_size)) continue;
++      const float weight = poly_sample(fx - float(jx), coefficients, degree, support) * wy;
++      const uint cell = 2 * (uint(cy) * grid_size + uint(cx));
++      value.x += weight * grid[cell];
++      value.y += weight * grid[cell + 1];
++    }
++  }
++  visibilities_out[2 * index + 0] = value.x;
++  visibilities_out[2 * index + 1] = value.y;
++}
++
+ )MSL";
+ 
+ }  // namespace mx::metal
+diff --git a/metal/probe_main.cpp b/metal/probe_main.cpp
+index 4d433df2..3f297d11 100644
+--- a/metal/probe_main.cpp
++++ b/metal/probe_main.cpp
+@@ -46,6 +46,7 @@ struct Options {
+   float beta = mx::metal::kDucc0BetaNorm * 6.0f;
+   float e0 = mx::metal::kDucc0E0;
+   std::string kernel_coefficients_file;
++  std::string op = "grid";  // grid | roundtrip
+   int repeat = 1;
+   bool quiet = false;
+   bool all_variants = true;
+@@ -230,6 +231,122 @@ CheckResult checkGrid(const std::vector<float>& candidate,
+   return result;
+ }
+ 
++// Degridding twin: grid -> visibilities in double, same weights and indexing as
++// the Metal kernel (the adjoint of referenceGrid's accumulation).
++std::vector<double> referenceDegrid(const Options& options,
++                                    const std::vector<float>& visibilities,
++                                    const std::vector<float>& grid,
++                                    const std::vector<float>& coefficients,
++                                    std::size_t degree) {
++  const std::size_t g = options.grid;
++  const int half = static_cast<int>(options.support) / 2;
++  const long centre_index = static_cast<long>(g) / 2;
++  const std::size_t count = visibilities.size() / 4;
++  std::vector<double> values(2 * count, 0.0);
++  for (std::size_t v = 0; v < count; ++v) {
++    const long rounded_u = std::lround(static_cast<double>(visibilities[4 * v]));
++    const long rounded_v = std::lround(static_cast<double>(visibilities[4 * v + 1]));
++    const long i0 = rounded_u + centre_index;
++    const long j0 = rounded_v + centre_index;
++    const double fx = static_cast<double>(visibilities[4 * v]) - static_cast<double>(rounded_u);
++    const double fy = static_cast<double>(visibilities[4 * v + 1]) - static_cast<double>(rounded_v);
++    double re = 0.0, im = 0.0;
++    for (int jy = -half; jy < half; ++jy) {
++      const long cy = j0 + jy;
++      if (cy < 0 || cy >= static_cast<long>(g)) continue;
++      const double wy = polySample(coefficients, options.support, degree, fy - jy);
++      if (wy == 0.0) continue;
++      for (int jx = -half; jx < half; ++jx) {
++        const long cx = i0 + jx;
++        if (cx < 0 || cx >= static_cast<long>(g)) continue;
++        const double weight = polySample(coefficients, options.support, degree, fx - jx) * wy;
++        const std::size_t cell = 2 * (static_cast<std::size_t>(cy) * g + static_cast<std::size_t>(cx));
++        re += weight * static_cast<double>(grid[cell]);
++        im += weight * static_cast<double>(grid[cell + 1]);
++      }
++    }
++    values[2 * v] = re;
++    values[2 * v + 1] = im;
++  }
++  return values;
++}
++
++// Round trip: grid -> degrid with the polynomial convention, checked against the
++// double twins and against the adjoint identity <Gx, Y> = <x, D Y>.
++int runRoundTrip(const Options& options, const mx::metal::DeviceInfo& info,
++                 const std::vector<float>& coefficients, std::size_t degree,
++                 mx::metal::GridAccumInput input) {
++  const std::size_t count = input.visibilities.size() / 4;
++  std::printf("roundtrip device=\"%s\" nvis=%zu grid=%zu support=%zu\n", info.name.c_str(),
++              count, options.grid, options.support);
++
++  // Forward: gridding, timed, and its double twin (also timed: the scalar
++  // single-thread baseline - not ducc0's SIMD, multithreaded path).
++  const auto twin_grid_begin = std::chrono::steady_clock::now();
++  const std::vector<double> reference_raw =
++      referenceGrid(options, input.visibilities, ReferenceKernel::kPolynomial, false,
++                    coefficients, degree);
++  const double twin_grid_seconds =
++      std::chrono::duration<double>(std::chrono::steady_clock::now() - twin_grid_begin).count();
++
++  input.variant = mx::metal::Variant::kPolyHoisted;
++  const mx::metal::GridAccumResult gpu_grid = mx::metal::gridAccumulate(input);
++  const CheckResult grid_check = checkGrid(gpu_grid.grid, reference_raw);
++
++  // Backward: degridding of the GPU grid, checked against the twin degridding of
++  // the same grid (isolates the degridding kernel from the gridding error).
++  const auto twin_degrid_begin = std::chrono::steady_clock::now();
++  const std::vector<double> reference_values =
++      referenceDegrid(options, input.visibilities, gpu_grid.grid, coefficients, degree);
++  const double twin_degrid_seconds =
++      std::chrono::duration<double>(std::chrono::steady_clock::now() - twin_degrid_begin).count();
++
++  const mx::metal::DegridResult gpu_values = mx::metal::gridDegrid(
++      input.visibilities, gpu_grid.grid, options.grid, options.support, coefficients, degree);
++  double worst = 0.0, scale = 0.0;
++  for (std::size_t i = 0; i < gpu_values.values.size(); ++i) {
++    worst = std::max(worst, std::fabs(static_cast<double>(gpu_values.values[i]) - reference_values[i]));
++    scale = std::max(scale, std::fabs(reference_values[i]));
++  }
++  const double degrid_relative = worst / std::max(scale, 1e-30);
++
++  // Adjoint identity with an independent random grid Y:
++  //   <G x, Y> must equal <x, D Y>.
++  std::mt19937_64 random(4242);
++  std::normal_distribution<float> noise(0.0f, 1.0f);
++  std::vector<float> random_grid(2 * options.grid * options.grid);
++  for (float& cell : random_grid) cell = noise(random);
++  const mx::metal::DegridResult adjoint_values = mx::metal::gridDegrid(
++      input.visibilities, random_grid, options.grid, options.support, coefficients, degree);
++  double lhs = 0.0, rhs = 0.0;
++  for (std::size_t i = 0; i < random_grid.size(); ++i) {
++    lhs += static_cast<double>(gpu_grid.grid[i]) * random_grid[i];
++  }
++  for (std::size_t v = 0; v < count; ++v) {
++    rhs += static_cast<double>(input.visibilities[4 * v + 2]) * adjoint_values.values[2 * v] +
++           static_cast<double>(input.visibilities[4 * v + 3]) * adjoint_values.values[2 * v + 1];
++  }
++  const double adjoint_relative = std::fabs(lhs - rhs) / std::max({std::fabs(lhs), std::fabs(rhs), 1e-30});
++
++  const double gpu_total_seconds = gpu_grid.gpu_seconds + gpu_values.gpu_seconds;
++  const double twin_total_seconds = twin_grid_seconds + twin_degrid_seconds;
++  std::printf("roundtrip grid: gpu_ms=%.2f twin_ms=%.1f rel_max=%.3g status=%s\n",
++              gpu_grid.gpu_seconds * 1e3, twin_grid_seconds * 1e3, grid_check.relative_max,
++              grid_check.passed ? "PASS" : "FAIL");
++  std::printf("roundtrip degrid: gpu_ms=%.2f twin_ms=%.1f rel_max=%.3g status=%s\n",
++              gpu_values.gpu_seconds * 1e3, twin_degrid_seconds * 1e3, degrid_relative,
++              degrid_relative <= 1.0e-5 ? "PASS" : "FAIL");
++  std::printf("roundtrip adjoint: lhs=%.6g rhs=%.6g rel_diff=%.3g status=%s\n", lhs, rhs,
++              adjoint_relative, adjoint_relative <= 1.0e-5 ? "PASS" : "FAIL");
++  std::printf("roundtrip total: gpu_ms=%.2f twin_ms=%.1f speedup_vs_scalar_double_twin=x%.1f "
++              "throughput_Mvis_s=%.1f\n",
++              gpu_total_seconds * 1e3, twin_total_seconds * 1e3,
++              twin_total_seconds / std::max(gpu_total_seconds, 1e-9),
++              static_cast<double>(count) / std::max(gpu_total_seconds, 1e-9) / 1e6);
++  const bool passed = grid_check.passed && degrid_relative <= 1.0e-5 && adjoint_relative <= 1.0e-5;
++  return passed ? 0 : 1;
++}
++
+ Options parseOptions(int argc, char** argv) {
+   Options options;
+   for (int i = 1; i < argc; ++i) {
+@@ -270,6 +387,12 @@ Options parseOptions(int argc, char** argv) {
+       }
+     } else if (argument == "--quiet") {
+       options.quiet = true;
++    } else if (argument == "--op") {
++      options.op = value("--op");
++      if (options.op != "grid" && options.op != "roundtrip") {
++        std::fprintf(stderr, "mx-metal-probe: unknown op %s\n", options.op.c_str());
++        std::exit(2);
++      }
+     } else if (argument == "--kernel-coeffs") {
+       options.kernel_coefficients_file = value("--kernel-coeffs");
+     } else if (argument == "--dump") {
+@@ -412,6 +535,14 @@ int main(int argc, char** argv) {
+   Options effective = options;
+   effective.beta = input.beta;
+   effective.e0 = input.e0;
++  if (options.op == "roundtrip") {
++    if (kernel_coefficients.empty()) {
++      std::fprintf(stderr, "mx-metal-probe: --op roundtrip needs --kernel-coeffs\n");
++      return 2;
++    }
++    return runRoundTrip(options, info, kernel_coefficients, kernel_degree, input);
++  }
++
+   const std::vector<double> reference = referenceGrid(effective, input.visibilities,
+                                                       ReferenceKernel::kAnalytic, true);
+   std::vector<double> reference_poly;
