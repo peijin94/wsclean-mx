@@ -29,6 +29,7 @@ class WscleanMx < Formula
   depends_on "cmake" => :build
   depends_on "ninja" => :build
   depends_on "pkgconf" => :build
+  depends_on "bison" => :build # casacore requires bison >= 3; macOS ships 2.3
   depends_on "gcc" => :build # Fortran for the casacore resource
   depends_on "boost"
   depends_on "cfitsio"
@@ -63,7 +64,10 @@ class WscleanMx < Formula
   end
 
   def install
-    casacore_prefix = buildpath/"casacore-install"
+    # The casacore resource lives permanently inside this keg (libexec), so
+    # the bottled wsclean links it by its keg-absolute path — never by the
+    # temporary build directory.
+    casacore_prefix = libexec/"casacore"
     resource("casacore").stage do
       mkdir "mx-build" do
         args = %W[
@@ -130,6 +134,13 @@ class WscleanMx < Formula
       system "cmake", "-S", src["wsclean"], "-B", ".", "-G", "Ninja", *args
       system "cmake", "--build", ".", "--target", "wsclean"
       bin.install "wsclean"
+      # wsclean's threading runtime: a build-tree shared lib the binary loads
+      # via @rpath. Upstream forces CMAKE_BUILD_WITH_INSTALL_RPATH=FALSE, so
+      # the built binary only knows the build dir; point it at the keg lib
+      # the same way bench/snapshot.sh does for frozen snapshots.
+      lib.install "libschaapthreading.dylib"
+      system "install_name_tool", "-add_rpath", lib, bin/"wsclean"
+      system "codesign", "--force", "--sign", "-", bin/"wsclean"
     end
   end
 
