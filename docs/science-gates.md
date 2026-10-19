@@ -170,6 +170,31 @@ for mx-p11, for its second rerun, and for the perturbed reference, whose own
 products are also indistinguishable from the reference here. On a real-source
 field this stack is numerically the same instrument as the fixed reference.
 
+### Correction (2026-10-19): the fixture is uncalibrated — "real sources" withdrawn
+
+The "real-source field" framing above is wrong and is withdrawn; the numbers
+stand, their interpretation changes. Direct inspection of the fixture and its
+images (`v010-lofar2-*`, same configuration):
+
+- Geometrically phased to 3C196: `FIELD.PHASE_DIR = 08h13m36.068
+  +48d13m02.581`, exactly 3C196, and the image phase center matches. In the
+  geometric sense the answer is yes.
+- Calibrated on 3C196: no. Usable visibilities average 8.9 Jy scalar but
+  only 0.9 Jy vector (10% coherence); the dirty peak is 0.28 Jy/beam far
+  off-axis; restored total flux is −391 Jy; restored ≈ residual (sidelobe
+  soup, symmetric positive/negative streaks, no detectable source). This is
+  upstream's uncalibrated CI smoke-test fixture, not a calibrated calibrator
+  image — it cannot test source photometry.
+- What the ~1e-7 agreement therefore proves: the two pipelines are
+  numerically identical instruments on real telescope data (real uv coverage,
+  flags, weights, NaNs), including through 3000 chaotic multiscale
+  iterations. The matched-"source" metrics there compare sidelobe peaks, not
+  astrophysical sources, and carry no photometric weight.
+- The fields with genuine emission in this project are the OVRO-LWA
+  quiet-Sun snapshot and the MWA PupA fixture (5.6 Jy peak); the LOFAR LBA
+  fixture is likewise uncalibrated (peak 2.7e6 in raw units). A calibrated
+  real-source photometry gate remains future work and is now explicit.
+
 ## Metric revision (2026-10-18): sub-pixel positions, significance floor
 
 The first LOFAR pass failed only on source checks of the *model* product: `2.000

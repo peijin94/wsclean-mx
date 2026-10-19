@@ -9,8 +9,10 @@ natively for arm64, moves serial FFT and deconvolution work onto all cores,
 and removes I/O and locking bottlenecks.
 It also fixes an upstream bug that corrupts 2048² images on macOS. Dirty/PSF
 products agree with the fixed upstream reference at float32 rounding
-(~1e-7 relative RMS). On a real-source field (LOFAR 3C196) the multiscale
-cleaned products agree at the same floor in every measured quantity; on the
+(~1e-7 relative RMS). On real LOFAR telescope data (the 3C196 CI fixture —
+geometrically phased to 3C196 but uncalibrated, so a pipeline-equivalence
+check, not source photometry) the multiscale cleaned products agree at the
+same floor in every measured quantity; on the
 noise-dominated quiet-Sun snapshot they sit inside the reference's own
 chaotic spread (50-rerun family, max and p95 criteria). Details:
 [docs/science-gates.md](docs/science-gates.md) and
@@ -200,8 +202,9 @@ Science acceptance is separate and measured at source level, not by pixel RMS:
 position, size and matched-source quantities against the reference's own rerun
 envelope. Results and the predeclared decision rule are in
 [docs/science-gates.md](docs/science-gates.md) — dirty/PSF pass, the multiscale
-cleaned products pass against a ten-rerun envelope, patch 12 is neutral, and on a
-real-source field (LOFAR 3C196, upstream's pinned CI fixture) the stack agrees
+cleaned products pass against a ten-rerun envelope, patch 12 is neutral, and on
+real LOFAR telescope data (3C196 fixture, uncalibrated — pipeline equivalence,
+not photometry) the stack agrees
 with the fixed reference to float32 rounding.
 
 The upstream unit/integration suites are separate and require their test data.

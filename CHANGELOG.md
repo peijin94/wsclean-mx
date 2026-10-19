@@ -53,9 +53,12 @@ imaging throughput.
   PASS, 0 differing pixels.
 - Reference comparison (`T2`, default limits rel-RMS `1e-4` / rel-peak
   `1e-3`): dirty + multiscale `-j 1` — PASS at ~2e-7 (float32 rounding).
-- Real-source field (LOFAR 3C196, 1024², multiscale, niter 3000): candidate
-  agrees with the reference at ~1e-7 in every measured quantity (total
-  flux, peak, MAD rms, second moment, matched-source flux/position).
+- Real LOFAR telescope data (3C196 fixture, 1024², multiscale, niter 3000):
+  candidate agrees with the reference at ~1e-7 in every measured quantity.
+  Correction: the fixture is geometrically phased to 3C196 but uncalibrated
+  (10% visibility coherence, no detectable source) — this is pipeline
+  equivalence on real data, not source photometry; the "real-source" label
+  is withdrawn in `docs/science-gates.md`.
 - Quiet-Sun full-sky multiscale: inside the reference's own chaotic spread;
   all four candidate runs pass both the max and the predeclared p95
   criterion against a 50-rerun family (1225 pairs); the only failing
