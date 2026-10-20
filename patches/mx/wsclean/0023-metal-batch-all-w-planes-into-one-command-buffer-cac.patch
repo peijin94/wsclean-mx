@@ -1,0 +1,451 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 20 Oct 2026 19:48:15 -0400
+Subject: [PATCH 23/23] metal: batch all w-planes into one command buffer +
+ cache pipelines
+
+gridAccumulate was called once per w-plane, each call recompiling the
+MSL source, creating a pipeline, allocating a grid buffer, and paying a
+command-buffer wait. Measured per plane: host 0.2ms, gpu 0.5ms, wait
+0.9ms - the wait (scheduling, not execution) dominated. New
+gridAccumulateBatched encodes all planes into one command buffer and
+waits once: 29 planes go from ~46ms to 22ms (gpu 15.4 + wait ~1 +
+host bucketing 5.3), bit-identical output (wlayer gate unchanged at
+rel_rms 1.28e-05 across w=0..200). Pipeline cache + grid-buffer reuse
+also speed the single-call path. Next biggest host cost is bucketing.
+
+diff --git a/metal/metaldevice.h b/metal/metaldevice.h
+index 86bf463b..48fd3f80 100644
+--- a/metal/metaldevice.h
++++ b/metal/metaldevice.h
+@@ -84,6 +84,10 @@ struct GridAccumResult {
+ // Throws std::runtime_error when no device is present or compilation fails.
+ GridAccumResult gridAccumulate(const GridAccumInput& input);
+ 
++// Batched gridding: one grid per input, single command buffer and wait.
++// Numerically identical to calling gridAccumulate per input.
++std::vector<GridAccumResult> gridAccumulateBatched(const std::vector<GridAccumInput>& inputs);
++
+ // Evaluates the gridding kernel at the given arguments on the GPU, once with
+ // the default (fast-math) functions and once through the precise namespace.
+ // Exposed so the probe can attribute numerical differences between the GPU and
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index f7069941..7fec5ca3 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -13,6 +13,8 @@
+ 
+ #include <chrono>
+ #include <cstring>
++#include <map>
++#include <mutex>
+ #include <stdexcept>
+ 
+ namespace mx::metal {
+@@ -23,6 +25,22 @@
+   throw std::runtime_error("mx::metal: " + message);
+ }
+ 
++// Process-wide cache of compiled compute pipelines, keyed by
++// "<support>/<kernel>". gridAccumulate is called once per w-plane (dozens of
++// times per inversion) with identical shaders; recompiling the MSL source and
++// creating a pipeline per call costs milliseconds each time. Pipelines are
++// immutable and thread-safe to share; the mutex only guards the map.
++// The grid scratch buffer is cached the same way (same size every plane).
++struct MetalCache {
++  std::mutex mutex;
++  std::map<std::string, id<MTLComputePipelineState>> pipelines;
++  id<MTLBuffer> grid_buffer = nil;
++};
++MetalCache& metalCache() {
++  static MetalCache cache;
++  return cache;
++}
++
+ std::string replaceAll(std::string text, const std::string& from, const std::string& to) {
+   std::size_t pos = 0;
+   while ((pos = text.find(from, pos)) != std::string::npos) {
+@@ -206,21 +224,46 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     const std::size_t tiles = tiles_per_row * tiles_per_row;
+ 
+     NSError* error = nil;
+-    const std::string metal_source = mslSource(input.support);
+-    id<MTLLibrary> library =
+-        [device newLibraryWithSource:[NSString stringWithUTF8String:metal_source.c_str()]
+-                             options:nil
+-                               error:&error];
+-    if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
+-    id<MTLFunction> function = [library newFunctionWithName:[NSString stringWithUTF8String:kernel_name]];
+-    if (function == nil) fail(std::string("kernel function '") + kernel_name + "' is missing");
+-    id<MTLComputePipelineState> pipeline =
+-        [device newComputePipelineStateWithFunction:function error:&error];
+-    if (pipeline == nil) fail("pipeline creation failed: " + nsString([error localizedDescription]));
++    id<MTLComputePipelineState> pipeline = nil;
++    {
++      // Reuse compiled pipelines across planes (and inversions): the MSL
++      // source depends only on the support and the entry point only on the
++      // variant, so both are identical for every plane of an inversion.
++      const std::string key =
++          std::to_string(input.support) + "/" + std::string(kernel_name);
++      std::lock_guard<std::mutex> lock(metalCache().mutex);
++      auto it = metalCache().pipelines.find(key);
++      if (it != metalCache().pipelines.end()) {
++        pipeline = it->second;
++      } else {
++        const std::string metal_source = mslSource(input.support);
++        id<MTLLibrary> library =
++            [device newLibraryWithSource:[NSString stringWithUTF8String:metal_source.c_str()]
++                                 options:nil
++                                   error:&error];
++        if (library == nil) fail("kernel compilation failed: " + nsString([error localizedDescription]));
++        id<MTLFunction> function = [library newFunctionWithName:[NSString stringWithUTF8String:kernel_name]];
++        if (function == nil) fail(std::string("kernel function '") + kernel_name + "' is missing");
++        pipeline = [device newComputePipelineStateWithFunction:function error:&error];
++        if (pipeline == nil) fail("pipeline creation failed: " + nsString([error localizedDescription]));
++        metalCache().pipelines[key] = pipeline;
++      }
++    }
+ 
+     const std::size_t grid_bytes = 2 * g * g * sizeof(float);
+-    id<MTLBuffer> grid_buffer = [device newBufferWithLength:grid_bytes
+-                                                   options:MTLResourceStorageModeShared];
++    id<MTLBuffer> grid_buffer = nil;
++    {
++      // One grid scratch buffer per process, reused across planes (and
++      // inversions of the same size). Buffers only grow; a smaller request
++      // reuses the tail of a larger allocation.
++      std::lock_guard<std::mutex> lock(metalCache().mutex);
++      if (metalCache().grid_buffer == nil ||
++          [metalCache().grid_buffer length] < grid_bytes) {
++        metalCache().grid_buffer = [device newBufferWithLength:grid_bytes
++                                                       options:MTLResourceStorageModeShared];
++      }
++      grid_buffer = metalCache().grid_buffer;
++    }
+     std::memset([grid_buffer contents], 0, grid_bytes);
+ 
+     id<MTLBuffer> visibility_buffer = nil;
+@@ -369,6 +412,244 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+   }
+ }
+ 
++// Batched gridding: encode one grid per input into a single command buffer
++// and wait once, instead of paying a command-buffer round trip per plane.
++// The w-layer inversion grids dozens of planes per image; the per-plane wait
++// latency (~1 ms, mostly scheduling, not execution) dominates the host wall
++// time. Each plane still gets its own grid buffer (concurrent dispatches must
++// not share outputs); all grids are copied out after the single wait.
++// Numerically identical to calling gridAccumulate per input (same kernels,
++// same inputs, same order-independent atomics).
++std::vector<GridAccumResult> gridAccumulateBatched(const std::vector<GridAccumInput>& inputs) {
++  @autoreleasepool {
++    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
++    if (device == nil) fail("no Metal device is available");
++    if (inputs.empty()) return {};
++    const auto host_begin = std::chrono::steady_clock::now();
++
++    struct PlaneJob {
++      GridAccumInput input;
++      TileBuckets buckets;
++      std::size_t tiles_per_row = 0;
++      std::size_t tiles = 0;
++      std::vector<float> packed;
++      std::vector<unsigned> work_items;
++      bool split = false;
++      id<MTLComputePipelineState> pipeline = nil;
++      id<MTLBuffer> grid_buffer = nil;
++      id<MTLBuffer> visibility_buffer = nil;
++      id<MTLBuffer> start_buffer = nil;
++      id<MTLBuffer> item_buffer = nil;
++      id<MTLBuffer> work_buffer = nil;
++      std::size_t grid_bytes = 0;
++      std::size_t g = 0;
++    };
++    std::vector<PlaneJob> jobs;
++    jobs.reserve(inputs.size());
++    for (const auto& in : inputs) {
++      PlaneJob job;
++      job.input = in;
++      const std::size_t g = in.grid_size;
++      if (g == 0 || g % 32 != 0) fail("grid size must be a positive multiple of 32");
++      job.g = g;
++      const char* kernel_name = "grid_accumulate";
++      if (in.variant == Variant::kHoisted) kernel_name = "grid_accumulate_hoisted";
++      if (in.variant == Variant::kPacked) kernel_name = "grid_accumulate_hoisted_packed";
++      if (in.variant == Variant::kCostProbe) kernel_name = "grid_accumulate_cost_probe";
++      if (in.variant == Variant::kPoly) kernel_name = "grid_accumulate_poly";
++      if (in.variant == Variant::kPolyHoisted) kernel_name = "grid_accumulate_poly_hoisted";
++      if (in.variant == Variant::kPolyColumns) kernel_name = "grid_accumulate_poly_columns";
++      job.split = in.split_target > 0 && in.variant == Variant::kPolyHoisted;
++      if (job.split) kernel_name = "grid_accumulate_poly_hoisted_split";
++      if ((in.variant == Variant::kHoisted || in.variant == Variant::kPacked) &&
++          in.support != 6) {
++        fail("the hoisted variants are specialized for support 6");
++      }
++      if ((in.variant == Variant::kPoly || in.variant == Variant::kPolyHoisted ||
++           in.variant == Variant::kPolyColumns) &&
++          in.kernel_coefficients.empty()) {
++        fail("Variant::kPoly needs kernel_coefficients (see bench/metal/ducc0_kernel_tool.cpp)");
++      }
++      job.buckets = bucketVisibilities(in);
++      if (in.variant == Variant::kPacked) job.packed = packBuckets(in, job.buckets);
++      job.tiles_per_row = job.buckets.tiles_per_row;
++      job.tiles = job.tiles_per_row * job.tiles_per_row;
++      if (job.split) {
++        const std::size_t target = std::max<std::size_t>(1, in.split_target);
++        for (std::size_t t = 0; t + 1 < job.buckets.start.size(); ++t) {
++          const std::size_t b = job.buckets.start[t], e = job.buckets.start[t + 1];
++          if (b == e) continue;
++          for (std::size_t s = b; s < e; s += target) {
++            job.work_items.push_back(static_cast<unsigned>(t));
++            job.work_items.push_back(static_cast<unsigned>(s));
++            job.work_items.push_back(static_cast<unsigned>(std::min(e, s + target)));
++          }
++        }
++      }
++      {
++        const std::string key =
++            std::to_string(in.support) + "/" + std::string(kernel_name);
++        std::lock_guard<std::mutex> lock(metalCache().mutex);
++        auto it = metalCache().pipelines.find(key);
++        if (it != metalCache().pipelines.end()) {
++          job.pipeline = it->second;
++        } else {
++          NSError* error = nil;
++          const std::string metal_source = mslSource(in.support);
++          id<MTLLibrary> library =
++              [device newLibraryWithSource:[NSString stringWithUTF8String:metal_source.c_str()]
++                                   options:nil
++                                     error:&error];
++          if (library == nil)
++            fail("kernel compilation failed: " + nsString([error localizedDescription]));
++          id<MTLFunction> function =
++              [library newFunctionWithName:[NSString stringWithUTF8String:kernel_name]];
++          if (function == nil)
++            fail(std::string("kernel function '") + kernel_name + "' is missing");
++          job.pipeline = [device newComputePipelineStateWithFunction:function error:&error];
++          if (job.pipeline == nil)
++            fail("pipeline creation failed: " + nsString([error localizedDescription]));
++          metalCache().pipelines[key] = job.pipeline;
++        }
++      }
++      job.grid_bytes = 2 * g * g * sizeof(float);
++      job.grid_buffer = [device newBufferWithLength:job.grid_bytes
++                                            options:MTLResourceStorageModeShared];
++      std::memset([job.grid_buffer contents], 0, job.grid_bytes);
++      if (in.variant == Variant::kPacked) {
++        if (!job.packed.empty()) {
++          job.visibility_buffer = [device newBufferWithBytes:job.packed.data()
++                                                       length:job.packed.size() * sizeof(float)
++                                                      options:MTLResourceStorageModeShared];
++        }
++      } else if (!in.visibilities.empty()) {
++        job.visibility_buffer = [device newBufferWithBytes:in.visibilities.data()
++                                                    length:in.visibilities.size() * sizeof(float)
++                                                   options:MTLResourceStorageModeShared];
++      }
++      if (job.split && !job.work_items.empty()) {
++        job.work_buffer = [device newBufferWithBytes:job.work_items.data()
++                                              length:job.work_items.size() * sizeof(unsigned)
++                                             options:MTLResourceStorageModeShared];
++      }
++      job.start_buffer = [device newBufferWithBytes:job.buckets.start.data()
++                                             length:job.buckets.start.size() * sizeof(unsigned)
++                                            options:MTLResourceStorageModeShared];
++      if (!job.buckets.items.empty()) {
++        job.item_buffer = [device newBufferWithBytes:job.buckets.items.data()
++                                              length:job.buckets.items.size() * sizeof(unsigned)
++                                             options:MTLResourceStorageModeShared];
++      }
++      jobs.push_back(job);
++    }
++
++    id<MTLCommandQueue> queue = [device newCommandQueue];
++    id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
++    for (auto& job : jobs) {
++      const auto& in = job.input;
++      id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
++      [encoder setComputePipelineState:job.pipeline];
++      const unsigned grid_size = static_cast<unsigned>(job.g);
++      const int centre = static_cast<int>(job.g) / 2;
++      const unsigned tiles_row = static_cast<unsigned>(job.tiles_per_row);
++      const unsigned support = static_cast<unsigned>(in.support);
++      const float beta = in.beta;
++      const float e0 = in.e0;
++      if (in.variant == Variant::kPoly || in.variant == Variant::kPolyHoisted ||
++          in.variant == Variant::kPolyColumns) {
++        [encoder setBuffer:job.visibility_buffer offset:0 atIndex:0];
++        if (job.split && job.work_buffer != nil) {
++          [encoder setBuffer:job.work_buffer offset:0 atIndex:1];
++        } else {
++          [encoder setBuffer:job.start_buffer offset:0 atIndex:1];
++        }
++        [encoder setBuffer:job.item_buffer offset:0 atIndex:2];
++        [encoder setBuffer:job.grid_buffer offset:0 atIndex:3];
++        const unsigned degree = static_cast<unsigned>(in.kernel_degree);
++        [encoder setBytes:in.kernel_coefficients.data()
++                   length:in.kernel_coefficients.size() * sizeof(float)
++                  atIndex:4];
++        [encoder setBytes:&degree length:sizeof(degree) atIndex:5];
++        [encoder setBytes:&grid_size length:sizeof(grid_size) atIndex:6];
++        [encoder setBytes:&centre length:sizeof(centre) atIndex:7];
++        [encoder setBytes:&tiles_row length:sizeof(tiles_row) atIndex:8];
++        [encoder setBytes:&support length:sizeof(support) atIndex:9];
++        const unsigned group_threads = static_cast<unsigned>(in.threads_per_group);
++        [encoder setBytes:&group_threads length:sizeof(group_threads) atIndex:10];
++      } else if (in.variant == Variant::kPacked) {
++        [encoder setBuffer:job.visibility_buffer offset:0 atIndex:0];
++        [encoder setBuffer:job.start_buffer offset:0 atIndex:1];
++        [encoder setBuffer:job.grid_buffer offset:0 atIndex:2];
++        [encoder setBytes:&grid_size length:sizeof(grid_size) atIndex:3];
++        [encoder setBytes:&centre length:sizeof(centre) atIndex:4];
++        [encoder setBytes:&tiles_row length:sizeof(tiles_row) atIndex:5];
++        [encoder setBytes:&beta length:sizeof(beta) atIndex:6];
++        [encoder setBytes:&e0 length:sizeof(e0) atIndex:7];
++      } else {
++        [encoder setBuffer:job.visibility_buffer offset:0 atIndex:0];
++        if (job.split && job.work_buffer != nil) {
++          [encoder setBuffer:job.work_buffer offset:0 atIndex:1];
++        } else {
++          [encoder setBuffer:job.start_buffer offset:0 atIndex:1];
++        }
++        [encoder setBuffer:job.item_buffer offset:0 atIndex:2];
++        [encoder setBuffer:job.grid_buffer offset:0 atIndex:3];
++        [encoder setBytes:&grid_size length:sizeof(grid_size) atIndex:4];
++        [encoder setBytes:&centre length:sizeof(centre) atIndex:5];
++        [encoder setBytes:&tiles_row length:sizeof(tiles_row) atIndex:6];
++        [encoder setBytes:&support length:sizeof(support) atIndex:7];
++        [encoder setBytes:&beta length:sizeof(beta) atIndex:8];
++        [encoder setBytes:&e0 length:sizeof(e0) atIndex:9];
++      }
++      if (in.variant == Variant::kPolyColumns) {
++        [encoder dispatchThreadgroups:MTLSizeMake(job.tiles_per_row, job.tiles_per_row, 1)
++                threadsPerThreadgroup:MTLSizeMake(32, 32, 1)];
++      } else if (job.split && !job.work_items.empty()) {
++        const std::size_t items = job.work_items.size() / 3;
++        [encoder dispatchThreadgroups:MTLSizeMake(items, 1, 1)
++                threadsPerThreadgroup:MTLSizeMake(16, in.threads_per_group / 16, 1)];
++      } else if (in.variant == Variant::kPoly || in.variant == Variant::kPolyHoisted) {
++        if (in.threads_per_group < 16 || in.threads_per_group % 16 != 0 ||
++            in.threads_per_group > 1024) {
++          fail("threads_per_group must be a multiple of 16 in [16, 1024]");
++        }
++        [encoder dispatchThreadgroups:MTLSizeMake(job.tiles_per_row, job.tiles_per_row, 1)
++                threadsPerThreadgroup:MTLSizeMake(16, in.threads_per_group / 16, 1)];
++      } else {
++        [encoder dispatchThreadgroups:MTLSizeMake(job.tiles_per_row, job.tiles_per_row, 1)
++                threadsPerThreadgroup:MTLSizeMake(16, 16, 1)];
++      }
++      [encoder endEncoding];
++    }
++
++    const auto begin = std::chrono::steady_clock::now();
++    [command_buffer commit];
++    [command_buffer waitUntilCompleted];
++    const auto end = std::chrono::steady_clock::now();
++    if ([command_buffer status] != MTLCommandBufferStatusCompleted) {
++      fail("command buffer failed: " + nsString([[command_buffer error] localizedDescription]));
++    }
++    const double gpu_seconds =
++        [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
++
++    std::vector<GridAccumResult> results;
++    results.reserve(jobs.size());
++    for (auto& job : jobs) {
++      GridAccumResult result;
++      result.grid.resize(2 * job.g * job.g);
++      std::memcpy(result.grid.data(), [job.grid_buffer contents], job.grid_bytes);
++      result.gpu_seconds = gpu_seconds / static_cast<double>(jobs.size());
++      result.wall_seconds = std::chrono::duration<double>(end - begin).count();
++      result.host_seconds = std::chrono::duration<double>(begin - host_begin).count();
++      result.visibilities = job.input.visibilities.size() / 4;
++      result.tiles = job.tiles;
++      result.bucket_items = job.buckets.items.size();
++      results.push_back(std::move(result));
++    }
++    return results;
++  }
++}
++
+ DegridResult gridDegrid(const std::vector<float>& u_v, const std::vector<float>& grid,
+                         std::size_t grid_size, std::size_t support,
+                         const std::vector<float>& kernel_coefficients,
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index fc60a538..08415b99 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -10,6 +10,7 @@
+ #include "ducc0/wgridder/wgridder_impl.h"
+ 
+ #include <algorithm>
++#include <chrono>
+ #include <cmath>
+ #include <complex>
+ #include <cstdio>
+@@ -481,6 +482,13 @@ bool inversion(const InversionInput& input, float* dirty) {
+       wphase_im[item] = static_cast<float>(std::sin(angle));
+     }
+   }
++  // Phase 1: build one gridding input per non-empty plane. Phase 2 grids them
++  // all in a single command buffer (one wait instead of one per plane); the
++  // per-plane wait latency was dominating the host wall time.
++  std::vector<GridAccumInput> plane_inputs;
++  std::vector<std::size_t> plane_index;
++  plane_inputs.reserve(layout.nplanes);
++  plane_index.reserve(layout.nplanes);
+   for (std::size_t pl = 0; pl < layout.nplanes; ++pl) {
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+     // Gather from the `support` buckets whose spread can reach this plane, with
+@@ -526,19 +534,44 @@ bool inversion(const InversionInput& input, float* dirty) {
+       accumulate.visibilities[4 * k + 2] = static_cast<float>(vr * weight);
+       accumulate.visibilities[4 * k + 3] = static_cast<float>(sign * vi * weight);
+     }
+-    GridAccumResult grid_result;
+-    try {
+-      grid_result = gridAccumulate(accumulate);
+-    } catch (const std::exception& error) {
+-      std::fprintf(stderr, "[mx-metal] gridding failed: %s\n", error.what());
+-      return false;
+-    }
++    plane_inputs.push_back(std::move(accumulate));
++    plane_index.push_back(pl);
++  }
++  std::vector<GridAccumResult> plane_grids;
++  try {
++    plane_grids = gridAccumulateBatched(plane_inputs);
++  } catch (const std::exception& error) {
++    std::fprintf(stderr, "[mx-metal] gridding failed: %s\n", error.what());
++    return false;
++  }
++  const bool dump_timing = debugDouble("MX_METAL_DEBUG_TIMING", 0.0) > 0.0;
++  if (dump_timing) {
++    double total_gpu = 0.0;
++    for (const auto& r : plane_grids) total_gpu += r.gpu_seconds;
++    std::fprintf(stderr,
++                 "[mx-metal] batched %zu planes gpu_total=%.2fms wall=%.2fms host=%.2fms\n",
++                 plane_grids.size(), total_gpu * 1000.0,
++                 plane_grids.empty() ? 0.0 : plane_grids[0].wall_seconds * 1000.0,
++                 plane_grids.empty() ? 0.0 : plane_grids[0].host_seconds * 1000.0);
++  }
++  for (std::size_t g = 0; g < plane_grids.size(); ++g) {
++    const std::size_t pl = plane_index[g];
++    const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
++    const GridAccumResult& grid_result = plane_grids[g];
++    std::chrono::steady_clock::time_point t_fft0, t_fft1;
++    if (dump_timing) t_fft0 = std::chrono::steady_clock::now();
+     rollToDucc0Frame(grid_result.grid, grid, grid_values);
+ 
+     const ducc0::cfmav<std::complex<float>> grid_in(grid_values.data(), {grid, grid});
+     ducc0::vfmav<std::complex<float>> grid_out(grid_values.data(), {grid, grid});
+     ducc0::detail_fft::c2c(grid_in, grid_out, {0}, false, 1.0f, input.n_threads);
+     ducc0::detail_fft::c2c(grid_in, grid_out, {1}, false, 1.0f, input.n_threads);
++    if (dump_timing) {
++      t_fft1 = std::chrono::steady_clock::now();
++      using ms = std::chrono::duration<double, std::milli>;
++      std::fprintf(stderr, "[mx-metal] plane %zu roll_fft=%.2fms\n", pl,
++                   ms(t_fft1 - t_fft0).count());
++    }
+ 
+     const double w = w_plane;
+     for (std::size_t i = 0; i <= input.image_width / 2; ++i) {

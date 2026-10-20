@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Mon, 19 Oct 2026 08:15:24 -0400
-Subject: [PATCH 11/22] uvw_file.h: a data row needs a tab, not just a leading
+Subject: [PATCH 11/23] uvw_file.h: a data row needs a tab, not just a leading
  digit
 
 taql's own header lines can start with a digit ("6 selected columns: u v w xr
