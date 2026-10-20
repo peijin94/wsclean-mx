@@ -20,6 +20,7 @@
 #include <casacore/casa/Arrays/Cube.h>
 #include <casacore/casa/BasicMath/Math.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -92,10 +93,13 @@ int main(int argc, char** argv) {
       continue;
     }
     data.get(row, cell);
-    // DATA is (nchan, npol=4): flat-spectrum points, XX=YY=I/2, XY=YX=0,
-    // with the exact per-channel wavelength (no-averaged-frequency error).
-    casacore::Cube<casacore::Complex> cube(cell);
-    for (casacore::uInt ch = 0; ch < cube.nrow() && ch < nchan; ++ch) {
+    // MS DATA layout is [ncorr, nchan] (verified: LOFAR [4, 1], GMRT [1, 31)).
+    // Never assume which axis is which: match the channel axis against the
+    // spectral window and address cells with an explicit IPosition.
+    const casacore::IPosition cellShape = cell.shape();
+    const casacore::uInt ncorr = cellShape(0);
+    const casacore::uInt ndchan = std::min<casacore::uInt>(cellShape(1), nchan);
+    for (casacore::uInt ch = 0; ch < ndchan; ++ch) {
       const double wavelength = kSpeedOfLight / freqs(ch);
       const double u = uvwVec(0) / wavelength;
       const double v = uvwVec(1) / wavelength;
@@ -109,15 +113,27 @@ int main(int argc, char** argv) {
                                  static_cast<float>(std::sin(phase)));
       }
       const casacore::Complex half = sum * 0.5f;
-      cube(ch, 0, 0) = half;
-      if (cube.ncolumn() > 1) cube(ch, 1, 0) = casacore::Complex(0.0f, 0.0f);
-      if (cube.ncolumn() > 2) cube(ch, 2, 0) = casacore::Complex(0.0f, 0.0f);
-      if (cube.ncolumn() > 3) cube(ch, 3, 0) = half;
+      const casacore::Complex zero(0.0f, 0.0f);
+      casacore::IPosition index(2, 0, ch);
+      index(0) = 0;
+      cell(index) = half;
+      if (ncorr > 1) {
+        index(0) = 1;
+        cell(index) = zero;
+      }
+      if (ncorr > 2) {
+        index(0) = 2;
+        cell(index) = zero;
+      }
+      if (ncorr > 3) {
+        index(0) = 3;
+        cell(index) = half;
+      }
     }
     data.put(row, cell);
     ++nwritten;
   }
-  std::printf("inject: nchan=%u rows=%u written=%zu newly_flagged=%zu sources=%zu\n",
-              nchan, nrow, nwritten, nflagged, sources.size());
+  std::printf("inject: ncorr/nchan per row set from MS rows=%u written=%zu newly_flagged=%zu sources=%zu\n",
+              nrow, nwritten, nflagged, sources.size());
   return 0;
 }

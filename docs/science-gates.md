@@ -465,7 +465,10 @@ original untouched). Stokes I peak truth = S/2 per hand
 
 (mx ≡ ref to ≤1e-3 everywhere, including the shared under-cleaning of the
 1 Jy source at the iteration cap and a shared ~8% model overshoot on the
-5 Jy source. w-sign convention confirmed: off-axis sources focus.)
+5 Jy source. w-sign convention confirmed: off-axis sources focus. Re-ran
+after the tool learned the [ncorr, nchan] layout — XX=YY=model verified in
+the MS, XY=YX=0 — identical table: the gate is insensitive to the fix and
+the numbers below are the all-pols state.)
 
 Pixel-RMS T2 across builds FAILS here (restored 5.5e-3, residual 7e-2) —
 not a defect but the documented property: with bright sources and 5 major
