@@ -64,7 +64,7 @@ struct Data {
 };
 
 Data makeSynthetic(std::size_t nvis, double max_lambda) {
-  std::mt19937_64 random(20261018);  // same generator as the probe and CPU tool
+  std::mt19937_64 random(20261019);  // same seed as the w-layer harness
   std::uniform_real_distribution<double> uv(-max_lambda, max_lambda);
   std::normal_distribution<double> flux(1.0, 0.25);
   Data data;
@@ -100,8 +100,14 @@ Data loadReal(const std::string& path, double frequency) {
 }
 
 // ducc0's getNuNv() cost model: minimise fftcost(nu,nv) + gridcost(nvis,supp).
+double sigmoidScaling(double x, double m, double s) {
+  const double x2 = x - 1.0, m2 = m - 1.0;
+  return 1.0 + x2 / std::pow(1.0 + std::pow(x2 / m2, s), 1.0 / s);
+}
+
 std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t image_size,
-                         std::size_t rows, double& ofactor_out, double& cost_out) {
+                         std::size_t rows, std::size_t nthreads, double& ofactor_out,
+                         double& cost_out) {
   constexpr double kNrefFft = 2048.0, kCostRefFft = 0.0693;
   constexpr std::size_t kSimdWidth = 4;  // float, NEON
   const double log_term_ref = std::log(kNrefFft * kNrefFft);
@@ -118,7 +124,8 @@ std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t
     double grid_cost = 2.2e-10 * static_cast<double>(rows) *
                        static_cast<double>(supp * nvec * kSimdWidth +
                                            (2 * nvec + 1) * (supp + 3) * kSimdWidth);
-    grid_cost /= 8.0;  // nthreads
+    grid_cost /= static_cast<double>(nthreads);
+    fft_cost /= sigmoidScaling(static_cast<double>(nthreads), 6.0, 2.0);
     const double cost = fft_cost + grid_cost;
     if (cost < best_cost) {
       best_cost = cost;
@@ -185,7 +192,7 @@ int main(int argc, char** argv) {
     return 2;
   }
   double ofactor = 0.0, cost = 0.0;
-  const std::size_t index = chooseKernel(candidates, image_size, data.rows(), ofactor, cost);
+  const std::size_t index = chooseKernel(candidates, image_size, data.rows(), nthreads, ofactor, cost);
   const ducc0::KernelParams& params = ducc0::getKernel(index);
   const std::shared_ptr<ducc0::PolynomialKernel> kernel = ducc0::selectKernel(index);
   const std::size_t nu = 2 * ducc0::good_size_complex(
@@ -200,6 +207,8 @@ int main(int argc, char** argv) {
   mx::metal::GridAccumInput input;
   input.grid_size = nu_metal;
   input.support = kernel->support();
+  input.beta = static_cast<float>(params.beta);
+  input.e0 = static_cast<float>(params.e0);
   input.kernel_degree = kernel->degree();
   input.kernel_coefficients.assign(kernel->Coeff().begin(), kernel->Coeff().end());
   input.variant = mx::metal::Variant::kPoly;
@@ -242,12 +251,14 @@ int main(int argc, char** argv) {
 
   // ---- ducc0's forward chain on that grid ----
   const std::size_t nv = nu_metal;
-  // ducc0 computes the band from ITS grid size (nu), i.e. the cutoff is the
-  // largest |v| in wavelengths. Using nv (= nu_metal) here multiplies in an
-  // extra nu_metal/nu factor and transforms a wider band than ducc0 does, which
-  // shows up as a ~1% difference in the outer field.
+  // vlim is a band on the METAL grid, so the cutoff must be in metal cells.
+  // ducc0's formula gives ducc0-cells; the metal grid has nu_metal/nu times
+  // more cells per wavelength, and using ducc0's count here cuts the outermost
+  // kernel tails (they reach ~0.4 cells past vlim).
+  const double vmax_metal_cells =
+      data.v_max_lambda * (static_cast<double>(nv) / static_cast<double>(nu));
   std::size_t vlim = std::min(
-      nv / 2, static_cast<std::size_t>(static_cast<double>(nu) * data.v_max_lambda * pixel_size +
+      nv / 2, static_cast<std::size_t>(vmax_metal_cells +
                                        0.5 * static_cast<double>(kernel->support()) + 1.0));
   bool uv_side_fast = true;
   const std::size_t vlim2 = (image_size + 1) / 2 + (kernel->support() + 1) / 2;
@@ -255,14 +266,21 @@ int main(int argc, char** argv) {
     vlim = vlim2;
     uv_side_fast = false;
   }
+  if (const char* full = std::getenv("MX_METAL_DEBUG_FULLFFT")) {
+    if (full[0] != '\0' && full[0] != '0') vlim = nv / 2;
+  }
   const ducc0::cmav<std::complex<float>, 2> grid_cmav(
       reinterpret_cast<const std::complex<float>*>(rolled.data()), {nu_metal, nv});
   ducc0::vmav<float, 2> hartley({nu_metal, nv});
   ducc0::detail_gridder::complex2hartley(grid_cmav, hartley, nthreads);
   ducc0::detail_gridder::hartley2_2D(hartley, vlim, uv_side_fast, nthreads);
 
-  const std::vector<double> cfu = kernel->corfunc(image_size / 2 + 1, 1.0 / static_cast<double>(nu_metal), 1);
-  const std::vector<double> cfv = kernel->corfunc(image_size / 2 + 1, 1.0 / static_cast<double>(nv), 1);
+  // ducc0 samples its correction at 1/nu (its own grid); the Metal grid is a
+  // padded container for the same discretisation, so use 1/nu here as well.
+  // 1/nu_metal puts a ~0.6% scale error into the correction that reads as a
+  // few-% edge-dominated image mismatch with an exact peak.
+  const std::vector<double> cfu = kernel->corfunc(image_size / 2 + 1, 1.0 / static_cast<double>(nu), 1);
+  const std::vector<double> cfv = kernel->corfunc(image_size / 2 + 1, 1.0 / static_cast<double>(nu), 1);
   std::vector<float> image_mine(image_size * image_size);
   for (std::size_t i = 0; i < image_size; ++i) {
     const int icfu = std::abs(static_cast<int>(image_size / 2) - static_cast<int>(i));
@@ -307,7 +325,7 @@ int main(int argc, char** argv) {
       ducc0::detail_gridder::ms2dirty_bda<float, float>(
           uvw_ma, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_ma, weight_ma, mask_ma,
           pixel_size, pixel_size, epsilon, /*do_wgridding=*/false, nthreads, dirty, 0, false,
-          true, false, false, 1.1, 2.0, 0.0, 0.0, false);
+          false, false, false, 1.1, 2.0, 0.0, 0.0, false);
       const auto end = std::chrono::steady_clock::now();
       best_reference =
           std::min(best_reference, std::chrono::duration<double>(end - begin).count());
@@ -317,13 +335,20 @@ int main(int argc, char** argv) {
 
   // ---- compare ----
   double max_ref = 0.0, max_mine = 0.0, max_diff = 0.0, sum_sq = 0.0;
+  std::size_t argmax_idx = 0;
   for (std::size_t i = 0; i < image_mine.size(); ++i) {
     max_ref = std::max(max_ref, std::fabs(static_cast<double>(reference_image[i])));
     max_mine = std::max(max_mine, std::fabs(static_cast<double>(image_mine[i])));
     const double diff = static_cast<double>(image_mine[i]) - static_cast<double>(reference_image[i]);
-    max_diff = std::max(max_diff, std::fabs(diff));
+    if (std::fabs(diff) > max_diff) {
+      max_diff = std::fabs(diff);
+      argmax_idx = i;
+    }
     sum_sq += diff * diff;
   }
+  std::fprintf(stderr, "[probe] argmax idx=%zu (i=%zu j=%zu) mine=%.6g ref=%.6g\n", argmax_idx,
+               argmax_idx / image_size, argmax_idx % image_size, image_mine[argmax_idx],
+               reference_image[argmax_idx]);
   {
     // A whole-cell error in the grid frame rolls shows up as a one-pixel shift
     // of the image: peak unchanged, differences tracking the gradient. Try the

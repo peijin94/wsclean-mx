@@ -1,0 +1,288 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 20 Oct 2026 19:01:24 -0400
+Subject: [PATCH 22/22] Metal: fix w-layer inversion (transpose, kernel select,
+ shifting phase)
+
+Grid buffer was [v][u]-ordered but consumed as [u][v]: every image came
+out transposed (peak exact, field scrambled). Fix all grid merge writes
+and the degrid read to [u][v]; adjoint re-verified at 2.9e-07.
+
+Cost-model port now matches ducc0's getNuNv exactly for w-gridding:
+ndim=3 kernels, truncated plane count, rows*nchannels. A mismatched
+kernel put the planes at the wrong spacing.
+
+Apply ducc0's shifting phase exp(+2*pi*i*w*nshift) per visibility
+before gridding (it is active whenever nshift != 0). Omitting it left
+a w-proportional global phase per visibility: invisible at w = 0, a
+~0.135 rad/lambda rotation elsewhere.
+
+Host tile buckets now cover the full kernel window for odd support.
+w-layer check: rel_rms ~1.3e-05 at w = 0,1,5,20,50,200 (was 2.6e-02
+with peaks collapsed to 8%); 2-D path 1.4e-07.
+
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index a1feba73..f7069941 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -88,7 +88,6 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+   const std::size_t g = input.grid_size;
+   const std::size_t tiles_per_row = g / tile;
+   const std::size_t visibility_count = input.visibilities.size() / 4;
+-  const int half = static_cast<int>(input.support) / 2;
+ 
+   TileBuckets buckets;
+   buckets.tiles_per_row = tiles_per_row;
+@@ -97,17 +96,22 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+   // Pass one: count. A visibility is listed in every tile its support touches.
+   auto tilesOf = [&](const float* visibility, std::size_t& x0, std::size_t& x1,
+                      std::size_t& y0, std::size_t& y1) {
+-    // floor()-anchored window, identical to the kernel: the support covers
+-    // distances (-support/2, support/2], so the tile range must follow floor().
++    // Floor-anchored window, identical to the poly kernel: it writes cells
++    // i0 + j for j in [-(support-1)/2, support/2] with i0 = floor(u) + g/2
++    // (verified against ducc0's getpix/prep cell selection). The tile range
++    // must cover every tile the support touches; a narrowed window drops edge
++    // taps at tile boundaries.
+     const long centre_index = static_cast<long>(g) / 2;
++    const long half_low = (static_cast<long>(input.support) - 1) / 2;
++    const long half_high = static_cast<long>(input.support) / 2;
+     const long centre_x = static_cast<long>(std::floor(static_cast<double>(visibility[0]))) +
+                           centre_index;
+     const long centre_y = static_cast<long>(std::floor(static_cast<double>(visibility[1]))) +
+                           centre_index;
+-    const long first_x = centre_x - half + 1;
+-    const long first_y = centre_y - half + 1;
+-    const long last_x = centre_x + half;
+-    const long last_y = centre_y + half;
++    const long first_x = centre_x - half_low;
++    const long first_y = centre_y - half_low;
++    const long last_x = centre_x + half_high;
++    const long last_y = centre_y + half_high;
+     if (last_x < 0 || first_x > static_cast<long>(g) - 1 || last_y < 0 ||
+         first_y > static_cast<long>(g) - 1) {
+       return false;
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index bb3ce85e..fc60a538 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -74,7 +74,9 @@
+       const double amplitude =
+           std::max(std::fabs(nm1max + nshift), std::fabs(nm1min + nshift));
+       const double dw = 0.5 / params.ofactor / std::max(amplitude, 1e-30);
+-      const double nplanes = w_range / dw + static_cast<double>(supp);
++      // ducc0 truncates the plane count to size_t before costing; the
++      // fractional part changes the ranking between neighbouring kernels.
++      const double nplanes = std::floor(w_range / dw + static_cast<double>(supp));
+       fft_cost *= nplanes;
+       grid_cost *= static_cast<double>(supp);
+     }
+@@ -196,6 +198,8 @@ bool supported(const InversionInput& input, const char** why) {
+   std::size_t nu = 0;    // ducc0's grid size for the same pixsize
+   double cell_x = 0.0;   // u cells per wavelength
+   double cell_y = 0.0;
++  double beta = 0.0;   // ES kernel shape for the SELECTED kernel
++  double e0 = 0.0;     // (KernelDB fit per W/ofactor/epsilon - not a constant!)
+   std::vector<double> cfu;
+   std::vector<double> cfv;
+   std::shared_ptr<ducc0::PolynomialKernel> kernel;
+@@ -203,8 +207,12 @@ bool supported(const InversionInput& input, const char** why) {
+ 
+ bool makeGeometry(const InversionInput& input, bool w_gridding, double w_range,
+                   std::size_t& image_size, Geometry& out) {
++  // ducc0 selects 3-D kernels (ndim=3) whenever w-gridding is on: the same
++  // kernel object supplies the u/v taps and the w-taps. Using ndim=2 here
++  // selects a different kernel (different support/beta/ofactor) and the
++  // plane layout, taps and grid all disagree with ducc0's.
+   const std::vector<std::size_t> candidates =
+-      ducc0::getAvailableKernels<float>(input.epsilon, 2, 1.1, 2.0);
++      ducc0::getAvailableKernels<float>(input.epsilon, w_gridding ? 3 : 2, 1.1, 2.0);
+   if (candidates.empty()) return false;
+   image_size = std::max(input.image_width, input.image_height);
+   // nm1 range over the whole image (even in l,m, so corners are not enough),
+@@ -222,10 +230,20 @@ bool makeGeometry(const InversionInput& input, bool w_gridding, double w_range,
+     }
+   }
+   double ofactor = 0.0;
+-  const std::size_t index = chooseKernel(candidates, image_size, input.n_rows, input.n_threads,
++  const std::size_t index = chooseKernel(candidates, image_size, input.n_rows * input.n_channels, input.n_threads,
+                                          w_gridding, nm1min, nm1max, w_range, ofactor, out.nu);
+   out.kernel = ducc0::selectKernel(index);
+   if (!out.kernel) return false;
++  // The ES shape (beta, e0) is fit per kernel in ducc0's KernelDB - a W=8
++  // kernel with W=6 beta grids the wrong shape (self-normalised, so the peak
++  // stays exact while the field is wrong). Never use the kPoly W=6 default.
++  const ducc0::KernelParams& params = ducc0::getKernel(index);
++  out.beta = params.beta;
++  out.e0 = params.e0;
++  if (debugDouble("MX_METAL_DEBUG_LAYOUT", 0.0) > 0.0)
++    std::fprintf(stderr,
++                 "[mx-metal] kernel index=%zu W=%zu ofactor=%.4f epsilon=%.4g beta=%.6f e0=%.6f\n",
++                 index, params.W, params.ofactor, params.epsilon, params.beta, params.e0);
+   out.grid = ((out.nu + 31) / 32) * 32;
+   // ducc0's cell is 1/(pixsize*nu) wavelengths; ours covers the same uv extent
+   // with grid cells, so a visibility's cell coordinate is u_lambda*pixsize*grid.
+@@ -239,6 +257,8 @@ bool makeGeometry(const InversionInput& input, bool w_gridding, double w_range,
+ void fillAccumInput(const InversionInput& input, const Geometry& geometry, GridAccumInput& accumulate) {
+   accumulate.grid_size = geometry.grid;
+   accumulate.support = geometry.kernel->support();
++  accumulate.beta = static_cast<float>(geometry.beta);
++  accumulate.e0 = static_cast<float>(geometry.e0);
+   accumulate.kernel_degree = geometry.kernel->degree();
+   accumulate.kernel_coefficients.assign(geometry.kernel->Coeff().begin(),
+                                         geometry.kernel->Coeff().end());
+@@ -283,10 +303,12 @@ bool inversion(const InversionInput& input, float* dirty) {
+     // then the `imflip` factor). Using the signed range instead puts negative-w
+     // rows in the wrong planes and with the wrong screen - which is exactly why
+     // w = 0 worked and w != 0 was incoherent.
+-    const std::size_t item_count = static_cast<std::size_t>(input.n_rows) * input.n_channels;
+-    std::vector<double> w_lambda(item_count);
+-    std::vector<float> w_sign(item_count);
+-    double w_min = 1e300, w_max = -1e300;
++    // NOTE (M0): these resize the OUTER vectors — do not redeclare them here.
++    // A shadowed redeclaration once confined the fill to this block and fed
++    // empty vectors + a zero range to the geometry and plane assignment below.
++    w_lambda.resize(item_count);
++    w_sign.resize(item_count);
++    w_min = 1e300, w_max = -1e300;
+     for (std::size_t row = 0; row < input.n_rows; ++row) {
+       for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+         const double lambda = kSpeedOfLight / input.frequencies[ch];
+@@ -443,6 +465,22 @@ bool inversion(const InversionInput& input, float* dirty) {
+   const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
+   const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
+   const bool skip_screen = debugDouble("MX_METAL_DEBUG_NOSCREEN", 0.0) > 0.0;
++  // ducc0's shifting phase: when nshift != 0 every visibility is rotated by
++  // exp(+2*pi*i*w*nshift) BEFORE gridding (x2grid_c multiplies v by the
++  // compute_phases factor with lshift=mshift=0; the w here is the signed one,
++  // imflip*|w|). Omitting it leaves a w-proportional global phase per
++  // visibility: invisible at w = 0, a ~0.135 rad/lambda rotation elsewhere,
++  // which is exactly the w-layer failure signature. Precompute per item (the
++  // phase is plane-independent); with nshift == 0 this is exactly (1, 0).
++  std::vector<float> wphase_re(item_count, 1.0f), wphase_im(item_count, 0.0f);
++  if (layout.nshift != 0.0) {
++    for (std::size_t item = 0; item < item_count; ++item) {
++      const double angle =
++          kTwoPi * static_cast<double>(w_sign[item]) * w_lambda[item] * layout.nshift;
++      wphase_re[item] = static_cast<float>(std::cos(angle));
++      wphase_im[item] = static_cast<float>(std::sin(angle));
++    }
++  }
+   for (std::size_t pl = 0; pl < layout.nplanes; ++pl) {
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+     // Gather from the `support` buckets whose spread can reach this plane, with
+@@ -481,8 +519,12 @@ bool inversion(const InversionInput& input, float* dirty) {
+       accumulate.visibilities[4 * k + 0] = static_cast<float>(u * geometry.cell_x);
+       accumulate.visibilities[4 * k + 1] = static_cast<float>(v * geometry.cell_y);
+       const std::complex<float>& value = input.ms[item];
+-      accumulate.visibilities[4 * k + 2] = static_cast<float>(value.real() * weight);
+-      accumulate.visibilities[4 * k + 3] = static_cast<float>(sign * value.imag() * weight);
++      // Shifting phase first, conjugation second - ducc0's order (v *= phases,
++      // then vi = v.imag*imflip). The phase uses the signed w (sign*|w|).
++      const float vr = value.real() * wphase_re[item] - value.imag() * wphase_im[item];
++      const float vi = value.real() * wphase_im[item] + value.imag() * wphase_re[item];
++      accumulate.visibilities[4 * k + 2] = static_cast<float>(vr * weight);
++      accumulate.visibilities[4 * k + 3] = static_cast<float>(sign * vi * weight);
+     }
+     GridAccumResult grid_result;
+     try {
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index 680073f2..bd1d50ff 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -177,8 +177,8 @@ kernel void grid_accumulate(device const float* visibilities,  // u, v, re, im
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }
+ }
+ // The vectorized path is specialized for the support-6 kernel (the W = 6,
+@@ -276,8 +276,8 @@ kernel void grid_accumulate_hoisted(device const float* visibilities,  // u,v,re
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }
+ }
+ 
+@@ -359,8 +359,8 @@ kernel void grid_accumulate_hoisted_packed(device const float* packed_visibiliti
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }
+ }
+ 
+@@ -424,8 +424,8 @@ kernel void grid_accumulate_cost_probe(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }
+ }
+ 
+@@ -528,8 +528,8 @@ kernel void grid_accumulate_poly(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }
+ }
+ 
+@@ -615,8 +615,8 @@ kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }
+ }
+ 
+@@ -705,8 +705,8 @@ kernel void grid_accumulate_poly_hoisted_split(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx)], re);
+-    atomic_add_float(&grid[2 * (cy * grid_size + cx) + 1], im);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
++    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }
+ }
+ 
+@@ -757,7 +757,7 @@ kernel void grid_accumulate_poly_columns(device const float* visibilities,
+     acc += float2(visibilities[4 * visibility + 2], visibilities[4 * visibility + 3]) * (wx * wy);
+   }
+ 
+-  device float* out = grid + 2 * (cy * int(grid_size) + cx);
++  device float* out = grid + 2 * (cx * int(grid_size) + cy);
+   out[0] = acc.x;
+   out[1] = acc.y;
+ }
+@@ -805,7 +805,7 @@ kernel void grid_degrid_poly(device const float* visibilities_in,  // u, v
+       const int cx = i0 + jx;
+       if (cx < 0 || cx >= int(grid_size)) continue;
+       const float weight = poly_sample(fx - float(jx), coefficients, degree, support) * wy;
+-      const uint cell = 2 * (uint(cy) * grid_size + uint(cx));
++      const uint cell = 2 * (uint(cx) * grid_size + uint(cy));
+       value.x += weight * grid[cell];
+       value.y += weight * grid[cell + 1];
+     }

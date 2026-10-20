@@ -35,7 +35,6 @@ fi
 "$CXX" -std=c++20 -O3 -DNDEBUG -march=native -fobjc-arc "${OMP_FLAGS[@]+"${OMP_FLAGS[@]}"}" \
   "-I$ROOT/work/wsclean" "-I$ROOT/work/wsclean/metal" "-I$ROOT/deps/src/schaapcommon/external" "-I$DUCC0" \
   "$ROOT/bench/metal/ducc0_image_check.cpp" "$ROOT/work/wsclean/metal/metaldevice.mm" \
-  
   "$DUCC0/wgridder/wgridder.cc" \
   "$DUCC0/math/gridding_kernel.cc" "$DUCC0/math/gl_integrator.cc" \
   "$DUCC0/infra/threading.cc" "$DUCC0/infra/string_utils.cc" "$DUCC0/infra/mav.cc" \

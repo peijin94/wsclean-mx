@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 15:19:19 -0400
-Subject: [PATCH 21/21] Metal: parameterise the kernels for odd support (ducc0
+Subject: [PATCH 21/22] Metal: parameterise the kernels for odd support (ducc0
  selects W=7)
 
 The cost-model fix moved the geometry to supp 7 / nu 378 / nplanes 125, which
@@ -15,7 +15,7 @@ diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
 index 582215e9..a1feba73 100644
 --- a/metal/metaldevice.mm
 +++ b/metal/metaldevice.mm
-@@ -23,6 +23,30 @@ namespace {
+@@ -23,6 +23,30 @@
    throw std::runtime_error("mx::metal: " + message);
  }
  

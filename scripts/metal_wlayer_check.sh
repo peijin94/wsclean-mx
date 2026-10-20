@@ -28,7 +28,6 @@ fi
   "-I$ROOT/work/wsclean" "-I$ROOT/work/wsclean/metal" "-I$ROOT/deps/src/schaapcommon/external" "-I$DUCC0" \
   "$ROOT/bench/metal/wlayer_check.cpp" \
   "$ROOT/work/wsclean/metal/metaldevice.mm" "$ROOT/work/wsclean/metal/metalinversion.mm" \
-  
   "$DUCC0/wgridder/wgridder.cc" \
   "$ROOT/build-mx-metal/_deps/schaapcommon-build/libschaapcommon.a" \
   "$DUCC0/math/gridding_kernel.cc" "$DUCC0/math/gl_integrator.cc" \

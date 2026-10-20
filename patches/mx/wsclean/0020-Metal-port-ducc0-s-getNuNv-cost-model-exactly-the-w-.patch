@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 14:50:41 -0400
-Subject: [PATCH 20/21] Metal: port ducc0's getNuNv cost model exactly (the
+Subject: [PATCH 20/22] Metal: port ducc0's getNuNv cost model exactly (the
  w-layer root cause)
 
 The cost model was missing the w-gridding terms ducc0 applies: fftcost *=
@@ -24,7 +24,7 @@ diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
 index 1e0d8519..bb3ce85e 100644
 --- a/metal/metalinversion.mm
 +++ b/metal/metalinversion.mm
-@@ -33,36 +33,63 @@ double debugDouble(const char* name, double fallback) {
+@@ -33,36 +33,63 @@
    return std::strtod(value, nullptr);
  }
  
@@ -97,7 +97,7 @@ index 1e0d8519..bb3ce85e 100644
    return best;
  }
  
-@@ -174,16 +201,31 @@ struct Geometry {
+@@ -174,16 +201,31 @@ bool supported(const InversionInput& input, const char** why) {
    std::shared_ptr<ducc0::PolynomialKernel> kernel;
  };
  

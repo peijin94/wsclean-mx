@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Sun, 18 Oct 2026 22:16:37 -0400
-Subject: [PATCH 08/21] Metal gridding: evaluate ducc0's fitted polynomial
+Subject: [PATCH 08/22] Metal gridding: evaluate ducc0's fitted polynomial
  (poly / poly-h variants)
 
 ducc0's w-gridder does not evaluate exp(beta*((1-v^2)^e0 - 1)) at gridding time:
@@ -55,7 +55,7 @@ diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
 index df42a364..ceec385b 100644
 --- a/metal/metaldevice.mm
 +++ b/metal/metaldevice.mm
-@@ -124,6 +124,8 @@ const char* variantName(Variant variant) {
+@@ -124,6 +124,8 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
      case Variant::kHoisted: return "hoisted";
      case Variant::kPacked: return "packed";
      case Variant::kCostProbe: return "costprobe";

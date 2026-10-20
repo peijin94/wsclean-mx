@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 13:21:42 -0400
-Subject: [PATCH 16/21] Metal: w-layer inversion - three bugs fixed, one scale
+Subject: [PATCH 16/22] Metal: w-layer inversion - three bugs fixed, one scale
  still open
 
 The w-path now: spreads each visibility over support planes with ducc0's own
@@ -124,7 +124,7 @@ index 2a22ac1c..0af67d5c 100644
  #include <exception>
  #include <vector>
  
-@@ -20,13 +21,21 @@ namespace mx::metal {
+@@ -20,13 +21,21 @@
  namespace {
  
  constexpr double kSpeedOfLight = 299792458.0;
@@ -151,7 +151,7 @@ index 2a22ac1c..0af67d5c 100644
    constexpr double kNrefFft = 2048.0, kCostRefFft = 0.0693;
    constexpr std::size_t kSimdWidth = 4;  // float, NEON
    constexpr double kNthreads = 8.0;      // ducc0's reference thread count
-@@ -46,7 +55,6 @@ std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t
+@@ -46,7 +55,6 @@
                         static_cast<double>(supp * nvec * kSimdWidth +
                                             (2 * nvec + 1) * (supp + 3) * kSimdWidth);
      grid_cost /= kNthreads;
@@ -159,7 +159,7 @@ index 2a22ac1c..0af67d5c 100644
      const double cost = fft_cost + grid_cost;
      if (cost < best_cost) {
        best_cost = cost;
-@@ -58,11 +66,51 @@ std::size_t chooseKernel(const std::vector<std::size_t>& candidates, std::size_t
+@@ -58,11 +66,51 @@
    return best;
  }
  

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Mon, 19 Oct 2026 08:49:40 -0400
-Subject: [PATCH 12/21] Metal: pull-model gridding variant (polycols), measured
+Subject: [PATCH 12/22] Metal: pull-model gridding variant (polycols), measured
  and scan-bound
 
 Gives every grid cell exactly one owner: one cell per thread, one scalar
@@ -45,7 +45,7 @@ diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
 index 6d883097..b952750a 100644
 --- a/metal/metaldevice.mm
 +++ b/metal/metaldevice.mm
-@@ -126,6 +126,7 @@ const char* variantName(Variant variant) {
+@@ -126,6 +126,7 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
      case Variant::kCostProbe: return "costprobe";
      case Variant::kPoly: return "poly";
      case Variant::kPolyHoisted: return "poly-h";

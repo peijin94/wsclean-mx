@@ -35,29 +35,48 @@ struct Data {
   std::size_t rows() const { return values.size(); }
 };
 
-Data makeSynthetic(std::size_t nvis, double max_lambda, double w_max_lambda, bool w_positive) {
+Data makeSynthetic(std::size_t nvis, double max_lambda, double w_max_lambda, bool w_positive,
+                     bool zero_mean, double dc_hole, bool int_cells) {
   std::mt19937_64 random(20261019);
   std::uniform_real_distribution<double> uv(-max_lambda, max_lambda);
   std::uniform_real_distribution<double> w(-w_max_lambda, w_max_lambda);
   std::normal_distribution<double> flux(1.0, 0.25);
+  std::normal_distribution<double> zflux(0.0, 1.0);
   Data data;
   data.uvw.resize(3 * nvis);
   data.values.resize(nvis);
   for (std::size_t v = 0; v < nvis; ++v) {
-    const double u = uv(random), vv = uv(random);
+    double u = uv(random), vv = uv(random);
+    // DC-hole discriminator: skip the central square (real data has no
+    // zero baselines; uniform synthetic does).
+    if (dc_hole > 0.0) {
+      int guard = 0;
+      while (std::fabs(u) < dc_hole && std::fabs(vv) < dc_hole && guard++ < 100) {
+        u = uv(random);
+        vv = uv(random);
+      }
+    }
+    // Integer-cell discriminator: remove all fractional-placement sensitivity.
+    if (int_cells) {
+      u = std::round(u);
+      vv = std::round(vv);
+    }
     const double ww = w_positive ? std::fabs(w(random)) : w(random);
     data.uvw[3 * v + 0] = u * kSpeedOfLight;  // f = 1 Hz, so u_m = u_lambda * c
     data.uvw[3 * v + 1] = vv * kSpeedOfLight;
     data.uvw[3 * v + 2] = ww * kSpeedOfLight;
-    data.values[v] = std::complex<float>(static_cast<float>(flux(random)),
-                                         static_cast<float>(flux(random) * 0.5));
+    const double re = zero_mean ? zflux(random) : flux(random);
+    const double im = zero_mean ? zflux(random) : flux(random) * 0.5;
+    data.values[v] = std::complex<float>(static_cast<float>(re), static_cast<float>(im));
     data.w_max_lambda = std::max(data.w_max_lambda, std::fabs(ww));
   }
   return data;
 }
 
 void compare(const std::vector<float>& mine, const std::vector<float>& reference,
-             const char* label) {
+               const char* label) {
+  const char* env = std::getenv("MX_METAL_DEBUG_ARGMAX");
+  const bool argmax = env != nullptr && env[0] != '\0' && env[0] != '0';
   double max_ref = 0.0, max_mine = 0.0, max_diff = 0.0, sum_sq = 0.0, sum_ref = 0.0;
   for (std::size_t i = 0; i < mine.size(); ++i) {
     max_ref = std::max(max_ref, std::fabs(static_cast<double>(reference[i])));
@@ -76,6 +95,34 @@ void compare(const std::vector<float>& mine, const std::vector<float>& reference
               sum_ref, sum_ref != 0.0 ? sum_mine / sum_ref : 0.0, max_diff, rms,
               max_ref != 0.0 ? max_diff / max_ref : 0.0,
               max_ref != 0.0 ? rms / max_ref : 0.0);
+  if (argmax) {
+    // Where are the worst offenders?
+    std::size_t n = 0;
+    for (std::size_t i = 0; i < mine.size() && n < 10; ++i) {
+      const double diff = std::fabs(static_cast<double>(mine[i]) - static_cast<double>(reference[i]));
+      if (diff > 0.5 * max_diff) {
+        std::printf("  argmax #%zu: idx=%zu diff=%.4g mine=%.4g ref=%.4g\n", n, i, diff,
+                    static_cast<double>(mine[i]), static_cast<double>(reference[i]));
+        ++n;
+      }
+    }
+  }
+  // Full dump for offline inspection (env-gated): raw float32, row-major.
+  // Only the first compare() per process (the Metal-vs-reference one).
+  if (const char* path = std::getenv("MX_METAL_DEBUG_DUMP")) {
+    static int dump_count = 0;
+    if (dump_count++ == 0) {
+    std::string base(path);
+    FILE* fm = std::fopen((base + ".mine.raw").c_str(), "wb");
+    FILE* fr = std::fopen((base + ".ref.raw").c_str(), "wb");
+    if (fm && fr) {
+      std::fwrite(mine.data(), sizeof(float), mine.size(), fm);
+      std::fwrite(reference.data(), sizeof(float), reference.size(), fr);
+    }
+    if (fm) std::fclose(fm);
+    if (fr) std::fclose(fr);
+    }
+  }
 }
 
 }  // namespace
@@ -88,6 +135,9 @@ int main(int argc, char** argv) {
   double pixel_scale = 1.0;
   double uv_frac = 0.45;
   bool w_positive = false;
+  bool zero_mean = false;
+  double dc_hole = 0.0;
+  bool int_cells = false;
   for (int i = 1; i < argc; ++i) {
     const std::string argument = argv[i];
     auto value = [&](const char* name) -> const char* {
@@ -105,6 +155,12 @@ int main(int argc, char** argv) {
       w_max_lambda = std::strtod(value("--w-max"), nullptr);
     } else if (argument == "--w-positive") {
       w_positive = true;
+    } else if (argument == "--zero-mean") {
+      zero_mean = true;
+    } else if (argument == "--dc-hole") {
+      dc_hole = std::strtod(value("--dc-hole"), nullptr);
+    } else if (argument == "--int-cells") {
+      int_cells = true;
     } else if (argument == "--uv-frac") {
       uv_frac = std::strtod(value("--uv-frac"), nullptr);
     } else if (argument == "--pixel-scale") {
@@ -125,7 +181,7 @@ int main(int argc, char** argv) {
   // uv range must respect the uv extent of the chosen pixel size (1/pixsize),
   // otherwise the visibilities fall outside the grid.
   const double max_lambda = uv_frac / pixel_size;
-  const Data data = makeSynthetic(nvis, max_lambda, w_max_lambda, w_positive);
+  const Data data = makeSynthetic(nvis, max_lambda, w_max_lambda, w_positive, zero_mean, dc_hole, int_cells);
   // pixsize = 1/image_size: one wavelength per pixel, which makes the uv cell
   // exactly one wavelength and keeps the comparison free of scale choices.
 
