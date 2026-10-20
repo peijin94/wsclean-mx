@@ -531,6 +531,14 @@ Extended-source quality benches (2026-10-20; paper data not downloadable — see
   imaging from `-data-column MODEL_DATA`. Same regime the paper tests
   (coplanar/short-baseline, extended emission), minus their TNG skies.
 
+OVRO-LWA full-sky w-layer bench (2026-10-20): `64MHz_concat.ms` (17 GB,
+5.6M rows, 48 ch, zenith drift, DATA uncalibrated — CORRECTED_DATA zeros)
+copied from calim3 to `/tmp/ovrolwa-64mhz.ms`. Dirty
+`-size 2048 2048 -scale 10arcmin -weight briggs 0 -niter 0 -j 8`
+(`v010-lwa-{ref,mx}`): T2 PASS, rel rms 3.8e-9, peak ratio 1.00000000;
+wall 47.2 s ref vs 27.7 s mx (1.71×). All-sky horizon disk + diffuse
+emission as expected; difference unstructured.
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
