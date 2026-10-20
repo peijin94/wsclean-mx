@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wsclean-mx gpu-dev Precision Split</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: #020617; min-height: 100vh; padding: 2rem; color: white; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #22d3ee; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
+    .diagram-container { background: rgba(15, 23, 42, 0.5); border-radius: 1rem; border: 1px solid #1e293b; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 900px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card { background: rgba(15, 23, 42, 0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card-dot.amber { background: #fbbf24; }
+    .card-dot.rose { background: #fb7185; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>gpu-dev Precision Split</h1>
+      </div>
+      <p class="subtitle">Apple Silicon unified memory: double stays on CPU (MSL rejects double), float32 on GPU, zero-copy handoff. w-layer inversion at rel_rms ~1e-05 vs ducc0.</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1000 640">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+          </marker>
+          <marker id="arrow-zero" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Unified memory boundary -->
+        <rect x="30" y="30" width="940" height="560" rx="12" fill="rgba(251, 191, 36, 0.05)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="42" y="50" fill="#fbbf24" font-size="10" font-weight="600">Apple Silicon unified memory — one physical copy, zero-copy handoff</text>
+
+        <!-- CPU double column -->
+        <rect x="60" y="70" width="280" height="480" rx="8" fill="transparent" stroke="#34d399" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="72" y="88" fill="#34d399" font-size="9" font-weight="600">CPU · double (stays)</text>
+
+        <rect x="80" y="100" width="240" height="56" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+        <rect x="80" y="100" width="240" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="200" y="122" fill="white" font-size="11" font-weight="600" text-anchor="middle">cost model + kernel</text>
+        <text x="200" y="138" fill="#94a3b8" font-size="9" text-anchor="middle">chooseKernel · once per inversion</text>
+
+        <rect x="80" y="166" width="240" height="56" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+        <rect x="80" y="166" width="240" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="200" y="188" fill="white" font-size="11" font-weight="600" text-anchor="middle">nm1 scan + planeLayout</text>
+        <text x="200" y="204" fill="#94a3b8" font-size="9" text-anchor="middle">dw · nplanes · wmin · nshift</text>
+
+        <rect x="80" y="232" width="240" height="56" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+        <rect x="80" y="232" width="240" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="200" y="254" fill="white" font-size="11" font-weight="600" text-anchor="middle">w-ladder + uvw/λ</text>
+        <text x="200" y="270" fill="#94a3b8" font-size="9" text-anchor="middle">wWeight · signs · flips</text>
+
+        <rect x="80" y="298" width="240" height="56" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+        <rect x="80" y="298" width="240" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="200" y="320" fill="white" font-size="11" font-weight="600" text-anchor="middle">phases + corrections</text>
+        <text x="200" y="336" fill="#94a3b8" font-size="9" text-anchor="middle">range-reduced → float32 out</text>
+
+        <rect x="80" y="364" width="240" height="56" rx="6" fill="#0f172a" stroke="#34d399" stroke-width="1.5"/>
+        <rect x="80" y="364" width="240" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="200" y="386" fill="white" font-size="11" font-weight="600" text-anchor="middle">roll · FFT · extract*</text>
+        <text x="200" y="402" fill="#94a3b8" font-size="9" text-anchor="middle">*stays CPU until GPU FFT gated</text>
+
+        <text x="200" y="440" fill="#64748b" font-size="8" text-anchor="middle">MSL rejects double →</text>
+        <text x="200" y="454" fill="#64748b" font-size="8" text-anchor="middle">these can never move to GPU</text>
+        <text x="200" y="480" fill="#64748b" font-size="8" text-anchor="middle">elementwise maps are the</text>
+        <text x="200" y="494" fill="#64748b" font-size="8" text-anchor="middle">next GPU candidates</text>
+        <text x="200" y="520" fill="#64748b" font-size="8" text-anchor="middle">gate: w-layer 1.3e-05 ✓</text>
+
+        <!-- Handoff column -->
+        <rect x="370" y="70" width="200" height="480" rx="8" fill="transparent" stroke="#22d3ee" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="382" y="88" fill="#22d3ee" font-size="9" font-weight="600">handoff · zero copy</text>
+
+        <rect x="385" y="100" width="170" height="46" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+        <rect x="385" y="100" width="170" height="46" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="470" y="119" fill="white" font-size="10" font-weight="600" text-anchor="middle">visibilities</text>
+        <text x="470" y="134" fill="#94a3b8" font-size="8" text-anchor="middle">4×float32, contents</text>
+
+        <rect x="385" y="156" width="170" height="46" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+        <rect x="385" y="156" width="170" height="46" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="470" y="175" fill="white" font-size="10" font-weight="600" text-anchor="middle">buckets + coeffs</text>
+        <text x="470" y="190" fill="#94a3b8" font-size="8" text-anchor="middle">u32 CSR · f32 poly</text>
+
+        <rect x="385" y="212" width="170" height="46" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+        <rect x="385" y="212" width="170" height="46" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="470" y="231" fill="white" font-size="10" font-weight="600" text-anchor="middle">screen + corr maps</text>
+        <text x="470" y="246" fill="#94a3b8" font-size="8" text-anchor="middle">float32, per plane</text>
+
+        <text x="470" y="280" fill="#22d3ee" font-size="8" text-anchor="middle">StorageModeShared</text>
+        <text x="470" y="294" fill="#94a3b8" font-size="8" text-anchor="middle">no blit · no sync</text>
+        <text x="470" y="308" fill="#94a3b8" font-size="8" text-anchor="middle">waitUntilCompleted</text>
+        <text x="470" y="322" fill="#94a3b8" font-size="8" text-anchor="middle">is the only barrier</text>
+        <text x="470" y="344" fill="#94a3b8" font-size="8" text-anchor="middle">11.5 GB/s measured</text>
+        <text x="470" y="380" fill="#64748b" font-size="8" text-anchor="middle">host 0.99ms &gt; gpu</text>
+        <text x="470" y="394" fill="#64748b" font-size="8" text-anchor="middle">0.30ms at 20k vis →</text>
+        <text x="470" y="408" fill="#64748b" font-size="8" text-anchor="middle">bucketing is next</text>
+
+        <!-- GPU column -->
+        <rect x="600" y="70" width="340" height="480" rx="8" fill="transparent" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="612" y="88" fill="#a78bfa" font-size="9" font-weight="600">GPU · float32 (verified)</text>
+
+        <rect x="620" y="100" width="300" height="60" rx="6" fill="#0f172a" stroke="#a78bfa" stroke-width="1.5"/>
+        <rect x="620" y="100" width="300" height="60" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="770" y="122" fill="white" font-size="11" font-weight="600" text-anchor="middle">grid accumulate</text>
+        <text x="770" y="138" fill="#94a3b8" font-size="9" text-anchor="middle">poly-hoisted-split/columns · CAS atomics</text>
+        <text x="770" y="152" fill="#34d399" font-size="8" text-anchor="middle">gate ≤5e-5 · measured 1.8e-5 ✓</text>
+
+        <rect x="620" y="170" width="300" height="60" rx="6" fill="#0f172a" stroke="#a78bfa" stroke-width="1.5"/>
+        <rect x="620" y="170" width="300" height="60" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="770" y="192" fill="white" font-size="11" font-weight="600" text-anchor="middle">degrid (adjoint)</text>
+        <text x="770" y="208" fill="#94a3b8" font-size="9" text-anchor="middle">grid_degrid_poly · no atomics</text>
+        <text x="770" y="222" fill="#34d399" font-size="8" text-anchor="middle">adjoint dot-product 2.9e-07 ✓</text>
+
+        <rect x="620" y="240" width="300" height="84" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="770" y="262" fill="white" font-size="11" font-weight="600" text-anchor="middle">per-plane FFT — OPEN</text>
+        <text x="770" y="280" fill="#94a3b8" font-size="9" text-anchor="middle">MPS or custom kernel · biggest</text>
+        <text x="770" y="294" fill="#94a3b8" font-size="9" text-anchor="middle">remaining CPU share</text>
+        <text x="770" y="312" fill="#fbbf24" font-size="8" text-anchor="middle">gate: vs ducc0 c2c to float precision</text>
+
+        <rect x="620" y="334" width="300" height="60" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="770" y="356" fill="white" font-size="11" font-weight="600" text-anchor="middle">screen/correction maps — NEXT</text>
+        <text x="770" y="372" fill="#94a3b8" font-size="9" text-anchor="middle">elementwise · trivially parallel</text>
+        <text x="770" y="386" fill="#fbbf24" font-size="8" text-anchor="middle">gate: vs CPU map exactly</text>
+
+        <text x="770" y="420" fill="#64748b" font-size="8" text-anchor="middle">reference is ms2dirty_bda&lt;float,float&gt;</text>
+        <text x="770" y="434" fill="#64748b" font-size="8" text-anchor="middle">if it ever goes &lt;double,double&gt;,</text>
+        <text x="770" y="448" fill="#64748b" font-size="8" text-anchor="middle">re-gate accumulation + FFT</text>
+        <text x="770" y="474" fill="#fb7185" font-size="8" text-anchor="middle">rule: only exact-same-maths runs</text>
+        <text x="770" y="488" fill="#fb7185" font-size="8" text-anchor="middle">on GPU · every refusal says why</text>
+
+        <!-- Arrows -->
+        <line x1="320" y1="200" x2="383" y2="200" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-zero)"/>
+        <line x1="320" y1="330" x2="383" y2="231" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-zero)"/>
+        <line x1="555" y1="123" x2="618" y2="130" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="555" y1="179" x2="618" y2="200" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="555" y1="235" x2="618" y2="300" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+        <text x="588" y="272" fill="#fbbf24" font-size="8">next</text>
+
+        <!-- Legend -->
+        <text x="60" y="580" fill="white" font-size="10" font-weight="600">Legend</text>
+        <rect x="60" y="590" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="82" y="598" fill="#94a3b8" font-size="8">CPU double (pinned)</text>
+        <rect x="220" y="590" width="16" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
+        <text x="242" y="598" fill="#94a3b8" font-size="8">zero-copy handoff</text>
+        <rect x="380" y="590" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="402" y="598" fill="#94a3b8" font-size="8">GPU float32 (gated ✓)</text>
+        <rect x="560" y="590" width="16" height="10" rx="2" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="582" y="598" fill="#94a3b8" font-size="8">GPU candidate (open)</text>
+        <line x1="740" y1="595" x2="756" y2="595" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="762" y="598" fill="#94a3b8" font-size="8">planned port</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>Why this split is forced</h3>
+        </div>
+        <ul>
+          <li>• MSL rejects double: GPU stages must be provably float-safe</li>
+          <li>• Phase args reach ~300 rad: range-reduce in double on CPU</li>
+          <li>• 1% dw error visibly drifts w-interpolation: layout stays double</li>
+          <li>• Zero-copy measured: 11.5 GB/s, no sync calls anywhere</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot violet"></div>
+          <h3>Gates (all passing unless noted)</h3>
+        </div>
+        <ul>
+          <li>• kernel eval abs/rel 4.5e-6</li>
+          <li>• grid rel_max/rms ≤ 5e-5 (measured 1.8e-5)</li>
+          <li>• roundtrip degrid ≤ 5e-5 · adjoint 2.9e-07</li>
+          <li>• w-layer image vs ducc0: rel_rms ~1.3e-05</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>Next, in order</h3>
+        </div>
+        <ul>
+          <li>• elementwise screen/correction maps → GPU</li>
+          <li>• bucketing: GPU port or CPU/GPU overlap</li>
+          <li>• per-plane FFT: MPS or custom kernel</li>
+          <li>• re-gate everything if reference goes double</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">
+      wsclean-mx gpu-dev • precision split • numerical consistency is non-negotiable
+    </p>
+  </div>
+</body>
+</html>
