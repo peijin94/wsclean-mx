@@ -578,6 +578,13 @@ Stats counted above the 10° horizon mask only (4.17M/5.56M px): rel rms
 inversion ties (132 vs 143), prediction ties (66 vs 78), deconvolution
 566 → 114 s (5×) decides it.
 
+Cross-machine check (2026-10-20): the 3C196 recipe run on inti via the
+LINC 5.2.1 docker image (upstream WSClean 3.7, `-j24`, `v010-3c196-inti`)
+vs Mac mx `-j8`: all 3 products PASS T2 at ~1e-6 — the gate is portable
+across machines and builds. Timings: Mac mx 0.72/0.59/0.83 s
+(inv/pred/deconv) vs Xeon-24 1.29/0.93/4.27 s — full-power M-silicon wins
+~3× wall, deconv 5×, on this small-MS regime.
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
