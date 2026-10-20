@@ -483,6 +483,18 @@ dirty is exact (12.0) but multiscale clean diverges per build per channel
 stays a pipeline-equivalence testbed only. Dense uv (LOFAR 621k rows) is
 required, and there both builds agree to 1e-3.
 
+Open-data search (2026-10-19), all rejected: local mocks are 10-row or
+all-zero fixtures; MWA_MOCK == MWA-single-timeslot byte-identically (same
+md5); the Zenodo LOFAR Boötes MS (7.7 GB + skycatalog/TGSS/NVSS npz,
+doi:10.5281/zenodo.1042524, 7M rows, 20 ch) does not cohere into its own
+catalog — 272 strict dirty peaks show ~1e-4 random ratios at 13–63 arcsec
+separations, no CORRECTED_DATA column. It images in 17 s (7M rows) so it
+stays a useful large-scale pipeline/equivalence workload, but not a
+photometry testbed. Realistic calibrated sources remain: NRAO SRDP
+calibrated VLA MSs (interactive archive, GBs, unverified here), LOFAR LTA
+public data (account + staging), or CASA-guides VLA + own calibration.
+Until one lands, exact-DFT injection is the photometry testbed.
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
