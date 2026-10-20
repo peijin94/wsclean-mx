@@ -545,6 +545,14 @@ Multiscale clean adds `-mgain 0.8 -multiscale -niter 3000`
 only 5% of the wall). On this w-heavy wide-field workload the mx edge
 vanishes outside deconvolution; inversion+prediction (>90% of wall) is
 the optimization target, not the minor loop.
+Optimization follow-up (2026-10-20): `sample` profile of mx on this
+workload — top non-idle symbols are ducc0 `grid2x_c` (predict), `x2grid_c`
+(grid), FFT copy/exec, `WriteModel`; nothing of ours is hot (weights,
+peak-finder negligible), and the dominant sample is thread
+`__psynch_cvwait` (pool idle). Thread sweep on the same dirty: -j4 30.2 s,
+-j8 27.7 s, -j16 27.8 s — 8 is already the sweet spot, more threads buy
+nothing. CPU verdict on this workload: at the ducc0-kernel floor, no
+patch-side target remains.
 
 ## Status of the wider release question
 
