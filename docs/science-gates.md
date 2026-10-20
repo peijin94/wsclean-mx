@@ -565,6 +565,19 @@ is identical: same top-5 component positions/fluxes, same peaks
 point testbed: T2-pixel is the wrong gate for deep cleans; photometry and
 envelopes agree. Clean walls 170.5 vs 147.3 s (deconv 18.8 vs 4.0 s).
 
+Pipeline-style deep clean (2026-10-20): the recovered pipeline recipe
+(`-pol I -multiscale -multiscale-scale-bias 0.8 -niter 150000 -mgain 0.95
+-horizon-mask 10deg -auto-threshold 0.5 -auto-mask 3 -local-rms -size 2357
+2357 -scale 0.049 -weight briggs 0`, `-mem 12` instead of 50 — 16 GB box,
+`-j8`) on the 64 MHz MS (`v010-pipe-{ref,mx}`). Dirty + PSF + horizon-mask
+PASS T2; restored/model/residual diverge at pixel level (150k-iteration
+auto-mask deep clean — chaos regime), with identical component photometry:
+same top-5 positions/fluxes, peaks 359.89 vs 359.88, sums within 1%.
+Stats counted above the 10° horizon mask only (4.17M/5.56M px): rel rms
+2.0e-5; reference panel is linear scale. Walls 781 vs 348 s (2.25×):
+inversion ties (132 vs 143), prediction ties (66 vs 78), deconvolution
+566 → 114 s (5×) decides it.
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
