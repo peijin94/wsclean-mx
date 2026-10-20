@@ -1,5 +1,7 @@
 # wsclean-mx
 
+![wsclean-mx](docs/wsclean-mx-banner.png)
+
 WSClean optimized for macOS on Apple Silicon.
 
 wsclean-mx is a small patch set on top of upstream

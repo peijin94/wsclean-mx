@@ -5,7 +5,7 @@ All notable changes to wsclean-mx are documented here. The format follows
 [SemVer](https://semver.org/). Upstream WSClean remains at 3.7
 (`2d5c1ed8d7559e5178d243661b408baa288681e6`, LINC 5.2.1 pin).
 
-## [0.1.0] — UNRELEASED (staged; do not publish yet)
+## [0.1.0] — 2026-10-19
 
 First installable release: a native Apple-Silicon (`arm64`) WSClean with
 numerical equivalence to the fixed upstream reference and roughly twice the
@@ -17,9 +17,7 @@ imaging throughput.
   `peijin94/wsclean-mx`), verified end to end: installs clean, vendors
   casacore 3.8.2 into the keg's libexec, applies the full patch set, links
   with no build-dir references, `brew test` passes, and the installed binary
-  is T0-bitwise identical to `bench/bin/v010-rc1`. `brew bottle` itself
-  requires a stable version, so the bottle tarball is produced at `v0.1.0`
-  tag time. Local bottle staging only until the tag exists.
+  is T0-bitwise identical to `bench/bin/v010-rc1`.
 - `bench/bin/v010-rc1` (+ byte-identical `v010-rc1-aa` control): frozen
   snapshots of this release candidate for A/B and A/A benchmarking.
 - `scripts/build_upstream_fix.sh` + `build-reffix/provenance.json`: the
