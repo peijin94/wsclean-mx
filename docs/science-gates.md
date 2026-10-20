@@ -507,6 +507,30 @@ calibrated VLA MSs (interactive archive, GBs, unverified here), LOFAR LTA
 public data (account + staging), or CASA-guides VLA + own calibration.
 Until one lands, exact-DFT injection is the photometry testbed.
 
+Extended-source quality benches (2026-10-20; paper data not downloadable — see below):
+
+- Non-w-layer (`v010-tiny-{ref,mx}`): compact analytic model (central
+  Gaussian + companions, sum 316.2) predicted into a scratch LOFAR copy,
+  imaged 128² at 4asec with `-data-column MODEL_DATA -maxuv-l 500`
+  (w-phase error at field edge ~2e-3 rad — negligible). All 5 products PASS
+  T2 (rel rms ~1e-6); model flux recovered identically, 312.95 vs 312.95.
+  Cleanest equivalence result yet — no deep-clean chaos at this scale.
+- Extended (`v010-ext-{ref,mx}`): 1024² analytic model (Gaussians + points,
+  sum 1274.9), same predict path, imaged with `-maxuv-l 2000`. Dirty + PSF
+  PASS T2; image/model/residual diverge at pixel level (multiscale chaos at
+  3000 iterations — same documented property as the point testbed), while
+  photometry agrees: model sums 1274.8 vs 1274.9, restored peaks identical
+  to 0.015. w-correction is active here (w up to ~2000λ in the selection),
+  handled by the same ducc0 code in both builds.
+- Paper setup (arXiv 2507.21270v1, RI-GAN/MeerKAT): their "data" are
+  simulated in-house (TNG particles, 241,920 visibilities, coplanar w=0) —
+  nothing downloadable. Their pipeline (simms empty MS + CASA predict +
+  wsclean image) was replicated minus CASA: simms is uninstallable here
+  (python-casacore wheel needs a retired brew hdf5/boost stack), so the
+  empty-MS step was replaced by wsclean `-predict` into a scratch copy and
+  imaging from `-data-column MODEL_DATA`. Same regime the paper tests
+  (coplanar/short-baseline, extended emission), minus their TNG skies.
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
