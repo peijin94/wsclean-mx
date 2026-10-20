@@ -554,6 +554,17 @@ peak-finder negligible), and the dominant sample is thread
 nothing. CPU verdict on this workload: at the ducc0-kernel floor, no
 patch-side target remains.
 
+Finer pixel scale (2026-10-20): same field re-imaged at 2048² 4arcmin
+(`v010-lwa4{,-clean}-{ref,mx}`). Dirty T2 PASS, 46.5 vs 25.8 s (1.80×).
+Clean: dirty + PSF PASS T2, but restored/model/residual diverge at pixel
+level (rel rms 4.6e-3) with source-correlated dipole residuals around
+bright sources — the deep-clean chaos regime (3000 iterations, finer
+beam, more components than the 10arcmin run). Component-level photometry
+is identical: same top-5 component positions/fluxes, same peaks
+(448.48/508.94), model sums within 0.4%. Same documented property as the
+point testbed: T2-pixel is the wrong gate for deep cleans; photometry and
+envelopes agree. Clean walls 170.5 vs 147.3 s (deconv 18.8 vs 4.0 s).
+
 ## Status of the wider release question
 
 Correctness (tests, selection, allocation, time units) is repaired and reviewed. Performance was re-measured and the earlier regression retracted (see `throttle-validation-2026-10-18.md`). On the evidence above:
