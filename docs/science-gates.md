@@ -538,6 +538,13 @@ copied from calim3 to `/tmp/ovrolwa-64mhz.ms`. Dirty
 (`v010-lwa-{ref,mx}`): T2 PASS, rel rms 3.8e-9, peak ratio 1.00000000;
 wall 47.2 s ref vs 27.7 s mx (1.71×). All-sky horizon disk + diffuse
 emission as expected; difference unstructured.
+Multiscale clean adds `-mgain 0.8 -multiscale -niter 3000`
+(`v010-lwaclean-{ref,mx}`): all 5 products PASS T2 (restored rel rms
+1.5e-9, residual 1.5e-6). Walls TIE, 191.8 vs 189.8 s: inversion 92.8 vs
+96.6, prediction 69.7 vs 78.3, deconvolution 12.8 vs 3.2 (mx 4× — but
+only 5% of the wall). On this w-heavy wide-field workload the mx edge
+vanishes outside deconvolution; inversion+prediction (>90% of wall) is
+the optimization target, not the minor loop.
 
 ## Status of the wider release question
 
