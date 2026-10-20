@@ -79,7 +79,19 @@ drops the fill. The padding is then uninitialized memory, so with the default
 small inversion many 2048² dirty images are garbage. GCC builds (LINC) are
 not affected. Details are in [benchmark.md](benchmark.md).
 
+## Install
+
+Apple Silicon Mac, [Homebrew](https://brew.sh):
+
+```bash
+brew tap peijin94/wsclean-mx
+brew install wsclean-mx        # prebuilt bottle, no compilation
+wsclean -version
+```
+
 ## Building
+
+To build from source instead (same result, ~4 min plus casacore):
 
 Requirements: Apple Silicon Mac, Xcode command line tools, and
 [Homebrew](https://brew.sh).
