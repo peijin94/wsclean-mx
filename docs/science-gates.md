@@ -493,7 +493,16 @@ doi:10.5281/zenodo.1042524, 7M rows, 20 ch) does not cohere into its own
 catalog — 272 strict dirty peaks show ~1e-4 random ratios at 13–63 arcsec
 separations, no CORRECTED_DATA column. It images in 17 s (7M rows) so it
 stays a useful large-scale pipeline/equivalence workload, but not a
-photometry testbed. Realistic calibrated sources remain: NRAO SRDP
+photometry testbed. Multiscale clean confirms both halves: `-size 2048 2048
+-scale 5asec -weight briggs 0 -mgain 0.8 -multiscale -niter 3000
+-channels-out 4 -j 8` (`bench/out/v010-bootes2-{ref,mx}`) — all 25 products
+ PASS T2, MFS-image rel rms 1.85e-7, max |Δ| 1.25e-6; wall 126.4 s ref vs 77.2 s
+mx (1.64×; inversion ties 40.0 vs 40.3 s on this w-heavy wide field,
+prediction ties 17.6 vs 17.8 s, deconvolution 55.4 → 11.3 s ~5×). Cleaned
+MFS vs catalog is decisive the other way: the 12 brightest in-field catalog
+sources (0.65–1.65 Jy) recover at ~1e-3 of their flux with random signs —
+noise-level, in both builds identically. The SIM visibilities do not contain
+these sources coherently. Realistic calibrated sources remain: NRAO SRDP
 calibrated VLA MSs (interactive archive, GBs, unverified here), LOFAR LTA
 public data (account + staging), or CASA-guides VLA + own calibration.
 Until one lands, exact-DFT injection is the photometry testbed.
