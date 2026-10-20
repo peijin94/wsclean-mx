@@ -3,8 +3,7 @@
 #
 # Homebrew formula for wsclean-mx: Apple-Silicon optimized WSClean.
 #
-# Status: LOCAL BOTTLE STAGING ONLY — do not publish until 0.1.0 is tagged.
-# Brew only accepts tap formulas, so stage with:
+# Status: released as 0.1.0. Brew only accepts tap formulas, so stage with:
 #   brew tap-new peijin94/wsclean-mx   (once)
 #   cp Formula/wsclean-mx.rb "$(brew --repo peijin94/wsclean-mx)/Formula/"
 #   brew install --HEAD --build-bottle peijin94/wsclean-mx/wsclean-mx
@@ -17,12 +16,16 @@
 class WscleanMx < Formula
   desc "WSClean optimized for Apple Silicon (multithreaded gridding/deconvolution)"
   homepage "https://github.com/peijin94/wsclean-mx"
-  # Release tarball (fill in at 0.1.0 tag time; the `head` line below is
-  # what local --HEAD bottle staging uses until then):
-  # url "https://github.com/peijin94/wsclean-mx/archive/refs/tags/v0.1.0.tar.gz"
-  # sha256 "<release tarball sha256>"
+  # Release tarball for 0.1.0 (`head` below stays for development builds).
+  url "https://github.com/peijin94/wsclean-mx/archive/refs/tags/v0.1.0.tar.gz"
+  sha256 "5a082b43f404f40d6099729d4eb10aaa712e0e3228287452c4e8f1be91e26e42"
   head "https://github.com/peijin94/wsclean-mx.git", branch: "main"
   version "0.1.0"
+
+  bottle do
+    root_url "https://github.com/peijin94/wsclean-mx/releases/download/v0.1.0"
+    sha256 cellar: :any_skip_relocation, arm64_golden_gate: "f6ea5748aa33dc4e5f4f7d0c716c2ffc74c813f83183a237afe82d14d587f787"
+  end
 
   depends_on arch: :arm64
   depends_on macos: :sequoia
