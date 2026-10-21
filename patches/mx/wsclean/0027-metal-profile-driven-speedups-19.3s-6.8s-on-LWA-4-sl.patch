@@ -1,0 +1,441 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 20 Oct 2026 22:54:36 -0400
+Subject: [PATCH 27/27] metal: profile-driven speedups, 19.3s -> 6.8s on LWA
+ 4-slot dirty
+
+Bottleneck map (was: 4.5s Metal grid + 4.7s CPU FFT/roll/extract + ~10s
+serial host prep, all repeated 12x by fixed 1M-item chunks):
+- adaptive row chunks from a 2 GB/item-data budget (12M items): 1 chunk
+  for the 4-slot case, 201 planes processed once not 967x (4.8x less FFT).
+- parallel item pass (split+wrap+sincos+wphase+plane, GCD, per-index
+  writes) with cached split reused across the ~7 gatherings per item.
+- parallel plane gather (GCD, per-plane slots, serial compact in order).
+- parallel two-phase extract+screens (conflict-free row sets).
+- shared compute grid buffer with GPU blit fill/copy (no 2 GB memset).
+- phase timers (MX_METAL_DEBUG_TIMING chunk phases).
+All bit-preserving (1-vis 2.95e-07, lwa50k 1.45e-08, T2 dirty 4.8e-06).
+Remaining: Metal grid 2.7s + other 2.5s; band-limited FFTs are next.
+
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index dfd3c11d..03c23cc8 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -606,10 +606,14 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+                            }
+                          }
+                          job.grid_bytes = 2 * job.g * job.g * sizeof(float);
++                         // Per-plane staging buffer for the result (read back on
++                         // the CPU after the wait). The compute grid itself is a
++                         // single shared buffer, blit-filled per plane below:
++                         // zeroing 87 separate grids on the CPU costs ~2 GB of
++                         // memset traffic; the blit fill runs on the GPU.
+                          job.grid_buffer =
+                              [device newBufferWithLength:job.grid_bytes
+                                                  options:MTLResourceStorageModeShared];
+-                         std::memset([job.grid_buffer contents], 0, job.grid_bytes);
+                          if (in.variant == Variant::kPacked) {
+                            if (!job.packed.empty()) {
+                              job.visibility_buffer =
+@@ -650,8 +654,18 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+ 
+     id<MTLCommandQueue> queue = [device newCommandQueue];
+     id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
++    // One shared compute grid (max plane size); blit-filled to zero before
++    // each plane, then blit-copied to the plane's staging buffer after.
++    std::size_t max_grid_bytes = 0;
++    for (const auto& job : jobs) max_grid_bytes = std::max(max_grid_bytes, job.grid_bytes);
++    id<MTLBuffer> work_grid =
++        [device newBufferWithLength:std::max<std::size_t>(max_grid_bytes, 1)
++                            options:MTLResourceStorageModeShared];
+     for (auto& job : jobs) {
+       const auto& in = job.input;
++      id<MTLBlitCommandEncoder> blit = [command_buffer blitCommandEncoder];
++      [blit fillBuffer:work_grid range:NSMakeRange(0, job.grid_bytes) value:0];
++      [blit endEncoding];
+       id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
+       [encoder setComputePipelineState:job.pipeline];
+       const unsigned grid_size = static_cast<unsigned>(job.g);
+@@ -669,7 +683,7 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+           [encoder setBuffer:job.start_buffer offset:0 atIndex:1];
+         }
+         [encoder setBuffer:job.item_buffer offset:0 atIndex:2];
+-        [encoder setBuffer:job.grid_buffer offset:0 atIndex:3];
++        [encoder setBuffer:work_grid offset:0 atIndex:3];
+         const unsigned degree = static_cast<unsigned>(in.kernel_degree);
+         [encoder setBytes:in.kernel_coefficients.data()
+                    length:in.kernel_coefficients.size() * sizeof(float)
+@@ -684,7 +698,7 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+       } else if (in.variant == Variant::kPacked) {
+         [encoder setBuffer:job.visibility_buffer offset:0 atIndex:0];
+         [encoder setBuffer:job.start_buffer offset:0 atIndex:1];
+-        [encoder setBuffer:job.grid_buffer offset:0 atIndex:2];
++        [encoder setBuffer:work_grid offset:0 atIndex:2];
+         [encoder setBytes:&grid_size length:sizeof(grid_size) atIndex:3];
+         [encoder setBytes:&centre length:sizeof(centre) atIndex:4];
+         [encoder setBytes:&tiles_row length:sizeof(tiles_row) atIndex:5];
+@@ -698,7 +712,7 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+           [encoder setBuffer:job.start_buffer offset:0 atIndex:1];
+         }
+         [encoder setBuffer:job.item_buffer offset:0 atIndex:2];
+-        [encoder setBuffer:job.grid_buffer offset:0 atIndex:3];
++        [encoder setBuffer:work_grid offset:0 atIndex:3];
+         [encoder setBytes:&grid_size length:sizeof(grid_size) atIndex:4];
+         [encoder setBytes:&centre length:sizeof(centre) atIndex:5];
+         [encoder setBytes:&tiles_row length:sizeof(tiles_row) atIndex:6];
+@@ -725,6 +739,13 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+                 threadsPerThreadgroup:MTLSizeMake(16, 16, 1)];
+       }
+       [encoder endEncoding];
++      id<MTLBlitCommandEncoder> blitOut = [command_buffer blitCommandEncoder];
++      [blitOut copyFromBuffer:work_grid
++                 sourceOffset:0
++                     toBuffer:job.grid_buffer
++          destinationOffset:0
++                         size:job.grid_bytes];
++      [blitOut endEncoding];
+     }
+ 
+     const auto begin = std::chrono::steady_clock::now();
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index d53038ab..d2b5c4be 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -15,7 +15,9 @@
+ #include <complex>
+ #include <cstdio>
+ #include <cstdlib>
++#include <dispatch/dispatch.h>
+ #include <exception>
++#include <mutex>
+ #include <vector>
+ 
+ namespace mx::metal {
+@@ -455,32 +457,86 @@ bool inversion(const InversionInput& input, float* dirty) {
+   // accumulate vectors (6 floats each), so materialising all items at once
+   // costs tens of GB on wide-field multi-channel runs. Chunks share the one
+   // global layout; dirty accumulates with += and corrections run once below.
++  // Size the chunks from a memory budget (~2 GB of item data): fewer chunks
++  // means fewer repeated plane FFTs (planes repeat across chunks). A fixed
++  // 1M-item chunk processes 201 planes ~5x over; fitting the whole call in
++  // one chunk when memory allows removes that multiplier entirely.
++  // Per-item peak ≈ supp*(index+weight) pairs + split/wphase ≈ 150 B/item.
+   const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
+   const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
+-  const std::size_t rows_per_chunk =
+-      std::max<std::size_t>(1, 1024 * 1024 / std::max<std::size_t>(1, input.n_channels));
++  const std::size_t chunk_items_cap = (std::size_t)12 << 20;
++  const std::size_t rows_per_chunk = std::max<std::size_t>(
++      1, chunk_items_cap / std::max<std::size_t>(1, input.n_channels));
++  if (input.n_rows > rows_per_chunk && debugDouble("MX_METAL_DEBUG_CHUNKS", 0.0) > 0.0)
++    std::fprintf(stderr, "[mx-metal] %zu rows -> %zu chunks\n", input.n_rows,
++                 (input.n_rows + rows_per_chunk - 1) / rows_per_chunk);
+   for (std::size_t r0 = 0; r0 < input.n_rows; r0 += rows_per_chunk) {
+     const std::size_t r1 = std::min(input.n_rows, r0 + rows_per_chunk);
+     const std::size_t chunk_items = (r1 - r0) * input.n_channels;
++    const bool phase_timing = debugDouble("MX_METAL_DEBUG_TIMING", 0.0) > 0.0;
++    std::chrono::steady_clock::time_point t_phase = std::chrono::steady_clock::now();
++    auto phase_mark = [&](const char* name) {
++      if (!phase_timing) return;
++      const auto t1 = std::chrono::steady_clock::now();
++      using ms = std::chrono::duration<double, std::milli>;
++      std::fprintf(stderr, "[mx-metal] chunk phase %s %.1fms\n", name, ms(t1 - t_phase).count());
++      t_phase = t1;
++    };
+     std::vector<double> w_lambda(chunk_items);
+     std::vector<float> w_sign(chunk_items);
+-    for (std::size_t row = r0; row < r1; ++row) {
++    // Per-item split coords + w-phase + plane, computed once in parallel and
++    // reused for every plane the item lands in (each item is gathered ~supp
++    // times; recomputing wrap/sincos per occurrence wastes 6/7 of the work).
++    // All writes are per-index: deterministic, identical to serial.
++    std::vector<float> split_bf(4 * chunk_items);
++    std::vector<float> wphase_re(chunk_items, 1.0f), wphase_im(chunk_items, 0.0f);
++    std::vector<std::size_t> item_plane(chunk_items);
++    const double odd_anchor = (geometry.kernel->support() & 1u) ? 0.5 : 0.0;
++    const bool need_shift = layout.nshift != 0.0;
++    const double shift_scale = kTwoPi * layout.nshift;
++    // ObjC blocks capture C++ vectors by value; mutate via raw pointers.
++    double* wlam_ptr = w_lambda.data();
++    float* wsign_ptr = w_sign.data();
++    float* split_ptr = split_bf.data();
++    float* wphre_ptr = wphase_re.data();
++    float* wphim_ptr = wphase_im.data();
++    std::size_t* iplane_ptr = item_plane.data();
++    dispatch_apply(chunk_items,
++                   dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(std::size_t item) {
++      const std::size_t row = r0 + item / input.n_channels;
++      const std::size_t ch = item % input.n_channels;
++      const double lambda = kSpeedOfLight / input.frequencies[ch];
+       const double w_m = input.flip_w ? -input.uvws[3 * row + 2] : input.uvws[3 * row + 2];
+-      for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+-        const double lambda = kSpeedOfLight / input.frequencies[ch];
+-        const std::size_t item = (row - r0) * input.n_channels + ch;
+-        const double w = w_m / lambda;
+-        w_sign[item] = (w < 0.0) ? -1.0f : 1.0f;
+-        w_lambda[item] = std::fabs(w);
++      const double w = w_m / lambda;
++      const float sign = (w < 0.0f) ? -1.0f : 1.0f;
++      wsign_ptr[item] = sign;
++      const double w_abs = std::fabs(w);
++      wlam_ptr[item] = w_abs;
++      double u = static_cast<double>(sign) * input.uvws[3 * row + 0] / lambda;
++      double v = static_cast<double>(sign) * input.uvws[3 * row + 1] / lambda;
++      if (input.flip_u) u = -u;
++      if (input.flip_v) v = -v;
++      const double wrap_x = wrapCell(u * geometry.cell_x, geometry.grid);
++      const double wrap_y = wrapCell(v * geometry.cell_y, geometry.grid);
++      const double base_x = std::floor(wrap_x + odd_anchor);
++      const double base_y = std::floor(wrap_y + odd_anchor);
++      split_ptr[4 * item + 0] = static_cast<float>(base_x);
++      split_ptr[4 * item + 1] = static_cast<float>(wrap_x - base_x);
++      split_ptr[4 * item + 2] = static_cast<float>(base_y);
++      split_ptr[4 * item + 3] = static_cast<float>(wrap_y - base_y);
++      long plane = static_cast<long>((w_abs + layout.wshift) / layout.dw);
++      plane = std::max<long>(0, std::min<long>(plane, static_cast<long>(layout.nplanes) - 1));
++      iplane_ptr[item] = static_cast<std::size_t>(plane);
++      if (need_shift) {
++        const double angle = shift_scale * static_cast<double>(sign) * w_abs;
++        wphre_ptr[item] = static_cast<float>(std::cos(angle));
++        wphim_ptr[item] = static_cast<float>(std::sin(angle));
+       }
+-    }
++    });
+     std::vector<std::vector<std::size_t>> plane_items(layout.nplanes);
+-    for (std::size_t item = 0; item < chunk_items; ++item) {
+-      const double w = w_lambda[item];
+-      long plane = static_cast<long>((w + layout.wshift) / layout.dw);
+-      plane = std::max<long>(0, std::min<long>(plane, static_cast<long>(layout.nplanes) - 1));
+-      plane_items[static_cast<std::size_t>(plane)].push_back(item);
+-    }
++    for (std::size_t item = 0; item < chunk_items; ++item)
++      plane_items[item_plane[item]].push_back(item);
++    phase_mark("item_pass+bucket");
+   // ducc0's w-tap (TemplateKernel::eval2s): z = (z_off - nth)*2 + (W-1), where
+   // z_off = (w_plane - w_vis)/dw is the distance in PLANES, and the value is the
+   // nth piece of the same polynomial the shader evaluates with poly_sample.
+@@ -514,30 +570,33 @@ bool inversion(const InversionInput& input, float* dirty) {
+   std::vector<std::complex<float>> grid_values(static_cast<std::size_t>(grid) * grid);
+   std::vector<double> phases(input.image_height / 2 + 1);
+   const bool skip_screen = debugDouble("MX_METAL_DEBUG_NOSCREEN", 0.0) > 0.0;
+-  // ducc0's shifting phase: when nshift != 0 every visibility is rotated by
+-  // exp(+2*pi*i*w*nshift) BEFORE gridding (x2grid_c multiplies v by the
+-  // compute_phases factor with lshift=mshift=0; the w here is the signed one,
+-  // imflip*|w|). Omitting it leaves a w-proportional global phase per
+-  // visibility: invisible at w = 0, a ~0.135 rad/lambda rotation elsewhere,
+-  // which is exactly the w-layer failure signature. Precompute per item (the
+-  // phase is plane-independent); with nshift == 0 this is exactly (1, 0).
+-  std::vector<float> wphase_re(chunk_items, 1.0f), wphase_im(chunk_items, 0.0f);
+-  if (layout.nshift != 0.0) {
+-    for (std::size_t item = 0; item < chunk_items; ++item) {
+-      const double angle =
+-          kTwoPi * static_cast<double>(w_sign[item]) * w_lambda[item] * layout.nshift;
+-      wphase_re[item] = static_cast<float>(std::cos(angle));
+-      wphase_im[item] = static_cast<float>(std::sin(angle));
+-    }
+-  }
++  // ducc0's shifting phase (computed in the parallel item pass above).
+   // Phase 1: build one gridding input per non-empty plane. Phase 2 grids them
+   // all in a single command buffer (one wait instead of one per plane); the
+   // per-plane wait latency was dominating the host wall time.
++  // The plane loop is the host-side bottleneck (Horner w-weights + split per
++  // weighted item, ~7x items). Planes are independent: build them in parallel
++  // with GCD, one slot per plane, then compact serially in plane order so the
++  // downstream order (and results) are identical to the serial loop.
+   std::vector<GridAccumInput> plane_inputs;
+   std::vector<std::size_t> plane_index;
+   plane_inputs.reserve(layout.nplanes);
+   plane_index.reserve(layout.nplanes);
+-  for (std::size_t pl = 0; pl < layout.nplanes; ++pl) {
++  std::vector<GridAccumInput> plane_slots(layout.nplanes);
++  std::vector<char> plane_used(layout.nplanes, 0);
++  std::exception_ptr plane_error;
++  std::mutex plane_error_mutex;
++  // ObjC blocks capture C++ objects by (const) value, which would deep-copy
++  // the vectors per invocation; use raw pointers to the shared storage.
++  GridAccumInput* slot_ptr = plane_slots.data();
++  char* used_ptr = plane_used.data();
++  std::exception_ptr* error_ptr = &plane_error;
++  std::mutex* error_mutex_ptr = &plane_error_mutex;
++  const std::vector<std::size_t>* buckets_ptr = plane_items.data();
++  dispatch_apply(layout.nplanes,
++                 dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(std::size_t pl) {
++    @autoreleasepool {
++      try {
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+     // Gather from the `support` buckets whose spread can reach this plane, with
+     // the w-kernel weight folded into the visibility.
+@@ -545,13 +604,13 @@ bool inversion(const InversionInput& input, float* dirty) {
+     const long first_bucket = static_cast<long>(pl) - static_cast<long>(support) + 1;
+     for (long bucket = std::max<long>(0, first_bucket); bucket <= static_cast<long>(pl); ++bucket) {
+       if (bucket >= static_cast<long>(layout.nplanes)) break;
+-      for (const std::size_t item : plane_items[static_cast<std::size_t>(bucket)]) {
+-        const double w = w_lambda[item];
++      for (const std::size_t item : buckets_ptr[static_cast<std::size_t>(bucket)]) {
++        const double w = wlam_ptr[item];
+         const double weight = wWeight(w, w_plane, pl);
+         if (weight != 0.0) weighted_items.emplace_back(item, weight);
+       }
+     }
+-    if (weighted_items.empty()) continue;
++    if (!weighted_items.empty()) {
+     if (debugDouble("MX_METAL_DEBUG_WEIGHTS", 0.0) > 0.0) {
+       double sum = 0.0;
+       for (const auto& wi : weighted_items) sum += wi.second;
+@@ -566,34 +625,36 @@ bool inversion(const InversionInput& input, float* dirty) {
+       const double weight = weighted_items[k].second;
+       const std::size_t row = r0 + item / input.n_channels;
+       const std::size_t ch = item % input.n_channels;
+-      const double lambda = kSpeedOfLight / input.frequencies[ch];
+-      const double sign = static_cast<double>(w_sign[item]);
+-      double u = sign * input.uvws[3 * row + 0] / lambda;
+-      double v = sign * input.uvws[3 * row + 1] / lambda;
+-      if (input.flip_u) u = -u;
+-      if (input.flip_v) v = -v;
+-      // Wrap exactly as ducc0's getpix does (see the 2-D path above), then
+-      // anchor round-half-up for odd support (ducc0's tap window).
+-      const double odd = (geometry.kernel->support() & 1u) ? 0.5 : 0.0;
+-      const double wrap_x = wrapCell(u * geometry.cell_x, geometry.grid);
+-      const double wrap_y = wrapCell(v * geometry.cell_y, geometry.grid);
+-      const double base_x = std::floor(wrap_x + odd);
+-      const double base_y = std::floor(wrap_y + odd);
+-      accumulate.visibilities[6 * k + 0] = static_cast<float>(base_x);
+-      accumulate.visibilities[6 * k + 1] = static_cast<float>(wrap_x - base_x);
+-      accumulate.visibilities[6 * k + 2] = static_cast<float>(base_y);
+-      accumulate.visibilities[6 * k + 3] = static_cast<float>(wrap_y - base_y);
++      const double sign = static_cast<double>(wsign_ptr[item]);
++      accumulate.visibilities[6 * k + 0] = split_ptr[4 * item + 0];
++      accumulate.visibilities[6 * k + 1] = split_ptr[4 * item + 1];
++      accumulate.visibilities[6 * k + 2] = split_ptr[4 * item + 2];
++      accumulate.visibilities[6 * k + 3] = split_ptr[4 * item + 3];
+       const std::complex<float>& value = input.ms[row * input.n_channels + ch];
+       // Shifting phase first, conjugation second - ducc0's order (v *= phases,
+       // then vi = v.imag*imflip). The phase uses the signed w (sign*|w|).
+-      const float vr = value.real() * wphase_re[item] - value.imag() * wphase_im[item];
+-      const float vi = value.real() * wphase_im[item] + value.imag() * wphase_re[item];
++      const float vr = value.real() * wphre_ptr[item] - value.imag() * wphim_ptr[item];
++      const float vi = value.real() * wphim_ptr[item] + value.imag() * wphre_ptr[item];
+       accumulate.visibilities[6 * k + 4] = static_cast<float>(vr * weight);
+       accumulate.visibilities[6 * k + 5] = static_cast<float>(sign * vi * weight);
+     }
+-    plane_inputs.push_back(std::move(accumulate));
++    slot_ptr[pl] = std::move(accumulate);
++    used_ptr[pl] = 1;
++    } // end if non-empty
++      } catch (const std::exception&) {
++        std::lock_guard<std::mutex> lock(*error_mutex_ptr);
++        if (!*error_ptr) *error_ptr = std::current_exception();
++        return;
++      }
++      } // end @autoreleasepool
++    });
++  if (plane_error) std::rethrow_exception(plane_error);
++  for (std::size_t pl = 0; pl < layout.nplanes; ++pl) {
++    if (!plane_used[pl]) continue;
++    plane_inputs.push_back(std::move(plane_slots[pl]));
+     plane_index.push_back(pl);
+   }
++  phase_mark("gather");
+   // Group the planes into memory-bounded batches: each plane holds a full
+   // grid (8*grid^2 bytes in the Metal buffer plus the result copy), so
+   // gridAccumulateBatched over all planes at once needs
+@@ -603,12 +664,13 @@ bool inversion(const InversionInput& input, float* dirty) {
+   const std::size_t grid_bytes =
+       8 * static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
+   const std::size_t planes_per_group =
+-      std::max<std::size_t>(1, (256u << 20) / std::max<std::size_t>(1, grid_bytes));
++      std::max<std::size_t>(1, (512u << 20) / std::max<std::size_t>(1, grid_bytes));
+   const bool dump_timing = debugDouble("MX_METAL_DEBUG_TIMING", 0.0) > 0.0;
+   for (std::size_t g0 = 0; g0 < plane_inputs.size(); g0 += planes_per_group) {
+     const std::size_t g1 = std::min(plane_inputs.size(), g0 + planes_per_group);
+-    std::vector<GridAccumInput> group_inputs(plane_inputs.begin() + g0,
+-                                             plane_inputs.begin() + g1);
++    std::vector<GridAccumInput> group_inputs;
++    group_inputs.reserve(g1 - g0);
++    for (std::size_t g = g0; g < g1; ++g) group_inputs.push_back(std::move(plane_inputs[g]));
+     std::vector<GridAccumResult> plane_grids;
+     try {
+       plane_grids = gridAccumulateBatched(std::move(group_inputs));
+@@ -655,40 +717,56 @@ bool inversion(const InversionInput& input, float* dirty) {
+     }
+ 
+     const double w = w_plane;
+-    for (std::size_t i = 0; i <= input.image_width / 2; ++i) {
++    const std::size_t W2 = input.image_width, H2 = input.image_height;
++    const std::size_t halfW = W2 / 2, halfH = H2 / 2;
++    const std::complex<float>* gv_ptr = grid_values.data();
++    // Extract + w-screen in two conflict-free parallel phases (per-row writes
++    // are disjoint within a phase, so results are bit-identical to serial).
++    // Low rows 0..W/2 (uses grid row ix).
++    dispatch_apply(halfW + 1, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(std::size_t i) {
+       const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
+-      std::size_t ix = grid - input.image_width / 2 + i;
++      std::size_t ix = grid - halfW + i;
+       if (ix >= grid) ix -= grid;
+-      std::size_t i2 = input.image_width - i;
+-      std::size_t ix2 = grid - input.image_width / 2 + i2;
++      std::vector<double> ph(halfH + 1);
++      for (std::size_t j = 0; j <= halfH; ++j) {
++        const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
++        ph[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
++      }
++      for (std::size_t j = 0; j < H2; ++j) {
++        const std::size_t jx = (grid - halfH + j) % grid;
++        const std::size_t j2 = std::min(j, H2 - j);
++        const double re = std::cos(ph[j2]);
++        const double im = std::sin(ph[j2]);
++        constexpr double norm = 1.0;
++        const std::complex<float>& low = gv_ptr[ix * grid + jx];
++        dirty[i * H2 + j] += static_cast<float>((low.real() * re - low.imag() * im) * norm);
++      }
++    });
++    // Mirror rows (uses grid row ix2); iteration i writes row i2 only.
++    dispatch_apply(halfW + 1, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(std::size_t i) {
++      const std::size_t i2 = W2 - i;
++      if (i == 0 || i >= i2) return;
++      const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
++      std::size_t ix2 = grid - halfW + i2;
+       if (ix2 >= grid) ix2 -= grid;
+-      for (std::size_t j = 0; j <= input.image_height / 2; ++j) {
++      std::vector<double> ph(halfH + 1);
++      for (std::size_t j = 0; j <= halfH; ++j) {
+         const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+-        phases[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
++        ph[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
+       }
+-      for (std::size_t j = 0; j < input.image_height; ++j) {
+-        const std::size_t jx = (grid - input.image_height / 2 + j) % grid;
+-        const std::size_t j2 = std::min(j, input.image_height - j);
+-        const double re = std::cos(phases[j2]);
+-        const double im = std::sin(phases[j2]);
+-        // No FFT normalisation factor: ducc0's detail_fft::c2c backwards transform
+-        // is already scaled correctly for this extraction. An earlier 4/grid^2
+-        // here was compensating for the corner-only nm1 scan, and removing that
+-        // bug left the image exactly 4/grid^2 too small - which is how the two
+-        // were disentangled.
++      for (std::size_t j = 0; j < H2; ++j) {
++        const std::size_t jx = (grid - halfH + j) % grid;
++        const std::size_t j2 = std::min(j, H2 - j);
++        const double re = std::cos(ph[j2]);
++        const double im = std::sin(ph[j2]);
+         constexpr double norm = 1.0;
+-        const std::complex<float>& low = grid_values[ix * grid + jx];
+-        dirty[i * input.image_height + j] +=
+-            static_cast<float>((low.real() * re - low.imag() * im) * norm);
+-        if (i > 0 && i < i2) {
+-          const std::complex<float>& high = grid_values[ix2 * grid + jx];
+-          dirty[i2 * input.image_height + j] +=
+-              static_cast<float>((high.real() * re - high.imag() * im) * norm);
+-        }
++        const std::complex<float>& high = gv_ptr[ix2 * grid + jx];
++        dirty[i2 * H2 + j] += static_cast<float>((high.real() * re - high.imag() * im) * norm);
+       }
+-    }
++    });
+   }  // end gi loop
+   }  // end plane group
++  phase_mark("groups+consume");
+   }  // end row chunk
+ 
+   // ---------------- ducc0's apply_global_corrections ----------------
