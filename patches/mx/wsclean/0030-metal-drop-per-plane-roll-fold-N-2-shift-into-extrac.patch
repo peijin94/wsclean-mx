@@ -1,0 +1,144 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 08:40:31 -0400
+Subject: [PATCH 30/30] metal: drop per-plane roll, fold N/2 shift into extract
+ checkerboard
+
+FFT the centered grid in place; cornered[n]=centered[n+N/2] gives
+FFT(cornered)=(-1)^(kx+ky)*FFT(centered) for even N. Removes a full
+2xGxG copy per plane (29ms at 4k, 77s->69s). Rounding differs at 1e-7
+(different FFT summation order); T2 still passes.
+
+Also: hoisted screen jx/sincos/allocs (saves ~5s at 4k), split roll/FFT timers.
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 5a496c72..ff49aab0 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -569,9 +569,14 @@ bool inversion(const InversionInput& input, float* dirty) {
+     return value;
+   };
+ 
+-  std::vector<std::complex<float>> grid_values(static_cast<std::size_t>(grid) * grid);
+   std::vector<double> phases(input.image_height / 2 + 1);
+   const bool skip_screen = debugDouble("MX_METAL_DEBUG_NOSCREEN", 0.0) > 0.0;
++  // Extract index table (geometry-only): jx[j] = (grid-halfH+j) % grid.
++  // Hoisted out of the per-plane screen: 16.8M integer modulos per plane at 4k.
++  const std::size_t W2tab = input.image_width, H2tab = input.image_height;
++  const std::size_t halfWtab = W2tab / 2, halfHtab = H2tab / 2;
++  std::vector<std::size_t> jx_table(H2tab);
++  for (std::size_t j = 0; j < H2tab; ++j) jx_table[j] = (grid - halfHtab + j) % grid;
+   // ducc0's shifting phase (computed in the parallel item pass above).
+   // Phase 1: build one gridding input per non-empty plane. Phase 2 grids them
+   // all in a single command buffer (one wait instead of one per plane); the
+@@ -697,7 +702,7 @@ bool inversion(const InversionInput& input, float* dirty) {
+     for (std::size_t gi = 0; gi < plane_grids.size(); ++gi) {
+       const std::size_t pl = plane_index[gi];
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+-    const GridAccumResult& grid_result = plane_grids[gi];
++    GridAccumResult& grid_result = plane_grids[gi];
+     if (const char* dump_dir = std::getenv("MX_METAL_DEBUG_DUMP_PLANES")) {
+       char path[1024];
+       std::snprintf(path, sizeof(path), "%s/plane%02zu.raw", dump_dir, pl);
+@@ -709,23 +714,28 @@ bool inversion(const InversionInput& input, float* dirty) {
+     }
+     std::chrono::steady_clock::time_point t_fft0, t_fft1;
+     if (dump_timing) t_fft0 = std::chrono::steady_clock::now();
+-    rollToDucc0Frame(grid_result.grid, grid, grid_values);
++    // No roll: FFT the centered grid in place. cornered[n] = centered[n+N/2]
++    // implies FFT(cornered)[k] = (-1)^k * FFT(centered)[k] (N even), so the
++    // shift becomes a checkerboard sign folded into the extract below. This
++    // removes a full 2xGxG copy per plane (~29ms at 4k). Rounding differs
++    // from the rolled FFT at the 1e-7 level (different summation order).
++    auto* plane_grid = reinterpret_cast<std::complex<float>*>(grid_result.grid.data());
+ 
+-    const ducc0::cfmav<std::complex<float>> grid_in(grid_values.data(), {grid, grid});
+-    ducc0::vfmav<std::complex<float>> grid_out(grid_values.data(), {grid, grid});
++    const ducc0::cfmav<std::complex<float>> grid_in(plane_grid, {grid, grid});
++    ducc0::vfmav<std::complex<float>> grid_out(plane_grid, {grid, grid});
+     ducc0::detail_fft::c2c(grid_in, grid_out, {0}, false, 1.0f, input.n_threads);
+     ducc0::detail_fft::c2c(grid_in, grid_out, {1}, false, 1.0f, input.n_threads);
+     if (dump_timing) {
+       t_fft1 = std::chrono::steady_clock::now();
+       using ms = std::chrono::duration<double, std::milli>;
+-      std::fprintf(stderr, "[mx-metal] plane %zu roll_fft=%.2fms\n", pl,
++      std::fprintf(stderr, "[mx-metal] plane %zu fft=%.2fms\n", pl,
+                    ms(t_fft1 - t_fft0).count());
+     }
+ 
+     const double w = w_plane;
+     const std::size_t W2 = input.image_width, H2 = input.image_height;
+     const std::size_t halfW = W2 / 2, halfH = H2 / 2;
+-    const std::complex<float>* gv_ptr = grid_values.data();
++    const std::complex<float>* gv_ptr = plane_grid;
+     // Extract + w-screen in two conflict-free parallel phases (per-row writes
+     // are disjoint within a phase, so results are bit-identical to serial).
+     // Low rows 0..W/2 (uses grid row ix).
+@@ -733,19 +743,29 @@ bool inversion(const InversionInput& input, float* dirty) {
+       const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
+       std::size_t ix = grid - halfW + i;
+       if (ix >= grid) ix -= grid;
+-      std::vector<double> ph(halfH + 1);
++      // Thread-local scratch reused across rows/planes (was: 1M+ mallocs at 4k).
++      thread_local std::vector<double> scr;
++      if (scr.size() < 3 * (halfH + 1)) scr.resize(3 * (halfH + 1));
++      double* ph = scr.data();
++      double* re2 = scr.data() + (halfH + 1);
++      double* im2 = scr.data() + 2 * (halfH + 1);
+       for (std::size_t j = 0; j <= halfH; ++j) {
+         const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+         ph[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
+       }
++      // sincos hoisted per j2 (was: one pair per pixel, 2x redundant via j2).
++      for (std::size_t j = 0; j <= halfH; ++j) {
++        re2[j] = std::cos(ph[j]);
++        im2[j] = std::sin(ph[j]);
++      }
+       for (std::size_t j = 0; j < H2; ++j) {
+-        const std::size_t jx = (grid - halfH + j) % grid;
++        const std::size_t jx = jx_table[j];
+         const std::size_t j2 = std::min(j, H2 - j);
+-        const double re = std::cos(ph[j2]);
+-        const double im = std::sin(ph[j2]);
++        // Checkerboard from the skipped N/2 roll: (-1)^(ix+jx).
++        const float sgn = (((ix + jx) & 1) != 0) ? -1.0f : 1.0f;
+         constexpr double norm = 1.0;
+         const std::complex<float>& low = gv_ptr[ix * grid + jx];
+-        dirty[i * H2 + j] += static_cast<float>((low.real() * re - low.imag() * im) * norm);
++        dirty[i * H2 + j] += static_cast<float>(sgn * (low.real() * re2[j2] - low.imag() * im2[j2]) * norm);
+       }
+     });
+     // Mirror rows (uses grid row ix2); iteration i writes row i2 only.
+@@ -755,19 +775,26 @@ bool inversion(const InversionInput& input, float* dirty) {
+       const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
+       std::size_t ix2 = grid - halfW + i2;
+       if (ix2 >= grid) ix2 -= grid;
+-      std::vector<double> ph(halfH + 1);
++      thread_local std::vector<double> scr2;
++      if (scr2.size() < 3 * (halfH + 1)) scr2.resize(3 * (halfH + 1));
++      double* ph = scr2.data();
++      double* re2 = scr2.data() + (halfH + 1);
++      double* im2 = scr2.data() + 2 * (halfH + 1);
+       for (std::size_t j = 0; j <= halfH; ++j) {
+         const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+         ph[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
+       }
++      for (std::size_t j = 0; j <= halfH; ++j) {
++        re2[j] = std::cos(ph[j]);
++        im2[j] = std::sin(ph[j]);
++      }
+       for (std::size_t j = 0; j < H2; ++j) {
+-        const std::size_t jx = (grid - halfH + j) % grid;
++        const std::size_t jx = jx_table[j];
+         const std::size_t j2 = std::min(j, H2 - j);
+-        const double re = std::cos(ph[j2]);
+-        const double im = std::sin(ph[j2]);
++        const float sgn = (((ix2 + jx) & 1) != 0) ? -1.0f : 1.0f;
+         constexpr double norm = 1.0;
+         const std::complex<float>& high = gv_ptr[ix2 * grid + jx];
+-        dirty[i2 * H2 + j] += static_cast<float>((high.real() * re - high.imag() * im) * norm);
++        dirty[i2 * H2 + j] += static_cast<float>(sgn * (high.real() * re2[j2] - high.imag() * im2[j2]) * norm);
+       }
+     });
+   }  // end gi loop

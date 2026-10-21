@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Sun, 18 Oct 2026 22:28:11 -0400
-Subject: [PATCH 09/29] Metal gridding: degridding kernel, round-trip benchmark
+Subject: [PATCH 09/30] Metal gridding: degridding kernel, round-trip benchmark
  and adjoint check
 
 The w-gridder runs both directions, so the harness now covers both and the

@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Tue, 20 Oct 2026 22:54:36 -0400
-Subject: [PATCH 27/29] metal: profile-driven speedups, 19.3s -> 6.8s on LWA
+Subject: [PATCH 27/30] metal: profile-driven speedups, 19.3s -> 6.8s on LWA
  4-slot dirty
 
 Bottleneck map (was: 4.5s Metal grid + 4.7s CPU FFT/roll/extract + ~10s
