@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 08:51:58 -0400
+Subject: [PATCH 31/31] metal: quiet by default, gate backend notice behind
+ TIMING
+
+The per-inversion 'used/refused' line now prints only on refusal or
+with MX_METAL_DEBUG_TIMING. All progress/timing output was already
+env-gated; error and refusal paths stay unconditional (diagnostic).
+
+diff --git a/wgridder/wgridder.h b/wgridder/wgridder.h
+index 820bef11..6ab2f383 100644
+--- a/wgridder/wgridder.h
++++ b/wgridder/wgridder.h
+@@ -414,9 +414,10 @@ class WGridder final : public WGridderBase {
+                        "rel_max=%.4g n=%zu\n",
+                        max_ref, max_diff, rms / max_ref, max_diff / max_ref, n);
+         }
+-        std::fprintf(stderr, "[mx-metal] inversion %s (%zu rows, %zu x %zu)\n",
+-                     metal_done ? "used" : "refused, falling back to ducc0", n_rows,
+-                     trimmed_width_, trimmed_height_);
++        if (!metal_done || std::getenv("MX_METAL_DEBUG_TIMING") != nullptr)
++          std::fprintf(stderr, "[mx-metal] inversion %s (%zu rows, %zu x %zu)\n",
++                       metal_done ? "used" : "refused, falling back to ducc0", n_rows,
++                       trimmed_width_, trimmed_height_);
+         if (metal_done) {
+           for (size_t k = 0; k < trimmed_width_ * trimmed_height_; ++k) image_[k] += tdirty.raw(k);
+           return;

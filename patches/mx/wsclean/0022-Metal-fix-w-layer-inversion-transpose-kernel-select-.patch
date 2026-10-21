@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Tue, 20 Oct 2026 19:01:24 -0400
-Subject: [PATCH 22/30] Metal: fix w-layer inversion (transpose, kernel select,
+Subject: [PATCH 22/31] Metal: fix w-layer inversion (transpose, kernel select,
  shifting phase)
 
 Grid buffer was [v][u]-ordered but consumed as [u][v]: every image came
