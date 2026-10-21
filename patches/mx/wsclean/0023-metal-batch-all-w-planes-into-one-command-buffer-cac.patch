@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Tue, 20 Oct 2026 19:48:15 -0400
-Subject: [PATCH 23/27] metal: batch all w-planes into one command buffer +
+Subject: [PATCH 23/28] metal: batch all w-planes into one command buffer +
  cache pipelines
 
 gridAccumulate was called once per w-plane, each call recompiling the

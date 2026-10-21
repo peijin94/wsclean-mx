@@ -1,0 +1,155 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 07:29:05 -0400
+Subject: [PATCH 28/28] metal: per-group gather, autoreleasepool drains, batch
+ host-phase timing
+
+
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index 03c23cc8..bd1ebba9 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -651,6 +651,8 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     for (const auto& job : jobs) {
+       if (job.error) std::rethrow_exception(job.error);
+     }
++    const bool dump_timing = std::getenv("MX_METAL_DEBUG_TIMING") != nullptr;
++    const auto t_prep_done = std::chrono::steady_clock::now();
+ 
+     id<MTLCommandQueue> queue = [device newCommandQueue];
+     id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
+@@ -757,6 +759,13 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     }
+     const double gpu_seconds =
+         [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
++    if (dump_timing) {
++      using ms = std::chrono::duration<double, std::milli>;
++      std::fprintf(stderr,
++                   "[mx-metal] batch host prep=%.1fms encode=%.1fms gpu_exec=%.1fms\n",
++                   ms(t_prep_done - host_begin).count(), ms(begin - t_prep_done).count(),
++                   1000.0 * gpu_seconds);
++    }
+ 
+     std::vector<GridAccumResult> results;
+     results.reserve(jobs.size());
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index d2b5c4be..da2f40a7 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -578,12 +578,27 @@ bool inversion(const InversionInput& input, float* dirty) {
+   // weighted item, ~7x items). Planes are independent: build them in parallel
+   // with GCD, one slot per plane, then compact serially in plane order so the
+   // downstream order (and results) are identical to the serial loop.
++  // Group the planes into memory-bounded batches AND gather per group:
++  // the per-plane accumulate vectors total ~2 GB for a full chunk and would
++  // otherwise all coexist with the item-pair lists (~5 GB peak). Gathering,
++  // gridding and consuming one group at a time keeps the peak near one
++  // group's working set. Planes are independent, so results are unchanged.
++  const std::size_t grid_bytes =
++      8 * static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
++  const std::size_t planes_per_group =
++      std::max<std::size_t>(1, (512u << 20) / std::max<std::size_t>(1, grid_bytes));
++  const bool dump_timing = debugDouble("MX_METAL_DEBUG_TIMING", 0.0) > 0.0;
+   std::vector<GridAccumInput> plane_inputs;
+   std::vector<std::size_t> plane_index;
+-  plane_inputs.reserve(layout.nplanes);
+-  plane_index.reserve(layout.nplanes);
+-  std::vector<GridAccumInput> plane_slots(layout.nplanes);
+-  std::vector<char> plane_used(layout.nplanes, 0);
++  for (std::size_t g0 = 0; g0 < layout.nplanes; g0 += planes_per_group) {
++    @autoreleasepool {
++    const std::size_t g1 = std::min(layout.nplanes, g0 + planes_per_group);
++  plane_inputs.clear();
++  plane_index.clear();
++  plane_inputs.reserve(g1 - g0);
++  plane_index.reserve(g1 - g0);
++  std::vector<GridAccumInput> plane_slots(g1 - g0);
++  std::vector<char> plane_used(g1 - g0, 0);
+   std::exception_ptr plane_error;
+   std::mutex plane_error_mutex;
+   // ObjC blocks capture C++ objects by (const) value, which would deep-copy
+@@ -593,10 +608,12 @@ bool inversion(const InversionInput& input, float* dirty) {
+   std::exception_ptr* error_ptr = &plane_error;
+   std::mutex* error_mutex_ptr = &plane_error_mutex;
+   const std::vector<std::size_t>* buckets_ptr = plane_items.data();
+-  dispatch_apply(layout.nplanes,
+-                 dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(std::size_t pl) {
++  const std::size_t group_count = g1 - g0;
++  dispatch_apply(group_count,
++                 dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(std::size_t bi) {
+     @autoreleasepool {
+       try {
++    const std::size_t pl = g0 + bi;
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+     // Gather from the `support` buckets whose spread can reach this plane, with
+     // the w-kernel weight folded into the visibility.
+@@ -638,8 +655,8 @@ bool inversion(const InversionInput& input, float* dirty) {
+       accumulate.visibilities[6 * k + 4] = static_cast<float>(vr * weight);
+       accumulate.visibilities[6 * k + 5] = static_cast<float>(sign * vi * weight);
+     }
+-    slot_ptr[pl] = std::move(accumulate);
+-    used_ptr[pl] = 1;
++    slot_ptr[bi] = std::move(accumulate);
++    used_ptr[bi] = 1;
+     } // end if non-empty
+       } catch (const std::exception&) {
+         std::lock_guard<std::mutex> lock(*error_mutex_ptr);
+@@ -649,28 +666,16 @@ bool inversion(const InversionInput& input, float* dirty) {
+       } // end @autoreleasepool
+     });
+   if (plane_error) std::rethrow_exception(plane_error);
+-  for (std::size_t pl = 0; pl < layout.nplanes; ++pl) {
+-    if (!plane_used[pl]) continue;
+-    plane_inputs.push_back(std::move(plane_slots[pl]));
+-    plane_index.push_back(pl);
++  for (std::size_t bi = 0; bi < group_count; ++bi) {
++    if (!plane_used[bi]) continue;
++    plane_inputs.push_back(std::move(plane_slots[bi]));
++    plane_index.push_back(g0 + bi);
+   }
+   phase_mark("gather");
+-  // Group the planes into memory-bounded batches: each plane holds a full
+-  // grid (8*grid^2 bytes in the Metal buffer plus the result copy), so
+-  // gridAccumulateBatched over all planes at once needs
+-  // 2*nplanes*grid_bytes. A 201-plane full-sky layout needs ~10 GB that
+-  // way and stalls the machine; groups of <=256 MB behave identically
+-  // (planes are independent until the dirty-image sum below).
+-  const std::size_t grid_bytes =
+-      8 * static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
+-  const std::size_t planes_per_group =
+-      std::max<std::size_t>(1, (512u << 20) / std::max<std::size_t>(1, grid_bytes));
+-  const bool dump_timing = debugDouble("MX_METAL_DEBUG_TIMING", 0.0) > 0.0;
+-  for (std::size_t g0 = 0; g0 < plane_inputs.size(); g0 += planes_per_group) {
+-    const std::size_t g1 = std::min(plane_inputs.size(), g0 + planes_per_group);
++  {
+     std::vector<GridAccumInput> group_inputs;
+-    group_inputs.reserve(g1 - g0);
+-    for (std::size_t g = g0; g < g1; ++g) group_inputs.push_back(std::move(plane_inputs[g]));
++    group_inputs.reserve(plane_inputs.size());
++    for (std::size_t g = 0; g < plane_inputs.size(); ++g) group_inputs.push_back(std::move(plane_inputs[g]));
+     std::vector<GridAccumResult> plane_grids;
+     try {
+       plane_grids = gridAccumulateBatched(std::move(group_inputs));
+@@ -688,8 +693,7 @@ bool inversion(const InversionInput& input, float* dirty) {
+                    plane_grids.empty() ? 0.0 : plane_grids[0].host_seconds * 1000.0);
+     }
+     for (std::size_t gi = 0; gi < plane_grids.size(); ++gi) {
+-      const std::size_t g = g0 + gi;
+-      const std::size_t pl = plane_index[g];
++      const std::size_t pl = plane_index[gi];
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+     const GridAccumResult& grid_result = plane_grids[gi];
+     if (const char* dump_dir = std::getenv("MX_METAL_DEBUG_DUMP_PLANES")) {
+@@ -765,8 +769,10 @@ bool inversion(const InversionInput& input, float* dirty) {
+       }
+     });
+   }  // end gi loop
+-  }  // end plane group
++  }  // end group block
+   phase_mark("groups+consume");
++  }  // end autoreleasepool
++  }  // end g0 group loop
+   }  // end row chunk
+ 
+   // ---------------- ducc0's apply_global_corrections ----------------
