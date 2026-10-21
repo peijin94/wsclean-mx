@@ -32,7 +32,7 @@ fi
   "$ROOT/build-mx-metal/_deps/schaapcommon-build/libschaapcommon.a" \
   "$DUCC0/math/gridding_kernel.cc" "$DUCC0/math/gl_integrator.cc" \
   "$DUCC0/infra/threading.cc" "$DUCC0/infra/string_utils.cc" "$DUCC0/infra/mav.cc" \
-  -framework Metal -framework Foundation \
+  -framework Metal -framework Foundation -framework Accelerate \
   "${LIBS[@]+"${LIBS[@]}"}" -o "$TOOL"
 
 "$TOOL" "$@"

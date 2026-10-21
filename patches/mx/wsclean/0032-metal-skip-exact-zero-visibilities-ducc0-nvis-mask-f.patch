@@ -1,0 +1,234 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 10:18:35 -0400
+Subject: [PATCH 32/32] metal: skip exact-zero visibilities (ducc0 nvis mask),
+ float vForce screens
+
+Count only nonzero ms for kernel selection (ducc0's nvis excludes
+flagged/zero-weight); skip zero items in gather (exact: zero adds zero).
+LWA: 37% fewer taps, 134/266 planes go empty-skipped, occupancy cols
+41%->10%. 4096: 70.8s->37.6s. Float trig + vvsincosf screens; screen
+timer split.
+
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 51300d6c..d8de9d83 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -19,7 +19,8 @@ set_source_files_properties(metaldevice.mm metalinversion.mm PROPERTIES COMPILE_
+ 
+ find_library(MX_METAL_FRAMEWORK Metal REQUIRED)
+ find_library(MX_FOUNDATION_FRAMEWORK Foundation REQUIRED)
+-target_link_libraries(mx-metal PUBLIC ${MX_METAL_FRAMEWORK} ${MX_FOUNDATION_FRAMEWORK})
++find_library(MX_ACCELERATE_FRAMEWORK Accelerate REQUIRED)
++target_link_libraries(mx-metal PUBLIC ${MX_METAL_FRAMEWORK} ${MX_FOUNDATION_FRAMEWORK} ${MX_ACCELERATE_FRAMEWORK})
+ 
+ # Differential self-test: the Metal gridding accumulator against a float64 CPU
+ # twin of the same arithmetic. Run it from the build directory:
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index ff49aab0..c84121cb 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -19,6 +19,9 @@
+ #include <exception>
+ #include <mutex>
+ #include <vector>
++#ifdef __APPLE__
++#include <Accelerate/Accelerate.h>
++#endif
+ 
+ namespace mx::metal {
+ namespace {
+@@ -240,7 +243,21 @@ bool makeGeometry(const InversionInput& input, bool w_gridding, double w_range,
+     }
+   }
+   double ofactor = 0.0;
+-  const std::size_t index = chooseKernel(candidates, image_size, input.n_rows * input.n_channels, input.n_threads,
++  // ducc0 counts only visibilities with norm(ms)*wgt*mask != 0 (its nvis):
++  // flagged and zero-weight visibilities are excluded from the cost model
++  // AND from gridding. Our ms arrives weighted, so exact zeros are exactly
++  // ducc0's excluded set. Using all rows*channels (incl. ~37% zeros on LWA)
++  // biases kernel selection and grids 1.6x dead taps.
++  std::size_t nvis_nonzero = 0;
++  {
++    const std::complex<float>* msp = input.ms;
++    const std::size_t n = input.n_rows * input.n_channels;
++    for (std::size_t k = 0; k < n; ++k) {
++      const std::complex<float>& v = msp[k];
++      if (v.real() != 0.0f || v.imag() != 0.0f) ++nvis_nonzero;
++    }
++  }
++  const std::size_t index = chooseKernel(candidates, image_size, nvis_nonzero, input.n_threads,
+                                          w_gridding, nm1min, nm1max, w_range, ofactor, out.nu);
+   out.kernel = ducc0::selectKernel(index);
+   if (!out.kernel) return false;
+@@ -629,11 +646,37 @@ bool inversion(const InversionInput& input, float* dirty) {
+     for (long bucket = std::max<long>(0, first_bucket); bucket <= static_cast<long>(pl); ++bucket) {
+       if (bucket >= static_cast<long>(layout.nplanes)) break;
+       for (const std::size_t item : buckets_ptr[static_cast<std::size_t>(bucket)]) {
++        // Exact-zero visibilities (flagged/zero-weight) are excluded, like
++        // ducc0's nvis mask. Zero contributes zero, so this is exact.
++        const std::size_t mrow = r0 + item / input.n_channels;
++        const std::size_t mch = item % input.n_channels;
++        const std::complex<float>& mval = input.ms[mrow * input.n_channels + mch];
++        if (mval.real() == 0.0f && mval.imag() == 0.0f) continue;
+         const double w = wlam_ptr[item];
+         const double weight = wWeight(w, w_plane, pl);
+         if (weight != 0.0) weighted_items.emplace_back(item, weight);
+       }
+     }
++    if (std::getenv("MX_METAL_DEBUG_OCCUPANCY") != nullptr) {
++      std::vector<unsigned char> orows(grid, 0), ocols(grid, 0);
++      const int reach = static_cast<int>(support / 2) + 1;
++      for (const auto& wi : weighted_items) {
++        const std::size_t item = wi.first;
++        const int bx = static_cast<int>(split_ptr[4 * item + 0]);
++        const int by = static_cast<int>(split_ptr[4 * item + 2]);
++        for (int d = -reach; d <= reach; ++d) {
++          int cx = bx + d, cy = by + d;
++          cx %= static_cast<int>(grid); if (cx < 0) cx += grid;
++          cy %= static_cast<int>(grid); if (cy < 0) cy += grid;
++          ocols[cx] = 1; orows[cy] = 1;
++        }
++      }
++      std::size_t nr = 0, nc = 0;
++      for (auto v : orows) nr += v;
++      for (auto v : ocols) nc += v;
++      std::fprintf(stderr, "[mx-metal] occ plane %zu items=%zu rows=%zu/%zu cols=%zu/%zu\n",
++                   pl, weighted_items.size(), nr, grid, nc, grid);
++    }
+     if (!weighted_items.empty()) {
+     if (debugDouble("MX_METAL_DEBUG_WEIGHTS", 0.0) > 0.0) {
+       double sum = 0.0;
+@@ -643,24 +686,28 @@ bool inversion(const InversionInput& input, float* dirty) {
+     }
+     GridAccumInput accumulate;
+     fillAccumInput(input, geometry, accumulate);
+-    accumulate.visibilities.resize(6 * weighted_items.size());
++    // Skip exact-zero visibilities (flagged/zero-weight): ducc0 excludes
++    // them from nvis AND from gridding. Zero contributes zero, so skipping
++    // is exact. This cuts ~37% of taps on LWA and shrinks occupancy.
++    accumulate.visibilities.reserve(6 * weighted_items.size());
+     for (std::size_t k = 0; k < weighted_items.size(); ++k) {
+       const std::size_t item = weighted_items[k].first;
+       const double weight = weighted_items[k].second;
+       const std::size_t row = r0 + item / input.n_channels;
+       const std::size_t ch = item % input.n_channels;
+-      const double sign = static_cast<double>(wsign_ptr[item]);
+-      accumulate.visibilities[6 * k + 0] = split_ptr[4 * item + 0];
+-      accumulate.visibilities[6 * k + 1] = split_ptr[4 * item + 1];
+-      accumulate.visibilities[6 * k + 2] = split_ptr[4 * item + 2];
+-      accumulate.visibilities[6 * k + 3] = split_ptr[4 * item + 3];
+       const std::complex<float>& value = input.ms[row * input.n_channels + ch];
++      if (value.real() == 0.0f && value.imag() == 0.0f) continue;
++      const double sign = static_cast<double>(wsign_ptr[item]);
++      accumulate.visibilities.push_back(split_ptr[4 * item + 0]);
++      accumulate.visibilities.push_back(split_ptr[4 * item + 1]);
++      accumulate.visibilities.push_back(split_ptr[4 * item + 2]);
++      accumulate.visibilities.push_back(split_ptr[4 * item + 3]);
+       // Shifting phase first, conjugation second - ducc0's order (v *= phases,
+       // then vi = v.imag*imflip). The phase uses the signed w (sign*|w|).
+       const float vr = value.real() * wphre_ptr[item] - value.imag() * wphim_ptr[item];
+       const float vi = value.real() * wphim_ptr[item] + value.imag() * wphre_ptr[item];
+-      accumulate.visibilities[6 * k + 4] = static_cast<float>(vr * weight);
+-      accumulate.visibilities[6 * k + 5] = static_cast<float>(sign * vi * weight);
++      accumulate.visibilities.push_back(static_cast<float>(vr * weight));
++      accumulate.visibilities.push_back(static_cast<float>(sign * vi * weight));
+     }
+     slot_ptr[bi] = std::move(accumulate);
+     used_ptr[bi] = 1;
+@@ -731,6 +778,8 @@ bool inversion(const InversionInput& input, float* dirty) {
+       std::fprintf(stderr, "[mx-metal] plane %zu fft=%.2fms\n", pl,
+                    ms(t_fft1 - t_fft0).count());
+     }
++    std::chrono::steady_clock::time_point t_scr0, t_scr1;
++    if (dump_timing) t_scr0 = std::chrono::steady_clock::now();
+ 
+     const double w = w_plane;
+     const std::size_t W2 = input.image_width, H2 = input.image_height;
+@@ -744,28 +793,27 @@ bool inversion(const InversionInput& input, float* dirty) {
+       std::size_t ix = grid - halfW + i;
+       if (ix >= grid) ix -= grid;
+       // Thread-local scratch reused across rows/planes (was: 1M+ mallocs at 4k).
+-      thread_local std::vector<double> scr;
++      thread_local std::vector<float> scr;
+       if (scr.size() < 3 * (halfH + 1)) scr.resize(3 * (halfH + 1));
+-      double* ph = scr.data();
+-      double* re2 = scr.data() + (halfH + 1);
+-      double* im2 = scr.data() + 2 * (halfH + 1);
++      // Float trig: the grid values are float, so double trig is false
++      // precision. Vectorized via Accelerate vForce (~8x scalar libm).
++      float* ph = scr.data();
++      float* re2 = scr.data() + (halfH + 1);
++      float* im2 = scr.data() + 2 * (halfH + 1);
+       for (std::size_t j = 0; j <= halfH; ++j) {
+         const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+-        ph[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
+-      }
+-      // sincos hoisted per j2 (was: one pair per pixel, 2x redundant via j2).
+-      for (std::size_t j = 0; j <= halfH; ++j) {
+-        re2[j] = std::cos(ph[j]);
+-        im2[j] = std::sin(ph[j]);
++        ph[j] = static_cast<float>(skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift));
+       }
++      int nph = static_cast<int>(halfH + 1);
++      vvsincosf(im2, re2, ph, &nph);
+       for (std::size_t j = 0; j < H2; ++j) {
+         const std::size_t jx = jx_table[j];
+         const std::size_t j2 = std::min(j, H2 - j);
+         // Checkerboard from the skipped N/2 roll: (-1)^(ix+jx).
+         const float sgn = (((ix + jx) & 1) != 0) ? -1.0f : 1.0f;
+-        constexpr double norm = 1.0;
++        constexpr float norm = 1.0f;
+         const std::complex<float>& low = gv_ptr[ix * grid + jx];
+-        dirty[i * H2 + j] += static_cast<float>(sgn * (low.real() * re2[j2] - low.imag() * im2[j2]) * norm);
++        dirty[i * H2 + j] += sgn * (low.real() * re2[j2] - low.imag() * im2[j2]) * norm;
+       }
+     });
+     // Mirror rows (uses grid row ix2); iteration i writes row i2 only.
+@@ -775,29 +823,33 @@ bool inversion(const InversionInput& input, float* dirty) {
+       const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
+       std::size_t ix2 = grid - halfW + i2;
+       if (ix2 >= grid) ix2 -= grid;
+-      thread_local std::vector<double> scr2;
++      thread_local std::vector<float> scr2;
+       if (scr2.size() < 3 * (halfH + 1)) scr2.resize(3 * (halfH + 1));
+-      double* ph = scr2.data();
+-      double* re2 = scr2.data() + (halfH + 1);
+-      double* im2 = scr2.data() + 2 * (halfH + 1);
++      float* ph = scr2.data();
++      float* re2 = scr2.data() + (halfH + 1);
++      float* im2 = scr2.data() + 2 * (halfH + 1);
+       for (std::size_t j = 0; j <= halfH; ++j) {
+         const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+-        ph[j] = skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift);
+-      }
+-      for (std::size_t j = 0; j <= halfH; ++j) {
+-        re2[j] = std::cos(ph[j]);
+-        im2[j] = std::sin(ph[j]);
++        ph[j] = static_cast<float>(skip_screen ? 0.0 : -kTwoPi * w * (nm1Of(l, m) + layout.nshift));
+       }
++      int nph = static_cast<int>(halfH + 1);
++      vvsincosf(im2, re2, ph, &nph);
+       for (std::size_t j = 0; j < H2; ++j) {
+         const std::size_t jx = jx_table[j];
+         const std::size_t j2 = std::min(j, H2 - j);
+         const float sgn = (((ix2 + jx) & 1) != 0) ? -1.0f : 1.0f;
+-        constexpr double norm = 1.0;
++        constexpr float norm = 1.0f;
+         const std::complex<float>& high = gv_ptr[ix2 * grid + jx];
+-        dirty[i2 * H2 + j] += static_cast<float>(sgn * (high.real() * re2[j2] - high.imag() * im2[j2]) * norm);
++        dirty[i2 * H2 + j] += sgn * (high.real() * re2[j2] - high.imag() * im2[j2]) * norm;
+       }
+     });
+-  }  // end gi loop
++    if (dump_timing) {
++      t_scr1 = std::chrono::steady_clock::now();
++      using ms = std::chrono::duration<double, std::milli>;
++      std::fprintf(stderr, "[mx-metal] plane %zu screen=%.2fms\n", pl,
++                   ms(t_scr1 - t_scr0).count());
++    }
++   }  // end gi loop
+   }  // end group block
+   phase_mark("groups+consume");
+   }  // end autoreleasepool

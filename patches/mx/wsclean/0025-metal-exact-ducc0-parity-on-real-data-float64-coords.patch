@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Tue, 20 Oct 2026 22:03:32 -0400
-Subject: [PATCH 25/31] metal: exact ducc0 parity on real data (float64 coords,
+Subject: [PATCH 25/32] metal: exact ducc0 parity on real data (float64 coords,
  wrap, odd anchor)
 
 Three measurement-found discrepancies, all from imaging real LOFAR data
