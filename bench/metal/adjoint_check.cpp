@@ -28,17 +28,21 @@ int main() {
   in.kernel_degree = 3;
   in.kernel_coefficients = coeff;
   in.variant = mx::metal::Variant::kPoly;
-  in.visibilities.resize(4 * nvis);
+  in.visibilities.resize(6 * nvis);
   std::vector<std::complex<double>> v(nvis);
   for (std::size_t k = 0; k < nvis; ++k) {
     const float u = static_cast<float>(uv(rng));
     const float vv = static_cast<float>(uv(rng));
     const double re = nrm(rng), im = nrm(rng);
     v[k] = {re, im};
-    in.visibilities[4 * k + 0] = u;
-    in.visibilities[4 * k + 1] = vv;
-    in.visibilities[4 * k + 2] = static_cast<float>(re);
-    in.visibilities[4 * k + 3] = static_cast<float>(im);
+    const double base_u = std::floor(static_cast<double>(u));
+    const double base_v = std::floor(static_cast<double>(vv));
+    in.visibilities[6 * k + 0] = static_cast<float>(base_u);
+    in.visibilities[6 * k + 1] = static_cast<float>(static_cast<double>(u) - base_u);
+    in.visibilities[6 * k + 2] = static_cast<float>(base_v);
+    in.visibilities[6 * k + 3] = static_cast<float>(static_cast<double>(vv) - base_v);
+    in.visibilities[6 * k + 4] = static_cast<float>(re);
+    in.visibilities[6 * k + 5] = static_cast<float>(im);
   }
   if (!mx::metal::deviceInfo().available) {
     std::printf("adjoint status=SKIP no-metal-device\n");
@@ -54,11 +58,12 @@ int main() {
     grid[2 * i + 0] = static_cast<float>(re);
     grid[2 * i + 1] = static_cast<float>(im);
   }
-  // u_v holds u,v per visibility (4 floats each).
+  // u_v holds u,v per visibility (4 floats each; the degrid path keeps its own
+  // buffer and reconstructs the cell the old way).
   std::vector<float> uv_in(4 * nvis);
   for (std::size_t k = 0; k < nvis; ++k) {
-    uv_in[4 * k + 0] = in.visibilities[4 * k + 0];
-    uv_in[4 * k + 1] = in.visibilities[4 * k + 1];
+    uv_in[4 * k + 0] = in.visibilities[6 * k + 0] + in.visibilities[6 * k + 1];
+    uv_in[4 * k + 1] = in.visibilities[6 * k + 2] + in.visibilities[6 * k + 3];
   }
   const mx::metal::DegridResult d =
       mx::metal::gridDegrid(uv_in, grid, G, supp, coeff, 3);

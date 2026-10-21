@@ -90,10 +90,19 @@ KernelCoefficients loadKernel(const std::string& path) {
 }
 
 struct Data {
-  std::vector<float> visibilities;  // u, v, re, im per row, uv in CELLS
+  std::vector<float> visibilities;  // base, frac per axis, re, im; uv in CELLS
   std::size_t rows = 0;
   double v_max_lambda = 0.0;
 };
+
+namespace {
+// Split a cell coordinate (double) into integer base + [0, 1) fraction.
+void pushSplitCell(std::vector<float>& out, double cell) {
+  const double base = std::floor(cell);
+  out.push_back(static_cast<float>(base));
+  out.push_back(static_cast<float>(cell - base));
+}
+}  // namespace
 
 Data makeSynthetic(std::size_t nvis, std::size_t cells) {
   std::mt19937_64 random(20261018);  // same generator as the probe and the CPU tool
@@ -101,15 +110,15 @@ Data makeSynthetic(std::size_t nvis, std::size_t cells) {
                                            0.45f * static_cast<float>(cells));
   std::normal_distribution<float> flux(1.0f, 0.25f);
   Data data;
-  data.visibilities.resize(4 * nvis);
+  data.visibilities.reserve(6 * nvis);
   for (std::size_t v = 0; v < nvis; ++v) {
-    data.visibilities[4 * v + 0] = uv(random);
-    data.visibilities[4 * v + 1] = uv(random);
-    data.visibilities[4 * v + 2] = flux(random);
-    data.visibilities[4 * v + 3] = flux(random) * 0.5f;
-    data.v_max_lambda = std::max(
-        {data.v_max_lambda, std::fabs(static_cast<double>(data.visibilities[4 * v + 0])),
-         std::fabs(static_cast<double>(data.visibilities[4 * v + 1]))});
+    const double cu = static_cast<double>(uv(random));
+    const double cv = static_cast<double>(uv(random));
+    pushSplitCell(data.visibilities, cu);
+    pushSplitCell(data.visibilities, cv);
+    data.visibilities.push_back(flux(random));
+    data.visibilities.push_back(flux(random) * 0.5f);
+    data.v_max_lambda = std::max({data.v_max_lambda, std::fabs(cu), std::fabs(cv)});
   }
   data.rows = nvis;
   return data;
@@ -118,17 +127,17 @@ Data makeSynthetic(std::size_t nvis, std::size_t cells) {
 Data loadReal(const std::string& path, double frequency, double lambda_per_cell) {
   const mxbench::RealVisibilitySet set = mxbench::LoadUvwFile(path);
   Data data;
-  data.visibilities.resize(4 * set.rows.size());
+  data.visibilities.reserve(6 * set.rows.size());
   const double to_cells = frequency / kSpeedOfLight / lambda_per_cell;
   for (std::size_t v = 0; v < set.rows.size(); ++v) {
     const mxbench::RealVisibility& row = set.rows[v];
-    data.visibilities[4 * v + 0] = static_cast<float>(row.u_m * to_cells);
-    data.visibilities[4 * v + 1] = static_cast<float>(row.v_m * to_cells);
-    data.visibilities[4 * v + 2] = row.re;
-    data.visibilities[4 * v + 3] = row.im;
-    data.v_max_lambda = std::max(
-        {data.v_max_lambda, std::fabs(static_cast<double>(data.visibilities[4 * v + 0])),
-         std::fabs(static_cast<double>(data.visibilities[4 * v + 1]))});
+    const double cu = row.u_m * to_cells;
+    const double cv = row.v_m * to_cells;
+    pushSplitCell(data.visibilities, cu);
+    pushSplitCell(data.visibilities, cv);
+    data.visibilities.push_back(row.re);
+    data.visibilities.push_back(row.im);
+    data.v_max_lambda = std::max({data.v_max_lambda, std::fabs(cu), std::fabs(cv)});
   }
   data.rows = set.rows.size();
   return data;
@@ -349,10 +358,17 @@ int main(int argc, char** argv) {
     for (std::size_t v = 0; v < data.rows; ++v) {
       // uvws are metres on ducc0's side; the data are stored in cells of one
       // wavelength, so metres = cells * c / f with f chosen as 1 Hz here.
-      uvw[3 * v + 0] = data.visibilities[4 * v + 0];
-      uvw[3 * v + 1] = data.visibilities[4 * v + 1];
+      // Reconstruct the cell in double from the split pair (exact for the
+      // synthetic data, 1e-7 for real data - strictly better than the old
+      // single-float storage).
+      const double cell_u = static_cast<double>(data.visibilities[6 * v + 0]) +
+                            static_cast<double>(data.visibilities[6 * v + 1]);
+      const double cell_v = static_cast<double>(data.visibilities[6 * v + 2]) +
+                            static_cast<double>(data.visibilities[6 * v + 3]);
+      uvw[3 * v + 0] = cell_u;
+      uvw[3 * v + 1] = cell_v;
       uvw[3 * v + 2] = 0.0;
-      ms[v] = std::complex<float>(data.visibilities[4 * v + 2], data.visibilities[4 * v + 3]);
+      ms[v] = std::complex<float>(data.visibilities[6 * v + 4], data.visibilities[6 * v + 5]);
     }
     const ducc0::cmav<double, 2> uvw_ma(uvw.data(), {data.rows, 3});
     const ducc0::cmav<size_t, 1> freqlist_id =

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Peijin Zhang <peijin@ustc.edu>
 Date: Sat, 17 Oct 2026 17:25:15 -0400
-Subject: [PATCH 02/24] ContiguousMSReader: read MS columns in row blocks
+Subject: [PATCH 02/25] ContiguousMSReader: read MS columns in row blocks
 
 Reading DATA/FLAG/WEIGHT/UVW row by row across columns thrashes the 64 KB
 casacore StManArrayFile buffer when all columns share one storage manager

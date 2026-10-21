@@ -1,0 +1,875 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 20 Oct 2026 22:03:32 -0400
+Subject: [PATCH 25/25] metal: exact ducc0 parity on real data (float64 coords,
+ wrap, odd anchor)
+
+Three measurement-found discrepancies, all from imaging real LOFAR data
+through -mgpu (synthetic probes never exercised these regimes):
+
+1. float32 cell coordinates quantise the sub-cell fraction to ulp(cell)
+   (6e-5 at 784 cells, 1e-3 at 15000): split into integer base + [0,1)
+   fraction on the CPU in double, 6 floats per visibility.
+2. ducc0 wraps out-of-grid visibilities into the grid (getpix frac);
+   we culled them (23% of LOFAR rows): wrap centred coords mod grid on
+   the CPU, wrap taps mod grid in every kernel (matches ducc0 dump()).
+3. Odd-support tap window: poly wrote 6 taps for W=7 (missing the -3 tap)
+   and anchored on floor where ducc0 anchors round-half-up (iu0 =
+   floor(u - supp/2 + 1)); base is now round-half-up for odd support,
+   floor for even (exact there).
+
+Real LOFAR 3C196 dirty via -mgpu: T2 rel_rms 3.6e-03 -> 4.6e-06
+(limit 1e-4). Synthetic w-sweep: 1.28e-05 -> 1.5e-07. Single-vis:
+2.6e-04 -> 3e-07.
+
+diff --git a/main/commandline.cpp b/main/commandline.cpp
+index 7601c709..d35eff9f 100644
+--- a/main/commandline.cpp
++++ b/main/commandline.cpp
+@@ -298,9 +298,9 @@ Options can be:
+ 
+   ** GRIDDER-SPECIFIC SETTINGS **
+ -mgpu
+-Use the experimental Apple Metal backend for gridding when the data allow an
+-exact 2-D inversion (single frequency, negligible w-term). Falls back to the CPU
+-otherwise. mx fork only, macOS only.
++Use the experimental Apple Metal backend for gridding (2-D and w-layer
++paths, both verified against ducc0). Falls back to the CPU wherever the
++data need maths the GPU does not perform exactly. mx fork only, macOS only.
+ 
+ -wstack-nwlayers <nwlayers>
+    Number of w-layers to use. Default: minimum suggested #w-layers for first MS.
+diff --git a/metal/metaldevice.h b/metal/metaldevice.h
+index 48fd3f80..3a7d309c 100644
+--- a/metal/metaldevice.h
++++ b/metal/metaldevice.h
+@@ -65,7 +65,13 @@ struct GridAccumInput {
+   // (degree+1) monomial coefficients in the local coordinate, interval-major.
+   std::vector<float> kernel_coefficients;
+   std::size_t kernel_degree = 0;
+-  // Visibilities: 4 floats each (u, v in grid coordinates, then re, im).
++  // Visibilities: 6 floats each (base_x, frac_x, base_y, frac_y, re, im).
++  // The grid coordinate is split on the CPU in double precision: base is the
++  // integer cell (exact as float for |base| < 2^24) and frac in [0, 1) carries
++  // the sub-cell position with full 24-bit precision. Storing the coordinate
++  // as one float32 quantises the fraction to ulp(cell) (6e-5 at 784 cells,
++  // 1e-3 at 15000), which corrupts kernel interpolation for long baselines
++  // (measured: 3e-04 on real LOFAR data, 1e-07 on the small-cell subset).
+   std::vector<float> visibilities;
+ };
+ 
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index 05c73e21..dfd3c11d 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -101,53 +101,115 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+   if (input.support < 2) {
+     fail("support must be at least 2");
+   }
+-  if (input.visibilities.size() % 4 != 0) {
+-    fail("visibility array must hold four floats per visibility");
++  if (input.visibilities.size() % 6 != 0) {
++    fail("visibility array must hold six floats per visibility");
+   }
+   const std::size_t g = input.grid_size;
+   const std::size_t tiles_per_row = g / tile;
+-  const std::size_t visibility_count = input.visibilities.size() / 4;
++  const std::size_t visibility_count = input.visibilities.size() / 6;
+ 
+   TileBuckets buckets;
+   buckets.tiles_per_row = tiles_per_row;
+   buckets.start.assign(tiles_per_row * tiles_per_row + 1, 0);
+ 
+   // Pass one: count. A visibility is listed in every tile its support touches.
+-  auto tilesOf = [&](const float* visibility, std::size_t& x0, std::size_t& x1,
+-                     std::size_t& y0, std::size_t& y1) {
+-    // Floor-anchored window, identical to the poly kernel: it writes cells
+-    // i0 + j for j in [-(support-1)/2, support/2] with i0 = floor(u) + g/2
+-    // (verified against ducc0's getpix/prep cell selection). The tile range
+-    // must cover every tile the support touches; a narrowed window drops edge
+-    // taps at tile boundaries.
++  // The integer base cell is exact (no float floor of large coordinates); the
++  // window [base - half, base + half] conservatively covers every kernel
++  // variant's tap range (poly writes [base-half+1, base+half], the
++  // round-anchored kernels [base-half, base+half-1] with the centre at base
++  // or base+1).
++  // Taps wrap modulo the grid exactly as ducc0's dump() does (periodic grid):
++  // a window crossing the edge becomes two segments. Nothing is culled for
++  // uv position; every visibility's taps land in-grid.
++  struct TileRect {
++    std::size_t x0, x1, y0, y1;
++  };
++  // The tile rectangles covering a visibility's support window. The window
++  // may cross the grid edge; taps wrap modulo the grid (ducc0's dump() is
++  // periodic), so a crossing window becomes two segments per axis, up to four
++  // rectangles. Windows wider than the grid cannot occur (support << grid).
++  auto tilesOf = [&](const float* visibility, TileRect* rects) -> std::size_t {
+     const long centre_index = static_cast<long>(g) / 2;
+-    const long half_low = (static_cast<long>(input.support) - 1) / 2;
+-    const long half_high = static_cast<long>(input.support) / 2;
+-    const long centre_x = static_cast<long>(std::floor(static_cast<double>(visibility[0]))) +
+-                          centre_index;
+-    const long centre_y = static_cast<long>(std::floor(static_cast<double>(visibility[1]))) +
+-                          centre_index;
+-    const long first_x = centre_x - half_low;
+-    const long first_y = centre_y - half_low;
+-    const long last_x = centre_x + half_high;
+-    const long last_y = centre_y + half_high;
+-    if (last_x < 0 || first_x > static_cast<long>(g) - 1 || last_y < 0 ||
+-        first_y > static_cast<long>(g) - 1) {
+-      return false;
++    const long half = static_cast<long>(input.support) / 2;
++    const long base_x = static_cast<long>(visibility[0]);
++    const long base_y = static_cast<long>(visibility[2]);
++    const long first_x = base_x + centre_index - half;
++    const long last_x = base_x + centre_index + half;
++    const long first_y = base_y + centre_index - half;
++    const long last_y = base_y + centre_index + half;
++    const long n = static_cast<long>(g);
++    // Split each axis into the in-grid segments of the (possibly wrapping)
++    // window. A window fully covering the grid cannot occur.
++    long xs[4] = {0, -1, 0, -1};
++    long ys[4] = {0, -1, 0, -1};
++    int nx = 0, ny = 0;
++    if (first_x < 0) {
++      xs[0] = first_x + n;
++      xs[1] = n - 1;
++      nx = 2;
++      if (last_x >= 0) {
++        xs[2] = 0;
++        xs[3] = std::min(last_x, n - 1);
++        nx = 4;
++      }
++    } else if (first_x >= n) {
++      xs[0] = first_x - n;
++      xs[1] = std::min(last_x - n, n - 1);
++      nx = 2;
++    } else {
++      xs[0] = first_x;
++      xs[1] = std::min(last_x, n - 1);
++      nx = 2;
++      if (last_x >= n) {
++        xs[2] = 0;
++        xs[3] = last_x - n;
++        nx = 4;
++      }
++    }
++    if (first_y < 0) {
++      ys[0] = first_y + n;
++      ys[1] = n - 1;
++      ny = 2;
++      if (last_y >= 0) {
++        ys[2] = 0;
++        ys[3] = std::min(last_y, n - 1);
++        ny = 4;
++      }
++    } else if (first_y >= n) {
++      ys[0] = first_y - n;
++      ys[1] = std::min(last_y - n, n - 1);
++      ny = 2;
++    } else {
++      ys[0] = first_y;
++      ys[1] = std::min(last_y, n - 1);
++      ny = 2;
++      if (last_y >= n) {
++        ys[2] = 0;
++        ys[3] = last_y - n;
++        ny = 4;
++      }
++    }
++    std::size_t count = 0;
++    for (int ix = 0; ix < nx; ix += 2) {
++      for (int iy = 0; iy < ny; iy += 2) {
++        TileRect& r = rects[count++];
++        r.x0 = static_cast<std::size_t>(xs[ix]) / tile;
++        r.x1 = static_cast<std::size_t>(xs[ix + 1]) / tile;
++        r.y0 = static_cast<std::size_t>(ys[iy]) / tile;
++        r.y1 = static_cast<std::size_t>(ys[iy + 1]) / tile;
++      }
+     }
+-    x0 = static_cast<std::size_t>(std::max<long>(first_x, 0)) / tile;
+-    x1 = static_cast<std::size_t>(std::max<long>(last_x, 0)) / tile;
+-    y0 = static_cast<std::size_t>(std::max<long>(first_y, 0)) / tile;
+-    y1 = static_cast<std::size_t>(std::max<long>(last_y, 0)) / tile;
+-    return true;
++    return count;
+   };
+ 
+   for (std::size_t v = 0; v < visibility_count; ++v) {
+-    std::size_t x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+-    if (!tilesOf(&input.visibilities[4 * v], x0, x1, y0, y1)) continue;
+-    for (std::size_t ty = y0; ty <= y1; ++ty) {
+-      for (std::size_t tx = x0; tx <= x1; ++tx) {
+-        ++buckets.start[ty * tiles_per_row + tx + 1];
++    TileRect rects[4];
++    const std::size_t nrects = tilesOf(&input.visibilities[6 * v], rects);
++    for (std::size_t r = 0; r < nrects; ++r) {
++      for (std::size_t ty = rects[r].y0; ty <= rects[r].y1; ++ty) {
++        for (std::size_t tx = rects[r].x0; tx <= rects[r].x1; ++tx) {
++          ++buckets.start[ty * tiles_per_row + tx + 1];
++        }
+       }
+     }
+   }
+@@ -159,11 +221,13 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+   // Pass two: fill, using a moving cursor per tile.
+   std::vector<unsigned> cursor(buckets.start.begin(), buckets.start.end() - 1);
+   for (std::size_t v = 0; v < visibility_count; ++v) {
+-    std::size_t x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+-    if (!tilesOf(&input.visibilities[4 * v], x0, x1, y0, y1)) continue;
+-    for (std::size_t ty = y0; ty <= y1; ++ty) {
+-      for (std::size_t tx = x0; tx <= x1; ++tx) {
+-        buckets.items[cursor[ty * tiles_per_row + tx]++] = static_cast<unsigned>(v);
++    TileRect rects[4];
++    const std::size_t nrects = tilesOf(&input.visibilities[6 * v], rects);
++    for (std::size_t r = 0; r < nrects; ++r) {
++      for (std::size_t ty = rects[r].y0; ty <= rects[r].y1; ++ty) {
++        for (std::size_t tx = rects[r].x0; tx <= rects[r].x1; ++tx) {
++          buckets.items[cursor[ty * tiles_per_row + tx]++] = static_cast<unsigned>(v);
++        }
+       }
+     }
+   }
+@@ -184,10 +248,10 @@ TileBuckets bucketVisibilities(const GridAccumInput& input, std::size_t tile) {
+ }
+ 
+ std::vector<float> packBuckets(const GridAccumInput& input, const TileBuckets& buckets) {
+-  std::vector<float> packed(4 * buckets.items.size());
++  std::vector<float> packed(6 * buckets.items.size());
+   for (std::size_t item = 0; item < buckets.items.size(); ++item) {
+     const unsigned visibility = buckets.items[item];
+-    std::memcpy(&packed[4 * item], &input.visibilities[4 * visibility], 4 * sizeof(float));
++    std::memcpy(&packed[6 * item], &input.visibilities[6 * visibility], 6 * sizeof(float));
+   }
+   return packed;
+ }
+@@ -406,7 +470,7 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     result.gpu_seconds = [command_buffer GPUEndTime] - [command_buffer GPUStartTime];
+     result.wall_seconds = std::chrono::duration<double>(end - begin).count();
+     result.host_seconds = std::chrono::duration<double>(begin - host_begin).count();
+-    result.visibilities = input.visibilities.size() / 4;
++    result.visibilities = input.visibilities.size() / 6;
+     result.tiles = tiles;
+     result.bucket_items = buckets.items.size();
+     return result;
+@@ -682,7 +746,7 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+       result.gpu_seconds = gpu_seconds / static_cast<double>(jobs.size());
+       result.wall_seconds = std::chrono::duration<double>(end - begin).count();
+       result.host_seconds = std::chrono::duration<double>(begin - host_begin).count();
+-      result.visibilities = job.input.visibilities.size() / 4;
++      result.visibilities = job.input.visibilities.size() / 6;
+       result.tiles = job.tiles;
+       result.bucket_items = job.buckets.items.size();
+       results.push_back(std::move(result));
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 08415b99..0a0ac602 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -266,6 +266,20 @@ void fillAccumInput(const InversionInput& input, const Geometry& geometry, GridA
+   accumulate.variant = Variant::kPoly;
+ }
+ 
++// Wrap a centred cell coordinate exactly as ducc0's getpix does:
++// ducc0 maps u to frac(u_lambda * pixsize) * nu, so out-of-grid visibilities
++// alias back into the grid instead of being culled. In our centred convention
++// with grid cells covering the same uv extent, that is frac(cell/grid)*grid
++// re-centred to [-grid/2, grid/2), which is the identity for in-grid cells.
++// All arithmetic stays in double precision; the caller splits the result
++// into integer base + [0, 1) fraction for the GPU.
++double wrapCell(double cell, std::size_t grid) {
++  const double g = static_cast<double>(grid);
++  const double q = cell / g;
++  const double cornered = (q - std::floor(q)) * g;
++  return cornered >= 0.5 * g ? cornered - g : cornered;
++}
++
+ // Roll the centred Metal grid to ducc0's DC-at-0 frame.
+ void rollToDucc0Frame(const std::vector<float>& centred, std::size_t grid,
+                       std::vector<std::complex<float>>& out) {
+@@ -344,7 +358,7 @@ bool inversion(const InversionInput& input, float* dirty) {
+       const double lambda = kSpeedOfLight / input.frequencies[ch];
+       GridAccumInput accumulate;
+       fillAccumInput(input, geometry, accumulate);
+-      accumulate.visibilities.resize(4 * input.n_rows);
++      accumulate.visibilities.resize(6 * input.n_rows);
+       double v_max = 0.0;
+       for (std::size_t row = 0; row < input.n_rows; ++row) {
+         double u = input.uvws[3 * row + 0] / lambda;
+@@ -352,11 +366,28 @@ bool inversion(const InversionInput& input, float* dirty) {
+         if (input.flip_u) u = -u;
+         if (input.flip_v) v = -v;
+         v_max = std::max(v_max, std::fabs(v));
+-        accumulate.visibilities[4 * row + 0] = static_cast<float>(u * geometry.cell_x);
+-        accumulate.visibilities[4 * row + 1] = static_cast<float>(v * geometry.cell_y);
++        // Wrap the cell coordinate exactly as ducc0's getpix does
++        // (frac(u*lambda*pixsize) * nu): out-of-grid visibilities alias back
++        // into the grid instead of being culled. 23% of real LOFAR rows fall
++        // outside; culling them cost 3e-04. The centred base is identical to
++        // the old floor(cell) for in-grid visibilities.
++        // Anchor: ducc0's tap window is [iu0, iu0+supp) with
++        // iu0 = floor(u - supp/2 + 1), i.e. round-half-up for odd support and
++        // floor for even support (the offset is integer for even W, so floor
++        // commutes there). A floor anchor for odd W shifts the window by one
++        // cell whenever frac >= 0.5 (measured 2.6e-04 on real data).
++        const double odd = (geometry.kernel->support() & 1u) ? 0.5 : 0.0;
++        const double wrap_x = wrapCell(u * geometry.cell_x, geometry.grid);
++        const double wrap_y = wrapCell(v * geometry.cell_y, geometry.grid);
++        const double base_x = std::floor(wrap_x + odd);
++        const double base_y = std::floor(wrap_y + odd);
++        accumulate.visibilities[6 * row + 0] = static_cast<float>(base_x);
++        accumulate.visibilities[6 * row + 1] = static_cast<float>(wrap_x - base_x);
++        accumulate.visibilities[6 * row + 2] = static_cast<float>(base_y);
++        accumulate.visibilities[6 * row + 3] = static_cast<float>(wrap_y - base_y);
+         const std::complex<float>& value = input.ms[row * input.n_channels + ch];
+-        accumulate.visibilities[4 * row + 2] = value.real();
+-        accumulate.visibilities[4 * row + 3] = value.imag();
++        accumulate.visibilities[6 * row + 4] = value.real();
++        accumulate.visibilities[6 * row + 5] = value.imag();
+       }
+       GridAccumResult grid_result;
+       try {
+@@ -512,7 +543,7 @@ bool inversion(const InversionInput& input, float* dirty) {
+     }
+     GridAccumInput accumulate;
+     fillAccumInput(input, geometry, accumulate);
+-    accumulate.visibilities.resize(4 * weighted_items.size());
++    accumulate.visibilities.resize(6 * weighted_items.size());
+     for (std::size_t k = 0; k < weighted_items.size(); ++k) {
+       const std::size_t item = weighted_items[k].first;
+       const double weight = weighted_items[k].second;
+@@ -524,15 +555,24 @@ bool inversion(const InversionInput& input, float* dirty) {
+       double v = sign * input.uvws[3 * row + 1] / lambda;
+       if (input.flip_u) u = -u;
+       if (input.flip_v) v = -v;
+-      accumulate.visibilities[4 * k + 0] = static_cast<float>(u * geometry.cell_x);
+-      accumulate.visibilities[4 * k + 1] = static_cast<float>(v * geometry.cell_y);
++      // Wrap exactly as ducc0's getpix does (see the 2-D path above), then
++      // anchor round-half-up for odd support (ducc0's tap window).
++      const double odd = (geometry.kernel->support() & 1u) ? 0.5 : 0.0;
++      const double wrap_x = wrapCell(u * geometry.cell_x, geometry.grid);
++      const double wrap_y = wrapCell(v * geometry.cell_y, geometry.grid);
++      const double base_x = std::floor(wrap_x + odd);
++      const double base_y = std::floor(wrap_y + odd);
++      accumulate.visibilities[6 * k + 0] = static_cast<float>(base_x);
++      accumulate.visibilities[6 * k + 1] = static_cast<float>(wrap_x - base_x);
++      accumulate.visibilities[6 * k + 2] = static_cast<float>(base_y);
++      accumulate.visibilities[6 * k + 3] = static_cast<float>(wrap_y - base_y);
+       const std::complex<float>& value = input.ms[item];
+       // Shifting phase first, conjugation second - ducc0's order (v *= phases,
+       // then vi = v.imag*imflip). The phase uses the signed w (sign*|w|).
+       const float vr = value.real() * wphase_re[item] - value.imag() * wphase_im[item];
+       const float vi = value.real() * wphase_im[item] + value.imag() * wphase_re[item];
+-      accumulate.visibilities[4 * k + 2] = static_cast<float>(vr * weight);
+-      accumulate.visibilities[4 * k + 3] = static_cast<float>(sign * vi * weight);
++      accumulate.visibilities[6 * k + 4] = static_cast<float>(vr * weight);
++      accumulate.visibilities[6 * k + 5] = static_cast<float>(sign * vi * weight);
+     }
+     plane_inputs.push_back(std::move(accumulate));
+     plane_index.push_back(pl);
+@@ -558,6 +598,15 @@ bool inversion(const InversionInput& input, float* dirty) {
+     const std::size_t pl = plane_index[g];
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+     const GridAccumResult& grid_result = plane_grids[g];
++    if (const char* dump_dir = std::getenv("MX_METAL_DEBUG_DUMP_PLANES")) {
++      char path[1024];
++      std::snprintf(path, sizeof(path), "%s/plane%02zu.raw", dump_dir, pl);
++      FILE* dump = std::fopen(path, "wb");
++      if (dump != nullptr) {
++        std::fwrite(grid_result.grid.data(), sizeof(float) * grid_result.grid.size(), 1, dump);
++        std::fclose(dump);
++      }
++    }
+     std::chrono::steady_clock::time_point t_fft0, t_fft1;
+     if (dump_timing) t_fft0 = std::chrono::steady_clock::now();
+     rollToDucc0Frame(grid_result.grid, grid, grid_values);
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index bd1d50ff..cf1fbac6 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -88,19 +88,32 @@ kernel void es_kernel_probe(device const float* arguments,
+ constant uint kTile = 32;      // output tile edge, in cells
+ constant uint kThreads = 256;  // 16x16 threads per threadgroup
+ 
++// Wrap a global tap cell into [0, grid_size): the grid is periodic, exactly
++// as ducc0's dump() writes taps modulo (nu, nv). Taps stay within one support
++// of the grid, so a single conditional add/subtract suffices.
++inline int wrapTap(int cell, int grid_size) {
++  if (cell < 0) return cell + grid_size;
++  if (cell >= grid_size) return cell - grid_size;
++  return cell;
++}
++
++// Split grid coordinates: the visibility buffer holds (base, frac) per axis,
++// split on the CPU in double precision. base is the exact integer floor cell,
++// frac in [0, 1) the sub-cell position with full 24-bit precision. Storing the
++// coordinate as one float32 quantises the fraction to ulp(cell), which
++// corrupts kernel interpolation for long baselines (measured 3e-04 on real
++// data). Never form base + frac in float32: that sum re-quantises the
++// fraction it was split to protect. Anchor from the parts instead:
++//   floor-anchored (poly family): i0 = int(base) + centre, f = frac.
++//   round-anchored: nearest = int(base) + (frac >= 0.5), f = frac - (frac >=
++//     0.5 ? 1 : 0), giving the [-0.5, 0.5) offset exactly.
++
+ // One threadgroup per tile. Grid coordinates are cell-centred: a visibility at
+ // grid coordinate u contributes to cells i0 + j, j in [-S/2, S/2), where
+ // i0 = round(u) + G/2 and the kernel argument for cell i0 + j is f - j with
+-// f = u - round(u).
+-//
+-// The rounding is done in centred coordinates on purpose. Forming u + G/2 in
+-// float32 rounds at the magnitude of G/2 (6e-5 near u = 460 on a 1024 grid),
+-// which flips the nearest integer for a visibility near a half-integer cell
+-// (measured: ~1 in 10^4 uniformly drawn visibilities lands one cell away from
+-// the double-precision CPU result). u - round(u) is exact in float32 for
+-// |u| < 2^23, so both sides then place every visibility in the same cell, with
+-// round() following round-half-away-from-zero as std::lround does.
+-kernel void grid_accumulate(device const float* visibilities,  // u, v, re, im
++// f = u - round(u), both derived from the split (base, frac) pair without
++// ever forming base + frac.
++kernel void grid_accumulate(device const float* visibilities,  // bx,fx,by,fy,re,im
+                             device const uint* bucket_start,   // per tile
+                             device const uint* bucket_items,
+                             device atomic_uint* grid,          // 2 * G * G
+@@ -130,18 +143,18 @@ kernel void grid_accumulate(device const float* visibilities,  // u, v, re, im
+ 
+   for (uint item = begin + tid; item < end; item += kThreads) {
+     const uint visibility = bucket_items[item];
+-    const float u = visibilities[4 * visibility + 0];
+-    const float v = visibilities[4 * visibility + 1];
+-    const float2 value = float2(visibilities[4 * visibility + 2],
+-                                visibilities[4 * visibility + 3]);
++    const float base_x = visibilities[6 * visibility + 0];
++    const float frac_x = visibilities[6 * visibility + 1];
++    const float base_y = visibilities[6 * visibility + 2];
++    const float frac_y = visibilities[6 * visibility + 3];
++    const float2 value = float2(visibilities[6 * visibility + 4],
++                                visibilities[6 * visibility + 5]);
+     // Centred arithmetic: exact in float32, and the cell index is the double
+     // precision result.
+-    const float rounded_u = round(u);
+-    const float rounded_v = round(v);
+-    const int i0 = int(rounded_u) + centre;
+-    const int j0 = int(rounded_v) + centre;
+-    const float fx = u - rounded_u;
+-    const float fy = v - rounded_v;
++    const int i0 = int(base_x) + (frac_x >= 0.5f ? 1 : 0) + centre;
++    const int j0 = int(base_y) + (frac_y >= 0.5f ? 1 : 0) + centre;
++    const float fx = frac_x >= 0.5f ? frac_x - 1.0f : frac_x;
++    const float fy = frac_y >= 0.5f ? frac_y - 1.0f : frac_y;
+ 
+     float sum_x = 0.0f, sum_y = 0.0f;
+     for (int j = -half_support; j < half_support; ++j) {
+@@ -151,12 +164,12 @@ kernel void grid_accumulate(device const float* visibilities,  // u, v, re, im
+     if (sum_x == 0.0f || sum_y == 0.0f) continue;
+ 
+     for (int jy = -half_support; jy < half_support; ++jy) {
+-      const int cy = j0 + jy - tile_y0;
++      const int cy = wrapTap(j0 + jy, int(grid_size)) - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy = es_kernel_ducc0(fy - float(jy), support, beta, e0) / sum_y;
+       if (wy == 0.0f) continue;
+       for (int jx = -half_support; jx < half_support; ++jx) {
+-        const int cx = i0 + jx - tile_x0;
++        const int cx = wrapTap(i0 + jx, int(grid_size)) - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float wx = es_kernel_ducc0(fx - float(jx), support, beta, e0) / sum_x;
+         const float weight = wx * wy;
+@@ -197,7 +210,7 @@ constant int kLowestOffset = 2;
+ // generic kernel above evaluates the same six values six times each). The
+ // arithmetic per value is identical; only the two float32 divisions are hoisted
+ // to one reciprocal each.
+-kernel void grid_accumulate_hoisted(device const float* visibilities,  // u,v,re,im
++kernel void grid_accumulate_hoisted(device const float* visibilities,  // bx,fx,by,fy,re,im
+                                     device const uint* bucket_start,
+                                     device const uint* bucket_items,
+                                     device atomic_uint* grid,
+@@ -224,16 +237,16 @@ kernel void grid_accumulate_hoisted(device const float* visibilities,  // u,v,re
+ 
+   for (uint item = begin + tid; item < end; item += kThreads) {
+     const uint visibility = bucket_items[item];
+-    const float u = visibilities[4 * visibility + 0];
+-    const float v = visibilities[4 * visibility + 1];
+-    const float2 value = float2(visibilities[4 * visibility + 2],
+-                                visibilities[4 * visibility + 3]);
+-    const float rounded_u = round(u);
+-    const float rounded_v = round(v);
+-    const int i0 = int(rounded_u) + centre;
+-    const int j0 = int(rounded_v) + centre;
+-    const float fx = u - rounded_u;
+-    const float fy = v - rounded_v;
++    const float base_x = visibilities[6 * visibility + 0];
++    const float frac_x = visibilities[6 * visibility + 1];
++    const float base_y = visibilities[6 * visibility + 2];
++    const float frac_y = visibilities[6 * visibility + 3];
++    const float2 value = float2(visibilities[6 * visibility + 4],
++                                visibilities[6 * visibility + 5]);
++    const int i0 = int(base_x) + (frac_x >= 0.5f ? 1 : 0) + centre;
++    const int j0 = int(base_y) + (frac_y >= 0.5f ? 1 : 0) + centre;
++    const float fx = frac_x >= 0.5f ? frac_x - 1.0f : frac_x;
++    const float fy = frac_y >= 0.5f ? frac_y - 1.0f : frac_y;
+ 
+     float wx[kSupport];
+     float wy[kSupport];
+@@ -252,13 +265,13 @@ kernel void grid_accumulate_hoisted(device const float* visibilities,  // u,v,re
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kLowestOffset - tile_y0;
++      const int cy = wrapTap(j0 + jy - kLowestOffset, int(grid_size)) - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_scaled = wy[jy] * inv_y;
+       if (wy_scaled == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kLowestOffset - tile_x0;
++        const int cx = wrapTap(i0 + jx - kLowestOffset, int(grid_size)) - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * inv_x * wy_scaled;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+@@ -308,15 +321,16 @@ kernel void grid_accumulate_hoisted_packed(device const float* packed_visibiliti
+   const int tile_y0 = int(tile_id.y) * int(kTile);
+ 
+   for (uint item = begin + tid; item < end; item += kThreads) {
+-    const float4 record = *reinterpret_cast<const device float4*>(packed_visibilities + 4 * item);
+-    const float u = record.x;
+-    const float v = record.y;
+-    const float rounded_u = round(u);
+-    const float rounded_v = round(v);
+-    const int i0 = int(rounded_u) + centre;
+-    const int j0 = int(rounded_v) + centre;
+-    const float fx = u - rounded_u;
+-    const float fy = v - rounded_v;
++    const device float* rec = packed_visibilities + 6 * item;
++    const float base_x = rec[0];
++    const float frac_x = rec[1];
++    const float base_y = rec[2];
++    const float frac_y = rec[3];
++    const float2 value = float2(rec[4], rec[5]);
++    const int i0 = int(base_x) + (frac_x >= 0.5f ? 1 : 0) + centre;
++    const int j0 = int(base_y) + (frac_y >= 0.5f ? 1 : 0) + centre;
++    const float fx = frac_x >= 0.5f ? frac_x - 1.0f : frac_x;
++    const float fy = frac_y >= 0.5f ? frac_y - 1.0f : frac_y;
+ 
+     float wx[kSupport];
+     float wy[kSupport];
+@@ -335,18 +349,18 @@ kernel void grid_accumulate_hoisted_packed(device const float* packed_visibiliti
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kLowestOffset - tile_y0;
++      const int cy = wrapTap(j0 + jy - kLowestOffset, int(grid_size)) - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_scaled = wy[jy] * inv_y;
+       if (wy_scaled == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kLowestOffset - tile_x0;
++        const int cx = wrapTap(i0 + jx - kLowestOffset, int(grid_size)) - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * inv_x * wy_scaled;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+-        atomic_add_float(&tile[cell], weight * record.z);
+-        atomic_add_float(&tile[cell + 1], weight * record.w);
++        atomic_add_float(&tile[cell], weight * value.x);
++        atomic_add_float(&tile[cell + 1], weight * value.y);
+       }
+     }
+   }
+@@ -395,19 +409,19 @@ kernel void grid_accumulate_cost_probe(device const float* visibilities,
+ 
+   for (uint item = begin + tid; item < end; item += kThreads) {
+     const uint visibility = bucket_items[item];
+-    const float u = visibilities[4 * visibility + 0];
+-    const float v = visibilities[4 * visibility + 1];
+-    const float2 value = float2(visibilities[4 * visibility + 2],
+-                                visibilities[4 * visibility + 3]);
+-    const float rounded_u = round(u);
+-    const float rounded_v = round(v);
+-    const int i0 = int(rounded_u) + centre;
+-    const int j0 = int(rounded_v) + centre;
++    const float base_x = visibilities[6 * visibility + 0];
++    const float frac_x = visibilities[6 * visibility + 1];
++    const float base_y = visibilities[6 * visibility + 2];
++    const float frac_y = visibilities[6 * visibility + 3];
++    const float2 value = float2(visibilities[6 * visibility + 4],
++                                visibilities[6 * visibility + 5]);
++    const int i0 = int(base_x) + (frac_x >= 0.5f ? 1 : 0) + centre;
++    const int j0 = int(base_y) + (frac_y >= 0.5f ? 1 : 0) + centre;
+     for (int jy = -half_support; jy < half_support; ++jy) {
+-      const int cy = j0 + jy - tile_y0;
++      const int cy = wrapTap(j0 + jy, int(grid_size)) - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       for (int jx = -half_support; jx < half_support; ++jx) {
+-        const int cx = i0 + jx - tile_x0;
++        const int cx = wrapTap(i0 + jx, int(grid_size)) - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+         atomic_add_float(&tile[cell], value.x);
+@@ -486,30 +500,32 @@ kernel void grid_accumulate_poly(device const float* visibilities,
+ 
+   for (uint item = begin + tid; item < end; item += group_threads) {
+     const uint visibility = bucket_items[item];
+-    const float u = visibilities[4 * visibility + 0];
+-    const float v = visibilities[4 * visibility + 1];
+-    const float2 value = float2(visibilities[4 * visibility + 2],
+-                                visibilities[4 * visibility + 3]);
+-    // Anchor on floor(), not round(). With `support` cells the kernel window is
+-    // (-support/2, support/2], i.e. cells floor(u)-support/2+1 .. floor(u)+support/2.
+-    // Rounding centred the window on the nearest cell instead and dropped the
+-    // cell at distance ~support/2, whose weight is ~2.6% for support 6: a
+-    // systematic ~1% amplitude deficit that only appears against ducc0's own
+-    // gridding (the probe's twin shared the bug, so it could never see it).
+-    const float floored_u = floor(u);
+-    const float floored_v = floor(v);
+-    const int i0 = int(floored_u) + centre;
+-    const int j0 = int(floored_v) + centre;
+-    const float fx = u - floored_u;
+-    const float fy = v - floored_v;
+-
+-    for (int jy = -half_support + 1; jy <= half_support; ++jy) {
+-      const int cy = j0 + jy - tile_y0;
++    const float base_x = visibilities[6 * visibility + 0];
++    const float frac_x = visibilities[6 * visibility + 1];
++    const float base_y = visibilities[6 * visibility + 2];
++    const float frac_y = visibilities[6 * visibility + 3];
++    const float2 value = float2(visibilities[6 * visibility + 4],
++                                visibilities[6 * visibility + 5]);
++    // Anchor matches ducc0's tap window [iu0, iu0+supp) with
++    // iu0 = floor(u - supp/2 + 1): round-half-up for odd support, floor for
++    // even support (the offset is integer for even W, so floor commutes
++    // there). With `support` cells the kernel window is
++    // (-support/2, support/2] for odd W, i.e. cells floor(u)-support/2+1 ..
++    // floor(u)+support/2 with the base already rounded. A floor anchor for
++    // odd W shifts the window by one cell whenever frac >= 0.5 (measured
++    // 2.6e-04 on real data); the base arrives pre-rounded from the CPU split.
++    const int i0 = int(base_x) + centre;
++    const int j0 = int(base_y) + centre;
++    const float fx = frac_x;
++    const float fy = frac_y;
++
++    for (int jy = -half_support + 1 - (support & 1); jy <= half_support; ++jy) {
++      const int cy = wrapTap(j0 + jy, int(grid_size)) - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy = poly_sample(fy - float(jy), coefficients, degree, support);
+       if (wy == 0.0f) continue;
+-      for (int jx = -half_support + 1; jx <= half_support; ++jx) {
+-        const int cx = i0 + jx - tile_x0;
++      for (int jx = -half_support + 1 - (support & 1); jx <= half_support; ++jx) {
++        const int cx = wrapTap(i0 + jx, int(grid_size)) - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight =
+             poly_sample(fx - float(jx), coefficients, degree, support) * wy;
+@@ -563,22 +579,24 @@ kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
+ 
+   for (uint item = begin + tid; item < end; item += group_threads) {
+     const uint visibility = bucket_items[item];
+-    const float u = visibilities[4 * visibility + 0];
+-    const float v = visibilities[4 * visibility + 1];
+-    const float2 value = float2(visibilities[4 * visibility + 2],
+-                                visibilities[4 * visibility + 3]);
+-    // Anchor on floor(), not round(). With `support` cells the kernel window is
+-    // (-support/2, support/2], i.e. cells floor(u)-support/2+1 .. floor(u)+support/2.
+-    // Rounding centred the window on the nearest cell instead and dropped the
+-    // cell at distance ~support/2, whose weight is ~2.6% for support 6: a
+-    // systematic ~1% amplitude deficit that only appears against ducc0's own
+-    // gridding (the probe's twin shared the bug, so it could never see it).
+-    const float floored_u = floor(u);
+-    const float floored_v = floor(v);
+-    const int i0 = int(floored_u) + centre;
+-    const int j0 = int(floored_v) + centre;
+-    const float fx = u - floored_u;
+-    const float fy = v - floored_v;
++    const float base_x = visibilities[6 * visibility + 0];
++    const float frac_x = visibilities[6 * visibility + 1];
++    const float base_y = visibilities[6 * visibility + 2];
++    const float frac_y = visibilities[6 * visibility + 3];
++    const float2 value = float2(visibilities[6 * visibility + 4],
++                                visibilities[6 * visibility + 5]);
++    // Anchor matches ducc0's tap window [iu0, iu0+supp) with
++    // iu0 = floor(u - supp/2 + 1): round-half-up for odd support, floor for
++    // even support (the offset is integer for even W, so floor commutes
++    // there). With `support` cells the kernel window is
++    // (-support/2, support/2] for odd W, i.e. cells floor(u)-support/2+1 ..
++    // floor(u)+support/2 with the base already rounded. A floor anchor for
++    // odd W shifts the window by one cell whenever frac >= 0.5 (measured
++    // 2.6e-04 on real data); the base arrives pre-rounded from the CPU split.
++    const int i0 = int(base_x) + centre;
++    const int j0 = int(base_y) + centre;
++    const float fx = frac_x;
++    const float fy = frac_y;
+ 
+     float wx[kSupport];
+     float wy[kSupport];
+@@ -591,13 +609,13 @@ kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kLowestOffset - tile_y0;
++      const int cy = wrapTap(j0 + jy - kLowestOffset, int(grid_size)) - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_val = wy[jy];
+       if (wy_val == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kLowestOffset - tile_x0;
++        const int cx = wrapTap(i0 + jx - kLowestOffset, int(grid_size)) - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * wy_val;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+@@ -653,22 +671,24 @@ kernel void grid_accumulate_poly_hoisted_split(device const float* visibilities,
+ 
+   for (uint item = begin + tid; item < end; item += group_threads) {
+     const uint visibility = bucket_items[item];
+-    const float u = visibilities[4 * visibility + 0];
+-    const float v = visibilities[4 * visibility + 1];
+-    const float2 value = float2(visibilities[4 * visibility + 2],
+-                                visibilities[4 * visibility + 3]);
+-    // Anchor on floor(), not round(). With `support` cells the kernel window is
+-    // (-support/2, support/2], i.e. cells floor(u)-support/2+1 .. floor(u)+support/2.
+-    // Rounding centred the window on the nearest cell instead and dropped the
+-    // cell at distance ~support/2, whose weight is ~2.6% for support 6: a
+-    // systematic ~1% amplitude deficit that only appears against ducc0's own
+-    // gridding (the probe's twin shared the bug, so it could never see it).
+-    const float floored_u = floor(u);
+-    const float floored_v = floor(v);
+-    const int i0 = int(floored_u) + centre;
+-    const int j0 = int(floored_v) + centre;
+-    const float fx = u - floored_u;
+-    const float fy = v - floored_v;
++    const float base_x = visibilities[6 * visibility + 0];
++    const float frac_x = visibilities[6 * visibility + 1];
++    const float base_y = visibilities[6 * visibility + 2];
++    const float frac_y = visibilities[6 * visibility + 3];
++    const float2 value = float2(visibilities[6 * visibility + 4],
++                                visibilities[6 * visibility + 5]);
++    // Anchor matches ducc0's tap window [iu0, iu0+supp) with
++    // iu0 = floor(u - supp/2 + 1): round-half-up for odd support, floor for
++    // even support (the offset is integer for even W, so floor commutes
++    // there). With `support` cells the kernel window is
++    // (-support/2, support/2] for odd W, i.e. cells floor(u)-support/2+1 ..
++    // floor(u)+support/2 with the base already rounded. A floor anchor for
++    // odd W shifts the window by one cell whenever frac >= 0.5 (measured
++    // 2.6e-04 on real data); the base arrives pre-rounded from the CPU split.
++    const int i0 = int(base_x) + centre;
++    const int j0 = int(base_y) + centre;
++    const float fx = frac_x;
++    const float fy = frac_y;
+ 
+     float wx[kSupport];
+     float wy[kSupport];
+@@ -681,13 +701,13 @@ kernel void grid_accumulate_poly_hoisted_split(device const float* visibilities,
+ 
+ #pragma clang loop unroll(full)
+     for (int jy = 0; jy < int(kSupport); ++jy) {
+-      const int cy = j0 + jy - kLowestOffset - tile_y0;
++      const int cy = wrapTap(j0 + jy - kLowestOffset, int(grid_size)) - tile_y0;
+       if (cy < 0 || cy >= int(kTile)) continue;
+       const float wy_val = wy[jy];
+       if (wy_val == 0.0f) continue;
+ #pragma clang loop unroll(full)
+       for (int jx = 0; jx < int(kSupport); ++jx) {
+-        const int cx = i0 + jx - kLowestOffset - tile_x0;
++        const int cx = wrapTap(i0 + jx - kLowestOffset, int(grid_size)) - tile_x0;
+         if (cx < 0 || cx >= int(kTile)) continue;
+         const float weight = wx[jx] * wy_val;
+         const uint cell = 2 * (cy * int(kTile) + cx);
+@@ -744,17 +764,21 @@ kernel void grid_accumulate_poly_columns(device const float* visibilities,
+   float2 acc = float2(0.0f);
+   for (uint item = begin; item < end; ++item) {
+     const uint visibility = bucket_items[item];
+-    const float u = visibilities[4 * visibility + 0];
+-    const float v = visibilities[4 * visibility + 1];
+-    const float rounded_u = round(u);
+-    const float rounded_v = round(v);
+-    const int jx = cx - (int(rounded_u) + centre);
++    const float base_x = visibilities[6 * visibility + 0];
++    const float frac_x = visibilities[6 * visibility + 1];
++    const float base_y = visibilities[6 * visibility + 2];
++    const float frac_y = visibilities[6 * visibility + 3];
++    const int rounded_x = int(base_x) + (frac_x >= 0.5f ? 1 : 0);
++    const int rounded_y = int(base_y) + (frac_y >= 0.5f ? 1 : 0);
++    const float fx = frac_x >= 0.5f ? frac_x - 1.0f : frac_x;
++    const float fy = frac_y >= 0.5f ? frac_y - 1.0f : frac_y;
++    const int jx = cx - (rounded_x + centre);
+     if (jx < -half_support || jx >= half_support) continue;
+-    const int jy = cy - (int(rounded_v) + centre);
++    const int jy = cy - (rounded_y + centre);
+     if (jy < -half_support || jy >= half_support) continue;
+-    const float wx = poly_sample((u - rounded_u) - float(jx), coefficients, degree, support);
+-    const float wy = poly_sample((v - rounded_v) - float(jy), coefficients, degree, support);
+-    acc += float2(visibilities[4 * visibility + 2], visibilities[4 * visibility + 3]) * (wx * wy);
++    const float wx = poly_sample(fx - float(jx), coefficients, degree, support);
++    const float wy = poly_sample(fy - float(jy), coefficients, degree, support);
++    acc += float2(visibilities[6 * visibility + 4], visibilities[6 * visibility + 5]) * (wx * wy);
+   }
+ 
+   device float* out = grid + 2 * (cx * int(grid_size) + cy);
+diff --git a/wgridder/wgridder.h b/wgridder/wgridder.h
+index 5e136499..820bef11 100644
+--- a/wgridder/wgridder.h
++++ b/wgridder/wgridder.h
+@@ -361,12 +361,59 @@ class WGridder final : public WGridderBase {
+         input.m_shift = m_shift_;
+         input.image_width = trimmed_width_;
+         input.image_height = trimmed_height_;
+-        // The w-layer path runs end to end inside wsclean but is still not
+-        // numerically equivalent (docs/metal-plan.md, "w-layers, fifth pass"):
+-        // correct power, decorrelated image, and 4.5x slower than ducc0. The
+-        // wired path therefore stays 2-D and refuses wherever w matters.
+-        input.w_gridding = false;
++        // The Metal w-layer path is verified against ducc0 (wlayer gate:
++        // rel_rms ~1e-05 across w = 0..200, adjoint dot-product 2.9e-07), so
++        // the hook requests w-gridding and lets inversion() refuse wherever
++        // the data need maths the GPU does not perform exactly (shifts,
++        // callback/proxy buffers, no device). A refusal falls back to the
++        // ducc0 call below untouched.
++        input.w_gridding = true;
++        if (const char* dump_path = std::getenv("MX_METAL_DEBUG_DUMP_INPUTS")) {
++          // Dump the exact live inputs so the probe can replay this inversion
++          // bit-identically: n_rows, n_channels, uvws, frequencies, ms.
++          FILE* dump = std::fopen(dump_path, "wb");
++          if (dump != nullptr) {
++            const std::uint64_t header[2] = {n_rows, freq.shape(0)};
++            const double geom[7] = {pixel_size_x_,      pixel_size_y_, epsilon_,
++                                   static_cast<double>(trimmed_width_),
++                                   static_cast<double>(trimmed_height_), l_shift_, m_shift_};
++            std::fwrite(header, sizeof(header), 1, dump);
++            std::fwrite(geom, sizeof(geom), 1, dump);
++            std::fwrite(uvw, sizeof(double) * 3 * n_rows, 1, dump);
++            std::fwrite(freq.data(), sizeof(double) * freq.shape(0), 1, dump);
++            std::fwrite(ms.data(), sizeof(std::complex<float>) * n_rows * freq.shape(0), 1,
++                        dump);
++            std::fclose(dump);
++          }
++        }
+         const bool metal_done = mx::metal::inversion(input, tdirty.data());
++        // Env-gated A/B: run ducc0 as well and compare on the exact live
++        // inputs, so real-data discrepancies can be attributed to maths
++        // (both ran) rather than plumbing (only one ran).
++        if (metal_done && std::getenv("MX_METAL_DEBUG_AB") != nullptr) {
++          ducc0::vmav<NumT, 2> tdirty_ref({trimmed_width_, trimmed_height_});
++          auto freqlist_id_ab = ducc0::cmav<size_t, 1>::build_uniform({n_rows}, 0);
++          auto freqlist_nfreqs_ab = ducc0::cmav<size_t, 1>::build_uniform({1}, freq.shape(0));
++          ducc0::ms2dirty_bda<NumT, NumT>(
++              uvw2, freqlist_id_ab, freqlist_nfreqs_ab, freq, ms, twgt, tmask,
++              pixel_size_x_, pixel_size_y_, epsilon_, kDoWgridding, n_threads_,
++              tdirty_ref, verbosity_, kFlipU, kFlipV, kFlipW, kDivideByN,
++              sigma_min, sigma_max, -l_shift_, -m_shift_, kAllowNShift);
++          double max_ref = 0.0, max_diff = 0.0, sum_sq = 0.0;
++          const std::size_t n = trimmed_width_ * trimmed_height_;
++          for (std::size_t k = 0; k < n; ++k) {
++            const double r = static_cast<double>(tdirty_ref.raw(k));
++            const double d = static_cast<double>(tdirty.raw(k)) - r;
++            max_ref = std::max(max_ref, std::fabs(r));
++            max_diff = std::max(max_diff, std::fabs(d));
++            sum_sq += d * d;
++          }
++          const double rms = std::sqrt(sum_sq / static_cast<double>(n));
++          std::fprintf(stderr,
++                       "[mx-metal] A/B: max_ref=%.6g max_diff=%.6g rel_rms=%.4g "
++                       "rel_max=%.4g n=%zu\n",
++                       max_ref, max_diff, rms / max_ref, max_diff / max_ref, n);
++        }
+         std::fprintf(stderr, "[mx-metal] inversion %s (%zu rows, %zu x %zu)\n",
+                      metal_done ? "used" : "refused, falling back to ducc0", n_rows,
+                      trimmed_width_, trimmed_height_);

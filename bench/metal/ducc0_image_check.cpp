@@ -218,12 +218,18 @@ int main(int argc, char** argv) {
   // differ by nu_metal/nu in scale - a ~1.6% error that grows towards the field
   // edge and reads as a ~0.8% rms kernel mismatch.
   const double cell_scale = static_cast<double>(nu_metal) / static_cast<double>(nu);
-  input.visibilities.resize(4 * data.rows());
+  input.visibilities.resize(6 * data.rows());
   for (std::size_t v = 0; v < data.rows(); ++v) {
-    input.visibilities[4 * v + 0] = static_cast<float>(data.u_lambda[v] * cell_scale);
-    input.visibilities[4 * v + 1] = static_cast<float>(data.v_lambda[v] * cell_scale);
-    input.visibilities[4 * v + 2] = data.values[v].real();
-    input.visibilities[4 * v + 3] = data.values[v].imag();
+    const double cell_u = data.u_lambda[v] * cell_scale;
+    const double cell_v = data.v_lambda[v] * cell_scale;
+    const double base_u = std::floor(cell_u);
+    const double base_v = std::floor(cell_v);
+    input.visibilities[6 * v + 0] = static_cast<float>(base_u);
+    input.visibilities[6 * v + 1] = static_cast<float>(cell_u - base_u);
+    input.visibilities[6 * v + 2] = static_cast<float>(base_v);
+    input.visibilities[6 * v + 3] = static_cast<float>(cell_v - base_v);
+    input.visibilities[6 * v + 4] = data.values[v].real();
+    input.visibilities[6 * v + 5] = data.values[v].imag();
   }
   const mx::metal::DeviceInfo info = mx::metal::deviceInfo();
   if (!info.available) {

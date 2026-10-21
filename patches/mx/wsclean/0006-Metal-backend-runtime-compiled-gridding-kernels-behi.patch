@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Sun, 18 Oct 2026 21:36:03 -0400
-Subject: [PATCH 06/24] Metal backend: runtime-compiled gridding kernels behind
+Subject: [PATCH 06/25] Metal backend: runtime-compiled gridding kernels behind
  WSCLEAN_MX_METAL
 
 Infrastructure for the experimental Apple Metal backend, off by default.
