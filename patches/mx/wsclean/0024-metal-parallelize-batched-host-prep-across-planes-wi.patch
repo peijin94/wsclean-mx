@@ -1,0 +1,239 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 20 Oct 2026 20:06:03 -0400
+Subject: [PATCH 24/24] metal: parallelize batched host prep across planes with
+ GCD
+
+At 200k visibilities the serial host prep (bucketing + buffer upload,
+39ms for 29 planes) dominated the batched GPU phase (gpu 29ms, one
+wait). dispatch_apply over planes cuts host to ~11ms; encode stays
+serial on one command buffer. Validation first (fail() cannot cross
+the block boundary), per-index writes only, exceptions captured per
+plane and rethrown after the barrier. Output identical
+(rel_rms 1.918e-06 at 200k vis, 1.28e-05 sweep w=0..200).
+
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index 7fec5ca3..05c73e21 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -13,6 +13,7 @@
+ 
+ #include <chrono>
+ #include <cstring>
++#include <dispatch/dispatch.h>
+ #include <map>
+ #include <mutex>
+ #include <stdexcept>
+@@ -429,6 +430,7 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+ 
+     struct PlaneJob {
+       GridAccumInput input;
++      const char* kernel_name = nullptr;
+       TileBuckets buckets;
+       std::size_t tiles_per_row = 0;
+       std::size_t tiles = 0;
+@@ -443,11 +445,14 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+       id<MTLBuffer> work_buffer = nil;
+       std::size_t grid_bytes = 0;
+       std::size_t g = 0;
++      std::exception_ptr error;
+     };
+-    std::vector<PlaneJob> jobs;
+-    jobs.reserve(inputs.size());
+-    for (const auto& in : inputs) {
+-      PlaneJob job;
++    std::vector<PlaneJob> jobs(inputs.size());
++    // Serial validation first: fail() throws, which cannot cross the GCD
++    // block boundary below.
++    for (std::size_t i = 0; i < inputs.size(); ++i) {
++      const auto& in = inputs[i];
++      PlaneJob& job = jobs[i];
+       job.input = in;
+       const std::size_t g = in.grid_size;
+       if (g == 0 || g % 32 != 0) fail("grid size must be a positive multiple of 32");
+@@ -470,77 +475,113 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+           in.kernel_coefficients.empty()) {
+         fail("Variant::kPoly needs kernel_coefficients (see bench/metal/ducc0_kernel_tool.cpp)");
+       }
+-      job.buckets = bucketVisibilities(in);
+-      if (in.variant == Variant::kPacked) job.packed = packBuckets(in, job.buckets);
+-      job.tiles_per_row = job.buckets.tiles_per_row;
+-      job.tiles = job.tiles_per_row * job.tiles_per_row;
+-      if (job.split) {
+-        const std::size_t target = std::max<std::size_t>(1, in.split_target);
+-        for (std::size_t t = 0; t + 1 < job.buckets.start.size(); ++t) {
+-          const std::size_t b = job.buckets.start[t], e = job.buckets.start[t + 1];
+-          if (b == e) continue;
+-          for (std::size_t s = b; s < e; s += target) {
+-            job.work_items.push_back(static_cast<unsigned>(t));
+-            job.work_items.push_back(static_cast<unsigned>(s));
+-            job.work_items.push_back(static_cast<unsigned>(std::min(e, s + target)));
+-          }
+-        }
+-      }
+-      {
+-        const std::string key =
+-            std::to_string(in.support) + "/" + std::string(kernel_name);
+-        std::lock_guard<std::mutex> lock(metalCache().mutex);
+-        auto it = metalCache().pipelines.find(key);
+-        if (it != metalCache().pipelines.end()) {
+-          job.pipeline = it->second;
+-        } else {
+-          NSError* error = nil;
+-          const std::string metal_source = mslSource(in.support);
+-          id<MTLLibrary> library =
+-              [device newLibraryWithSource:[NSString stringWithUTF8String:metal_source.c_str()]
+-                                   options:nil
+-                                     error:&error];
+-          if (library == nil)
+-            fail("kernel compilation failed: " + nsString([error localizedDescription]));
+-          id<MTLFunction> function =
+-              [library newFunctionWithName:[NSString stringWithUTF8String:kernel_name]];
+-          if (function == nil)
+-            fail(std::string("kernel function '") + kernel_name + "' is missing");
+-          job.pipeline = [device newComputePipelineStateWithFunction:function error:&error];
+-          if (job.pipeline == nil)
+-            fail("pipeline creation failed: " + nsString([error localizedDescription]));
+-          metalCache().pipelines[key] = job.pipeline;
+-        }
+-      }
+-      job.grid_bytes = 2 * g * g * sizeof(float);
+-      job.grid_buffer = [device newBufferWithLength:job.grid_bytes
+-                                            options:MTLResourceStorageModeShared];
+-      std::memset([job.grid_buffer contents], 0, job.grid_bytes);
+-      if (in.variant == Variant::kPacked) {
+-        if (!job.packed.empty()) {
+-          job.visibility_buffer = [device newBufferWithBytes:job.packed.data()
+-                                                       length:job.packed.size() * sizeof(float)
+-                                                      options:MTLResourceStorageModeShared];
+-        }
+-      } else if (!in.visibilities.empty()) {
+-        job.visibility_buffer = [device newBufferWithBytes:in.visibilities.data()
+-                                                    length:in.visibilities.size() * sizeof(float)
+-                                                   options:MTLResourceStorageModeShared];
+-      }
+-      if (job.split && !job.work_items.empty()) {
+-        job.work_buffer = [device newBufferWithBytes:job.work_items.data()
+-                                              length:job.work_items.size() * sizeof(unsigned)
+-                                             options:MTLResourceStorageModeShared];
+-      }
+-      job.start_buffer = [device newBufferWithBytes:job.buckets.start.data()
+-                                             length:job.buckets.start.size() * sizeof(unsigned)
+-                                            options:MTLResourceStorageModeShared];
+-      if (!job.buckets.items.empty()) {
+-        job.item_buffer = [device newBufferWithBytes:job.buckets.items.data()
+-                                              length:job.buckets.items.size() * sizeof(unsigned)
+-                                             options:MTLResourceStorageModeShared];
+-      }
+-      jobs.push_back(job);
++      job.kernel_name = kernel_name;
++    }
++    // Host prep (bucketing, buffer upload) is independent per plane and
++    // dominates the host time at high visibility counts, so it runs in
++    // parallel. Encoding stays serial below (one command buffer). The raw
++    // pointer sidesteps block capture constness; each index is written once.
++    PlaneJob* job_data = jobs.data();
++    dispatch_apply(jobs.size(),
++                   dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(std::size_t i) {
++                     @autoreleasepool {
++                       PlaneJob& job = job_data[i];
++                       const auto& in = job.input;
++                       try {
++                         job.buckets = bucketVisibilities(in);
++                         if (in.variant == Variant::kPacked)
++                           job.packed = packBuckets(in, job.buckets);
++                         job.tiles_per_row = job.buckets.tiles_per_row;
++                         job.tiles = job.tiles_per_row * job.tiles_per_row;
++                         if (job.split) {
++                           const std::size_t target = std::max<std::size_t>(1, in.split_target);
++                           for (std::size_t t = 0;
++                                t + 1 < job.buckets.start.size(); ++t) {
++                             const std::size_t b = job.buckets.start[t],
++                                               e = job.buckets.start[t + 1];
++                             if (b == e) continue;
++                             for (std::size_t s = b; s < e; s += target) {
++                               job.work_items.push_back(static_cast<unsigned>(t));
++                               job.work_items.push_back(static_cast<unsigned>(s));
++                               job.work_items.push_back(
++                                   static_cast<unsigned>(std::min(e, s + target)));
++                             }
++                           }
++                         }
++                         {
++                           const std::string key = std::to_string(in.support) + "/" +
++                                                   std::string(job.kernel_name);
++                           std::lock_guard<std::mutex> lock(metalCache().mutex);
++                           auto it = metalCache().pipelines.find(key);
++                           if (it != metalCache().pipelines.end()) {
++                             job.pipeline = it->second;
++                           } else {
++                             NSError* error = nil;
++                             const std::string metal_source = mslSource(in.support);
++                             id<MTLLibrary> library = [device
++                                 newLibraryWithSource:[NSString
++                                                          stringWithUTF8String:metal_source
++                                                                                  .c_str()]
++                                              options:nil
++                                                error:&error];
++                             if (library == nil)
++                               fail("kernel compilation failed: " +
++                                    nsString([error localizedDescription]));
++                             id<MTLFunction> function = [library
++                                 newFunctionWithName:[NSString
++                                                         stringWithUTF8String:job.kernel_name]];
++                             if (function == nil)
++                               fail(std::string("kernel function '") + job.kernel_name +
++                                    "' is missing");
++                             job.pipeline = [device newComputePipelineStateWithFunction:function
++                                                                                 error:&error];
++                             if (job.pipeline == nil)
++                               fail("pipeline creation failed: " +
++                                    nsString([error localizedDescription]));
++                             metalCache().pipelines[key] = job.pipeline;
++                           }
++                         }
++                         job.grid_bytes = 2 * job.g * job.g * sizeof(float);
++                         job.grid_buffer =
++                             [device newBufferWithLength:job.grid_bytes
++                                                 options:MTLResourceStorageModeShared];
++                         std::memset([job.grid_buffer contents], 0, job.grid_bytes);
++                         if (in.variant == Variant::kPacked) {
++                           if (!job.packed.empty()) {
++                             job.visibility_buffer =
++                                 [device newBufferWithBytes:job.packed.data()
++                                                     length:job.packed.size() * sizeof(float)
++                                                    options:MTLResourceStorageModeShared];
++                           }
++                         } else if (!in.visibilities.empty()) {
++                           job.visibility_buffer =
++                               [device newBufferWithBytes:in.visibilities.data()
++                                                   length:in.visibilities.size() * sizeof(float)
++                                                  options:MTLResourceStorageModeShared];
++                         }
++                         if (job.split && !job.work_items.empty()) {
++                           job.work_buffer =
++                               [device newBufferWithBytes:job.work_items.data()
++                                                   length:job.work_items.size() * sizeof(unsigned)
++                                                  options:MTLResourceStorageModeShared];
++                         }
++                         job.start_buffer =
++                             [device newBufferWithBytes:job.buckets.start.data()
++                                                 length:job.buckets.start.size() * sizeof(unsigned)
++                                                options:MTLResourceStorageModeShared];
++                         if (!job.buckets.items.empty()) {
++                           job.item_buffer =
++                               [device newBufferWithBytes:job.buckets.items.data()
++                                                   length:job.buckets.items.size() * sizeof(unsigned)
++                                                  options:MTLResourceStorageModeShared];
++                         }
++                       } catch (...) {
++                         job.error = std::current_exception();
++                       }
++                     }
++                   });
++    for (const auto& job : jobs) {
++      if (job.error) std::rethrow_exception(job.error);
+     }
+ 
+     id<MTLCommandQueue> queue = [device newCommandQueue];

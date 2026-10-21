@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 10:49:29 -0400
-Subject: [PATCH 15/23] Metal: -mgpu wiring and a refusing 2-D gate
+Subject: [PATCH 15/24] Metal: -mgpu wiring and a refusing 2-D gate
 
 Adds metal/metalinversion.{h,mm}: the 2-D inversion (GPU gridding + ducc0's own
 forward chain) as a library usable by the gridder, plus a -mgpu setting that
