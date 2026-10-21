@@ -1,0 +1,124 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 07:49:26 -0400
+Subject: [PATCH 29/29] metal: plain-store epilogue, batch phase timing,
+ threads env knob
+
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index da2f40a7..5a496c72 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -273,6 +273,8 @@ void fillAccumInput(const InversionInput& input, const Geometry& geometry, GridA
+   accumulate.kernel_coefficients.assign(geometry.kernel->Coeff().begin(),
+                                         geometry.kernel->Coeff().end());
+   accumulate.variant = Variant::kPoly;
++  if (const char* threads = std::getenv("MX_METAL_DEBUG_THREADS"))
++    accumulate.threads_per_group = static_cast<std::size_t>(std::atoi(threads));
+ }
+ 
+ // Wrap a centred cell coordinate exactly as ducc0's getpix does:
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index cf1fbac6..c5a57100 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -190,8 +190,12 @@ kernel void grid_accumulate(device const float* visibilities,  // bx,fx,by,fy,re
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
++    // Plain stores: tiles partition the grid disjointly (32x32 cells each,
++    // one threadgroup per tile) and the grid is zeroed per plane, so no two
++    // threads ever write the same cell. The global CAS loop was pure overhead.
++    device float* gf = (device float*)grid;
++    gf[2 * (cx * grid_size + cy)] = re;
++    gf[2 * (cx * grid_size + cy) + 1] = im;
+   }
+ }
+ // The vectorized path is specialized for the support-6 kernel (the W = 6,
+@@ -289,8 +293,12 @@ kernel void grid_accumulate_hoisted(device const float* visibilities,  // bx,fx,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
++    // Plain stores: tiles partition the grid disjointly (32x32 cells each,
++    // one threadgroup per tile) and the grid is zeroed per plane, so no two
++    // threads ever write the same cell. The global CAS loop was pure overhead.
++    device float* gf = (device float*)grid;
++    gf[2 * (cx * grid_size + cy)] = re;
++    gf[2 * (cx * grid_size + cy) + 1] = im;
+   }
+ }
+ 
+@@ -373,8 +381,12 @@ kernel void grid_accumulate_hoisted_packed(device const float* packed_visibiliti
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
++    // Plain stores: tiles partition the grid disjointly (32x32 cells each,
++    // one threadgroup per tile) and the grid is zeroed per plane, so no two
++    // threads ever write the same cell. The global CAS loop was pure overhead.
++    device float* gf = (device float*)grid;
++    gf[2 * (cx * grid_size + cy)] = re;
++    gf[2 * (cx * grid_size + cy) + 1] = im;
+   }
+ }
+ 
+@@ -438,8 +450,12 @@ kernel void grid_accumulate_cost_probe(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
++    // Plain stores: tiles partition the grid disjointly (32x32 cells each,
++    // one threadgroup per tile) and the grid is zeroed per plane, so no two
++    // threads ever write the same cell. The global CAS loop was pure overhead.
++    device float* gf = (device float*)grid;
++    gf[2 * (cx * grid_size + cy)] = re;
++    gf[2 * (cx * grid_size + cy) + 1] = im;
+   }
+ }
+ 
+@@ -544,8 +560,12 @@ kernel void grid_accumulate_poly(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
++    // Plain stores: tiles partition the grid disjointly (32x32 cells each,
++    // one threadgroup per tile) and the grid is zeroed per plane, so no two
++    // threads ever write the same cell. The global CAS loop was pure overhead.
++    device float* gf = (device float*)grid;
++    gf[2 * (cx * grid_size + cy)] = re;
++    gf[2 * (cx * grid_size + cy) + 1] = im;
+   }
+ }
+ 
+@@ -633,8 +653,12 @@ kernel void grid_accumulate_poly_hoisted(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
+-    atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
++    // Plain stores: tiles partition the grid disjointly (32x32 cells each,
++    // one threadgroup per tile) and the grid is zeroed per plane, so no two
++    // threads ever write the same cell. The global CAS loop was pure overhead.
++    device float* gf = (device float*)grid;
++    gf[2 * (cx * grid_size + cy)] = re;
++    gf[2 * (cx * grid_size + cy) + 1] = im;
+   }
+ }
+ 
+@@ -725,6 +749,8 @@ kernel void grid_accumulate_poly_hoisted_split(device const float* visibilities,
+     if (re == 0.0f && im == 0.0f) continue;
+     const uint cx = tile_x0 + i % kTile;
+     const uint cy = tile_y0 + i / kTile;
++    // Split dispatch: several threadgroups can flush slices of the SAME tile,
++    // so the flush must stay atomic here (unlike the per-tile kernels above).
+     atomic_add_float(&grid[2 * (cx * grid_size + cy)], re);
+     atomic_add_float(&grid[2 * (cx * grid_size + cy) + 1], im);
+   }

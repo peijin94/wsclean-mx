@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Tue, 20 Oct 2026 20:06:03 -0400
-Subject: [PATCH 24/28] metal: parallelize batched host prep across planes with
+Subject: [PATCH 24/29] metal: parallelize batched host prep across planes with
  GCD
 
 At 200k visibilities the serial host prep (bucketing + buffer upload,

@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 15:19:19 -0400
-Subject: [PATCH 21/28] Metal: parameterise the kernels for odd support (ducc0
+Subject: [PATCH 21/29] Metal: parameterise the kernels for odd support (ducc0
  selects W=7)
 
 The cost-model fix moved the geometry to supp 7 / nu 378 / nplanes 125, which

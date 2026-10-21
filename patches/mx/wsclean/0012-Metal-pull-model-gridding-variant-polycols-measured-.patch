@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: wsclean-mx <wsclean-mx@localhost>
 Date: Mon, 19 Oct 2026 08:49:40 -0400
-Subject: [PATCH 12/28] Metal: pull-model gridding variant (polycols), measured
+Subject: [PATCH 12/29] Metal: pull-model gridding variant (polycols), measured
  and scan-bound
 
 Gives every grid cell exactly one owner: one cell per thread, one scalar
