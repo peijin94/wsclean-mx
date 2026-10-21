@@ -1,0 +1,288 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Tue, 20 Oct 2026 22:33:51 -0400
+Subject: [PATCH 26/26] metal: chunk rows + group planes, exact beyond-horizon
+ nm1
+
+Memory: one inversion call can hold 270M row-channels; materialising
+per-item vectors for all of them (~45 GB of accumulate copies across
+201 planes) stalls the machine. Process row chunks (<=1M items) sharing
+one global layout, plane groups capped at 256 MB; dirty accumulates
+with +=, corrections run once. Identical results (lwa50k 1.43e-08
+before and after).
+
+Correctness (wide-field): ducc0's beyond-horizon nm1 is
+-sqrt(sum-1)-1, not -sqrt(sum)-1; also port its exact extrema scan
+(xext/yext, sqrt(1-tmp)-1 inside). Narrow-field was inside the horizon
+and never saw it; full-sky LWA was 3.7e-03, now 1.5e-08 on the 50k
+subset. Wide synthetic (pixel-scale 10): 0.025 -> 1.5e-07.
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 0a0ac602..d53038ab 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -99,7 +99,10 @@
+ // nm1 = sqrt(1-l^2-m^2)-1, in the accurate form ducc0 uses near zero.
+ double nm1Of(double l, double m) {
+   const double sum = l * l + m * m;
+-  if (sum >= 1.0) return -std::sqrt(sum) - 1.0;
++  // ducc0's phase()/correction beyond-horizon form: -sqrt(sum-1)-1, NOT
++  // -sqrt(sum)-1. Wide-field images have pixels beyond the horizon; the
++  // wrong form corrupts screens, corrections, and the nm1 range below.
++  if (sum >= 1.0) return -std::sqrt(sum - 1.0) - 1.0;
+   return -sum / (std::sqrt(1.0 - sum) + 1.0);
+ }
+ 
+@@ -117,21 +120,25 @@ PlaneLayout planeLayout(const InversionInput& input, std::size_t grid, std::size
+   PlaneLayout layout;
+   const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
+   const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
+-  // Scan the WHOLE image, like ducc0's prep(). nm1 is even in l and m, so the
+-  // four corners all return the same value: taking only corners then gives
+-  // nm1min == nm1max, nshift = -nm1, and an `amplitude` of ~0 instead of ~0.15,
+-  // which makes dw 50x too large and the plane weights extrapolate wildly. That
+-  // was the last factor.
++  // ducc0's getNuNv() nm1 scan: extrema of the pixel-center grid (image
++  // corners/edges/center, plus 0 when straddled), NOT every pixel, with
++  // ducc0's exact nval forms. A whole-image scan with the accurate
++  // near-zero form gives the same min/max to ~1e-16, but the extrema scan
++  // is exact by construction and immune to pixel-grid subtleties.
+   double nm1min = 1e300, nm1max = -1e300;
+-  for (std::size_t i = 0; i < input.image_width; ++i) {
+-    const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
+-    for (std::size_t j = 0; j < input.image_height; ++j) {
+-      const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+-      const double value = nm1Of(l, m);
+-      nm1min = std::min(nm1min, value);
+-      nm1max = std::max(nm1max, value);
++  const double xmin = x0, xmax = x0 + (input.image_width - 1) * input.pixel_size_x;
++  const double ymin = y0, ymax = y0 + (input.image_height - 1) * input.pixel_size_y;
++  double xext[3] = {xmin, xmax, 0.0}, yext[3] = {ymin, ymax, 0.0};
++  const int nxext = (xmin * xmax < 0.0) ? 3 : 2;
++  const int nyext = (ymin * ymax < 0.0) ? 3 : 2;
++  for (int ix = 0; ix < nxext; ++ix)
++    for (int iy = 0; iy < nyext; ++iy) {
++      const double tmp = xext[ix] * xext[ix] + yext[iy] * yext[iy];
++      const double nval = (tmp <= 1.0) ? (std::sqrt(1.0 - tmp) - 1.0)
++                                       : (-std::sqrt(tmp - 1.0) - 1.0);
++      nm1min = std::min(nm1min, nval);
++      nm1max = std::max(nm1max, nval);
+     }
+-  }
+   layout.nshift = -0.5 * (nm1max + nm1min);
+   const double ofactor =
+       static_cast<double>(grid) / static_cast<double>(std::max(input.image_width, input.image_height));
+@@ -308,34 +315,27 @@ bool inversion(const InversionInput& input, float* dirty) {
+   }
+   std::size_t image_size = 0;
+   Geometry geometry;
+-  // |w| extremes and per-row sign, needed by the cost model and the layout.
+-  const std::size_t item_count = static_cast<std::size_t>(input.n_rows) * input.n_channels;
+-  std::vector<double> w_lambda;
+-  std::vector<float> w_sign;
++  // |w| extremes, needed by the cost model and the layout. Streamed (no
++  // storage): the full run holds 270M row-channels, and materialising
++  // per-item vectors for all of them costs gigabytes. Per-chunk vectors
++  // are built inside the row-chunk loop below.
+   double w_min = 0.0, w_max = 0.0;
+   if (input.w_gridding) {
+-    // by negating (u,v) and conjugating the visibility (UVW::FixW, whose sign is
+-    // then the `imflip` factor). Using the signed range instead puts negative-w
+-    // rows in the wrong planes and with the wrong screen - which is exactly why
+-    // w = 0 worked and w != 0 was incoherent.
+-    // NOTE (M0): these resize the OUTER vectors — do not redeclare them here.
+-    // A shadowed redeclaration once confined the fill to this block and fed
+-    // empty vectors + a zero range to the geometry and plane assignment below.
+-    w_lambda.resize(item_count);
+-    w_sign.resize(item_count);
+     w_min = 1e300, w_max = -1e300;
+     for (std::size_t row = 0; row < input.n_rows; ++row) {
++      const double w_m = input.flip_w ? -input.uvws[3 * row + 2] : input.uvws[3 * row + 2];
+       for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+-        const double lambda = kSpeedOfLight / input.frequencies[ch];
+-        double w = input.uvws[3 * row + 2] / lambda;
+-        if (input.flip_w) w = -w;
+-        const std::size_t item = row * input.n_channels + ch;
+-        w_sign[item] = (w < 0.0) ? -1.0f : 1.0f;
+-        w_lambda[item] = std::fabs(w);
+-        w_min = std::min(w_min, w_lambda[item]);
+-        w_max = std::max(w_max, w_lambda[item]);
++        const double w = std::fabs(w_m / (kSpeedOfLight / input.frequencies[ch]));
++        if (w < w_min) w_min = w;
++        if (w > w_max) w_max = w;
+       }
+     }
++    // by negating (u,v) and conjugating the visibility (UVW::FixW, whose sign is
++    // then the `imflip` factor). Using the signed range instead puts negative-w
++    // rows in the wrong planes and with the wrong screen - which is exactly why
++    // w = 0 worked and w != 0 was incoherent.
++
++  }
+     // The plane layout must use ducc0's ofactor (nu / image_size), not my grid's:
+     // nu_metal = 352 vs nu = 350 is a 1% difference in dw, and a 1% error in the
+     // plane spacing makes the w-interpolation drift with w - 5% peak error at
+@@ -343,8 +343,6 @@ bool inversion(const InversionInput& input, float* dirty) {
+     // measured. The grid stays nu_metal (the kernel tile), the DISCRETISATION is
+     // ducc0's.
+ 
+-  }
+-
+   if (!makeGeometry(input, input.w_gridding, w_max - w_min, image_size, geometry)) {
+     std::fprintf(stderr, "[mx-metal] refused: no usable gridding kernel\n");
+     return false;
+@@ -453,15 +451,36 @@ bool inversion(const InversionInput& input, float* dirty) {
+                  layout.dw, layout.nplanes, layout.wmin, layout.wshift, layout.nshift, w_min,
+                  w_max);
+   }
+-  std::vector<std::vector<std::size_t>> plane_items(layout.nplanes);
+-  for (std::size_t row = 0; row < input.n_rows; ++row) {
+-    for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
+-      const double w = w_lambda[row * input.n_channels + ch];
++  // Row chunks bound the memory: every item appears in ~supp planes'
++  // accumulate vectors (6 floats each), so materialising all items at once
++  // costs tens of GB on wide-field multi-channel runs. Chunks share the one
++  // global layout; dirty accumulates with += and corrections run once below.
++  const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
++  const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
++  const std::size_t rows_per_chunk =
++      std::max<std::size_t>(1, 1024 * 1024 / std::max<std::size_t>(1, input.n_channels));
++  for (std::size_t r0 = 0; r0 < input.n_rows; r0 += rows_per_chunk) {
++    const std::size_t r1 = std::min(input.n_rows, r0 + rows_per_chunk);
++    const std::size_t chunk_items = (r1 - r0) * input.n_channels;
++    std::vector<double> w_lambda(chunk_items);
++    std::vector<float> w_sign(chunk_items);
++    for (std::size_t row = r0; row < r1; ++row) {
++      const double w_m = input.flip_w ? -input.uvws[3 * row + 2] : input.uvws[3 * row + 2];
++      for (std::size_t ch = 0; ch < input.n_channels; ++ch) {
++        const double lambda = kSpeedOfLight / input.frequencies[ch];
++        const std::size_t item = (row - r0) * input.n_channels + ch;
++        const double w = w_m / lambda;
++        w_sign[item] = (w < 0.0) ? -1.0f : 1.0f;
++        w_lambda[item] = std::fabs(w);
++      }
++    }
++    std::vector<std::vector<std::size_t>> plane_items(layout.nplanes);
++    for (std::size_t item = 0; item < chunk_items; ++item) {
++      const double w = w_lambda[item];
+       long plane = static_cast<long>((w + layout.wshift) / layout.dw);
+       plane = std::max<long>(0, std::min<long>(plane, static_cast<long>(layout.nplanes) - 1));
+-      plane_items[static_cast<std::size_t>(plane)].push_back(row * input.n_channels + ch);
++      plane_items[static_cast<std::size_t>(plane)].push_back(item);
+     }
+-  }
+   // ducc0's w-tap (TemplateKernel::eval2s): z = (z_off - nth)*2 + (W-1), where
+   // z_off = (w_plane - w_vis)/dw is the distance in PLANES, and the value is the
+   // nth piece of the same polynomial the shader evaluates with poly_sample.
+@@ -494,8 +513,6 @@ bool inversion(const InversionInput& input, float* dirty) {
+ 
+   std::vector<std::complex<float>> grid_values(static_cast<std::size_t>(grid) * grid);
+   std::vector<double> phases(input.image_height / 2 + 1);
+-  const double x0 = -0.5 * static_cast<double>(input.image_width) * input.pixel_size_x;
+-  const double y0 = -0.5 * static_cast<double>(input.image_height) * input.pixel_size_y;
+   const bool skip_screen = debugDouble("MX_METAL_DEBUG_NOSCREEN", 0.0) > 0.0;
+   // ducc0's shifting phase: when nshift != 0 every visibility is rotated by
+   // exp(+2*pi*i*w*nshift) BEFORE gridding (x2grid_c multiplies v by the
+@@ -504,9 +521,9 @@ bool inversion(const InversionInput& input, float* dirty) {
+   // visibility: invisible at w = 0, a ~0.135 rad/lambda rotation elsewhere,
+   // which is exactly the w-layer failure signature. Precompute per item (the
+   // phase is plane-independent); with nshift == 0 this is exactly (1, 0).
+-  std::vector<float> wphase_re(item_count, 1.0f), wphase_im(item_count, 0.0f);
++  std::vector<float> wphase_re(chunk_items, 1.0f), wphase_im(chunk_items, 0.0f);
+   if (layout.nshift != 0.0) {
+-    for (std::size_t item = 0; item < item_count; ++item) {
++    for (std::size_t item = 0; item < chunk_items; ++item) {
+       const double angle =
+           kTwoPi * static_cast<double>(w_sign[item]) * w_lambda[item] * layout.nshift;
+       wphase_re[item] = static_cast<float>(std::cos(angle));
+@@ -547,7 +564,7 @@ bool inversion(const InversionInput& input, float* dirty) {
+     for (std::size_t k = 0; k < weighted_items.size(); ++k) {
+       const std::size_t item = weighted_items[k].first;
+       const double weight = weighted_items[k].second;
+-      const std::size_t row = item / input.n_channels;
++      const std::size_t row = r0 + item / input.n_channels;
+       const std::size_t ch = item % input.n_channels;
+       const double lambda = kSpeedOfLight / input.frequencies[ch];
+       const double sign = static_cast<double>(w_sign[item]);
+@@ -566,7 +583,7 @@ bool inversion(const InversionInput& input, float* dirty) {
+       accumulate.visibilities[6 * k + 1] = static_cast<float>(wrap_x - base_x);
+       accumulate.visibilities[6 * k + 2] = static_cast<float>(base_y);
+       accumulate.visibilities[6 * k + 3] = static_cast<float>(wrap_y - base_y);
+-      const std::complex<float>& value = input.ms[item];
++      const std::complex<float>& value = input.ms[row * input.n_channels + ch];
+       // Shifting phase first, conjugation second - ducc0's order (v *= phases,
+       // then vi = v.imag*imflip). The phase uses the signed w (sign*|w|).
+       const float vr = value.real() * wphase_re[item] - value.imag() * wphase_im[item];
+@@ -577,27 +594,42 @@ bool inversion(const InversionInput& input, float* dirty) {
+     plane_inputs.push_back(std::move(accumulate));
+     plane_index.push_back(pl);
+   }
+-  std::vector<GridAccumResult> plane_grids;
+-  try {
+-    plane_grids = gridAccumulateBatched(plane_inputs);
+-  } catch (const std::exception& error) {
+-    std::fprintf(stderr, "[mx-metal] gridding failed: %s\n", error.what());
+-    return false;
+-  }
++  // Group the planes into memory-bounded batches: each plane holds a full
++  // grid (8*grid^2 bytes in the Metal buffer plus the result copy), so
++  // gridAccumulateBatched over all planes at once needs
++  // 2*nplanes*grid_bytes. A 201-plane full-sky layout needs ~10 GB that
++  // way and stalls the machine; groups of <=256 MB behave identically
++  // (planes are independent until the dirty-image sum below).
++  const std::size_t grid_bytes =
++      8 * static_cast<std::size_t>(grid) * static_cast<std::size_t>(grid);
++  const std::size_t planes_per_group =
++      std::max<std::size_t>(1, (256u << 20) / std::max<std::size_t>(1, grid_bytes));
+   const bool dump_timing = debugDouble("MX_METAL_DEBUG_TIMING", 0.0) > 0.0;
+-  if (dump_timing) {
+-    double total_gpu = 0.0;
+-    for (const auto& r : plane_grids) total_gpu += r.gpu_seconds;
+-    std::fprintf(stderr,
+-                 "[mx-metal] batched %zu planes gpu_total=%.2fms wall=%.2fms host=%.2fms\n",
+-                 plane_grids.size(), total_gpu * 1000.0,
+-                 plane_grids.empty() ? 0.0 : plane_grids[0].wall_seconds * 1000.0,
+-                 plane_grids.empty() ? 0.0 : plane_grids[0].host_seconds * 1000.0);
+-  }
+-  for (std::size_t g = 0; g < plane_grids.size(); ++g) {
+-    const std::size_t pl = plane_index[g];
++  for (std::size_t g0 = 0; g0 < plane_inputs.size(); g0 += planes_per_group) {
++    const std::size_t g1 = std::min(plane_inputs.size(), g0 + planes_per_group);
++    std::vector<GridAccumInput> group_inputs(plane_inputs.begin() + g0,
++                                             plane_inputs.begin() + g1);
++    std::vector<GridAccumResult> plane_grids;
++    try {
++      plane_grids = gridAccumulateBatched(std::move(group_inputs));
++    } catch (const std::exception& error) {
++      std::fprintf(stderr, "[mx-metal] gridding failed: %s\n", error.what());
++      return false;
++    }
++    if (dump_timing) {
++      double total_gpu = 0.0;
++      for (const auto& r : plane_grids) total_gpu += r.gpu_seconds;
++      std::fprintf(stderr,
++                   "[mx-metal] batched %zu planes gpu_total=%.2fms wall=%.2fms host=%.2fms\n",
++                   plane_grids.size(), total_gpu * 1000.0,
++                   plane_grids.empty() ? 0.0 : plane_grids[0].wall_seconds * 1000.0,
++                   plane_grids.empty() ? 0.0 : plane_grids[0].host_seconds * 1000.0);
++    }
++    for (std::size_t gi = 0; gi < plane_grids.size(); ++gi) {
++      const std::size_t g = g0 + gi;
++      const std::size_t pl = plane_index[g];
+     const double w_plane = layout.wmin + static_cast<double>(pl) * layout.dw;
+-    const GridAccumResult& grid_result = plane_grids[g];
++    const GridAccumResult& grid_result = plane_grids[gi];
+     if (const char* dump_dir = std::getenv("MX_METAL_DEBUG_DUMP_PLANES")) {
+       char path[1024];
+       std::snprintf(path, sizeof(path), "%s/plane%02zu.raw", dump_dir, pl);
+@@ -655,7 +687,9 @@ bool inversion(const InversionInput& input, float* dirty) {
+         }
+       }
+     }
+-  }
++  }  // end gi loop
++  }  // end plane group
++  }  // end row chunk
+ 
+   // ---------------- ducc0's apply_global_corrections ----------------
+   for (std::size_t i = 0; i < input.image_width; ++i) {
