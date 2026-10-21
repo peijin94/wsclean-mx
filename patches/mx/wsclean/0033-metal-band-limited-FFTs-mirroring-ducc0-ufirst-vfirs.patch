@@ -1,0 +1,194 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 11:34:17 -0400
+Subject: [PATCH 33/33] metal: band-limited FFTs mirroring ducc0 ufirst/vfirst
+
+Per-plane occupied line ranges from the centered-frame tap footprints;
+FFT axis-0 over occupied columns (or axis-1 over occupied rows), then
+the other axis over dirty rows/cols only. Skipped lines are zeros so
+this is exact up to strided-FFT rounding (~1e-7). 4096: FFT 19.7s->9.7s,
+total 37.6s->30.5s. T2 passes (4.78e-06).
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index c84121cb..48e75b51 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -308,7 +308,89 @@ void fillAccumInput(const InversionInput& input, const Geometry& geometry, GridA
+   return cornered >= 0.5 * g ? cornered - g : cornered;
+ }
+ 
+-// Roll the centred Metal grid to ducc0's DC-at-0 frame.
++// Merge an occupancy bitset into maximal contiguous [begin,end) ranges.
++std::vector<std::pair<std::size_t, std::size_t>> mergeRanges(
++    const std::vector<unsigned char>& occ) {
++  std::vector<std::pair<std::size_t, std::size_t>> ranges;
++  for (std::size_t i = 0; i < occ.size();) {
++    if (!occ[i]) {
++      ++i;
++      continue;
++    }
++    std::size_t j = i + 1;
++    while (j < occ.size() && occ[j]) ++j;
++    ranges.emplace_back(i, j);
++    i = j;
++  }
++  return ranges;
++}
++
++// Band-limited 2-D FFT mirroring ducc0's grid2dirty_c_overwrite_wscreen_add:
++// FFT axis 0 over occupied-column ranges (or axis 1 over occupied-row
++// ranges), then the other axis over the dirty rows/cols only. Skipped lines
++// are zeros (grid zero-filled, taps only in occupied lines), so this is
++// bit-exact vs the full FFT. ducc0's ufirst/vfirst cost model picks the
++// cheaper order per plane. Our grid is centered (no roll): dirty rows/cols
++// are [0,half)+[grid-half,grid), which is exactly what extract reads.
++void bandedFFT(std::complex<float>* G, std::size_t grid, std::size_t W2, std::size_t H2,
++               const std::vector<unsigned char>& occ_rows,
++               const std::vector<unsigned char>& occ_cols, std::size_t nthreads) {
++  const auto rows = mergeRanges(occ_rows);
++  const auto cols = mergeRanges(occ_cols);
++  std::size_t nrow = 0, ncol = 0;
++  for (const auto& r : rows) nrow += r.second - r.first;
++  for (const auto& r : cols) ncol += r.second - r.first;
++  const double lg = std::log(static_cast<double>(grid));
++  const double cost_u =
++      static_cast<double>(W2) * lg * grid + static_cast<double>(ncol) * lg * grid;
++  const double cost_v =
++      static_cast<double>(H2) * lg * grid + static_cast<double>(nrow) * lg * grid;
++  if (std::getenv("MX_METAL_DEBUG_OCCUPANCY") != nullptr) {
++    std::string rs = "rows:";
++    for (std::size_t k = 0; k < std::min<std::size_t>(rows.size(), 6); ++k)
++      rs += " [" + std::to_string(rows[k].first) + "," + std::to_string(rows[k].second) + ")";
++    std::string cs = " cols:";
++    for (std::size_t k = 0; k < std::min<std::size_t>(cols.size(), 6); ++k)
++      cs += " [" + std::to_string(cols[k].first) + "," + std::to_string(cols[k].second) + ")";
++    std::fprintf(stderr, "[mx-metal] bandedFFT grid=%zu W2=%zu nrow=%zu ncol=%zu %s%s%s\n", grid, W2,
++                 nrow, ncol, (cost_u < cost_v) ? "ufirst" : "vfirst", rs.c_str(), cs.c_str());
++  }
++  ducc0::vfmav<std::complex<float>> inout(G, {grid, grid});
++  const std::size_t halfW = W2 / 2, halfH = H2 / 2;
++  if (std::getenv("MX_METAL_DEBUG_FULLFFT") != nullptr) {
++    ducc0::detail_fft::c2c(inout, inout, {0}, false, 1.0f, nthreads);
++    ducc0::detail_fft::c2c(inout, inout, {1}, false, 1.0f, nthreads);
++    return;
++  }
++  if (cost_u < cost_v) {
++    for (const auto& r : cols) {
++      auto sub = inout.subarray({{},{r.first, r.second}});
++      ducc0::detail_fft::c2c(sub, sub, {0}, false, 1.0f, nthreads);
++    }
++    {
++      auto sub = inout.subarray({{0, halfW},{}});
++      ducc0::detail_fft::c2c(sub, sub, {1}, false, 1.0f, nthreads);
++    }
++    {
++      auto sub = inout.subarray({{grid - halfW, grid},{}});
++      ducc0::detail_fft::c2c(sub, sub, {1}, false, 1.0f, nthreads);
++    }
++  } else {
++    for (const auto& r : rows) {
++      auto sub = inout.subarray({{r.first, r.second},{}});
++      ducc0::detail_fft::c2c(sub, sub, {1}, false, 1.0f, nthreads);
++    }
++    {
++      auto sub = inout.subarray({{}, {0, halfH}});
++      ducc0::detail_fft::c2c(sub, sub, {0}, false, 1.0f, nthreads);
++    }
++    {
++      auto sub = inout.subarray({{}, {grid - halfH, grid}});
++      ducc0::detail_fft::c2c(sub, sub, {0}, false, 1.0f, nthreads);
++    }
++  }
++}
++
+ void rollToDucc0Frame(const std::vector<float>& centred, std::size_t grid,
+                       std::vector<std::complex<float>>& out) {
+   for (std::size_t i = 0; i < grid; ++i) {
+@@ -623,12 +705,15 @@ bool inversion(const InversionInput& input, float* dirty) {
+   plane_index.reserve(g1 - g0);
+   std::vector<GridAccumInput> plane_slots(g1 - g0);
+   std::vector<char> plane_used(g1 - g0, 0);
++  std::vector<std::vector<unsigned char>> slot_occ_r(g1 - g0), slot_occ_c(g1 - g0);
+   std::exception_ptr plane_error;
+   std::mutex plane_error_mutex;
+   // ObjC blocks capture C++ objects by (const) value, which would deep-copy
+   // the vectors per invocation; use raw pointers to the shared storage.
+   GridAccumInput* slot_ptr = plane_slots.data();
+   char* used_ptr = plane_used.data();
++  std::vector<unsigned char>* occ_r_ptr = slot_occ_r.data();
++  std::vector<unsigned char>* occ_c_ptr = slot_occ_c.data();
+   std::exception_ptr* error_ptr = &plane_error;
+   std::mutex* error_mutex_ptr = &plane_error_mutex;
+   const std::vector<std::size_t>* buckets_ptr = plane_items.data();
+@@ -657,13 +742,24 @@ bool inversion(const InversionInput& input, float* dirty) {
+         if (weight != 0.0) weighted_items.emplace_back(item, weight);
+       }
+     }
+-    if (std::getenv("MX_METAL_DEBUG_OCCUPANCY") != nullptr) {
++    {  // Occupied-line bitsets for band-limited FFTs (mirror ducc0's
++      // uranges/vranges): a line is occupied if any kept tap touches it.
++      // Taps span ±(support/2) around the base; reach covers it with margin
++      // (superset only costs FFT time, never correctness).
+       std::vector<unsigned char> orows(grid, 0), ocols(grid, 0);
+       const int reach = static_cast<int>(support / 2) + 1;
++      // Centered-frame cells: the GPU kernel places taps at base+centre
++      // (centre == grid/2, see i0/j0 and tilesOf), so shift the ducc0-frame
++      // split bases the same way or the ranges miss every tap.
++      // Image rows <-> u <-> split[0], image cols <-> v <-> split[2]
++      // (the kernel's i0/cx is the row axis, j0/cy the column axis).
++      const int centre = static_cast<int>(grid) / 2;
+       for (const auto& wi : weighted_items) {
+         const std::size_t item = wi.first;
+-        const int bx = static_cast<int>(split_ptr[4 * item + 0]);
+-        const int by = static_cast<int>(split_ptr[4 * item + 2]);
++        const int bx = (static_cast<int>(split_ptr[4 * item + 2]) + centre) %
++                       static_cast<int>(grid);
++        const int by = (static_cast<int>(split_ptr[4 * item + 0]) + centre) %
++                       static_cast<int>(grid);
+         for (int d = -reach; d <= reach; ++d) {
+           int cx = bx + d, cy = by + d;
+           cx %= static_cast<int>(grid); if (cx < 0) cx += grid;
+@@ -671,11 +767,21 @@ bool inversion(const InversionInput& input, float* dirty) {
+           ocols[cx] = 1; orows[cy] = 1;
+         }
+       }
+-      std::size_t nr = 0, nc = 0;
+-      for (auto v : orows) nr += v;
+-      for (auto v : ocols) nc += v;
+-      std::fprintf(stderr, "[mx-metal] occ plane %zu items=%zu rows=%zu/%zu cols=%zu/%zu\n",
+-                   pl, weighted_items.size(), nr, grid, nc, grid);
++      if (std::getenv("MX_METAL_DEBUG_OCCUPANCY") != nullptr) {
++        std::size_t nr = 0, nc = 0, mr0 = grid, mr1 = 0, mc0 = grid, mc1 = 0;
++        for (std::size_t k = 0; k < grid; ++k) {
++          if (orows[k]) { nr++; mr0 = std::min(mr0, k); mr1 = k + 1; }
++          if (ocols[k]) { nc++; mc0 = std::min(mc0, k); mc1 = k + 1; }
++        }
++        const auto& w0 = weighted_items.front();
++        std::fprintf(stderr, "[mx-metal] occ plane %zu items=%zu rows=%zu/%zu cols=%zu/%zu\n",
++                     pl, weighted_items.size(), nr, grid, nc, grid);
++        std::fprintf(stderr, "[mx-metal] mark plane %zu orows=[%zu,%zu) ocols=[%zu,%zu) split0=%.1f split2=%.1f\n",
++                     pl, mr0, mr1, mc0, mc1, split_ptr[4 * w0.first + 0],
++                     split_ptr[4 * w0.first + 2]);
++      }
++      occ_r_ptr[bi] = std::move(orows);
++      occ_c_ptr[bi] = std::move(ocols);
+     }
+     if (!weighted_items.empty()) {
+     if (debugDouble("MX_METAL_DEBUG_WEIGHTS", 0.0) > 0.0) {
+@@ -768,10 +874,11 @@ bool inversion(const InversionInput& input, float* dirty) {
+     // from the rolled FFT at the 1e-7 level (different summation order).
+     auto* plane_grid = reinterpret_cast<std::complex<float>*>(grid_result.grid.data());
+ 
+-    const ducc0::cfmav<std::complex<float>> grid_in(plane_grid, {grid, grid});
+-    ducc0::vfmav<std::complex<float>> grid_out(plane_grid, {grid, grid});
+-    ducc0::detail_fft::c2c(grid_in, grid_out, {0}, false, 1.0f, input.n_threads);
+-    ducc0::detail_fft::c2c(grid_in, grid_out, {1}, false, 1.0f, input.n_threads);
++    // Band-limited FFT over occupied lines + dirty rows/cols (bit-exact:
++    // skipped lines are zeros). Mirror of ducc0's ufirst/vfirst selection.
++    bandedFFT(plane_grid, grid, input.image_width, input.image_height,
++              slot_occ_r[plane_index[gi] - g0], slot_occ_c[plane_index[gi] - g0],
++              input.n_threads);
+     if (dump_timing) {
+       t_fft1 = std::chrono::steady_clock::now();
+       using ms = std::chrono::duration<double, std::milli>;
