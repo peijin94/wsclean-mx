@@ -5,6 +5,12 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- GPU deconv/prediction record: `dev-note.md` (2026-10-22). Inversion is
+  locked to ducc0 (`MX_METAL_ENGINE` gates the experimental path);
+  `-mgpu` = peak-scan + prediction hooks only, convolve hook opt-in
+  (`MX_METAL_CONVOLVE=1`). 15-slot 3k deep: CPU 23.27 s vs `-mgpu` ~23.5 s;
+  all products T2 PASS at 1-2e-06. Batched vkFFT and direct R2C measured
+  worse than CPU (pinned in `mx-vkfft-batch-probe`, do not retry).
 - Current plan: `docs/development-plan.md`; evidence and limits:
   `docs/audit-2026-10-17.md` and `docs/continuation-2026-10-17.md`.
   Read the continuation before the historical measurements below.
