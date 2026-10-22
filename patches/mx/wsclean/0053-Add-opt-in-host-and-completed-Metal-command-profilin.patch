@@ -1,0 +1,562 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 13:40:32 -0700
+Subject: [PATCH] Add opt-in host and completed Metal command profiling spans
+
+
+diff --git a/metal/mxconvolve.cpp b/metal/mxconvolve.cpp
+index 1067b095..43ea7d01 100644
+--- a/metal/mxconvolve.cpp
++++ b/metal/mxconvolve.cpp
+@@ -1,5 +1,6 @@
+ #include "metal/mxconvolve.h"
+ #include "metal/mxvkfft.h"
++#include "metal/mxprofile.h"
+ #include <atomic>
+ #include <chrono>
+ #include <cstdio>
+@@ -34,41 +35,68 @@ extern "C" int mx_convolve_many(float* const* images,const std::complex<float>*
+   const size_t pitch=2*(w/2+1);
+   if(pitch>((size_t(512)<<20)/sizeof(float))/h/count)return refuse("512 MiB batch FFT budget exceeded");
+   for(size_t i=0;i<count;++i)if(!images[i]||!kernels[i])return refuse("null scale buffer");
++  mx::profile::Context profile;
++  profile.id=mx::profile::nextId();profile.w=w;profile.h=h;profile.batch=count;
++  mx::profile::Span total("convolution.total",profile);total.ok=false;
++  mx::profile::Span mutex_wait("convolution.batch_mutex_wait",profile);
+   std::lock_guard lock(batch_mutex);
++  mutex_wait.finish();
+   auto stamp=Clock::now();
+   if(!batch_plan||batch_plan->width()!=w||batch_plan->height()!=h||batch_plan->batch()!=count){
++    mx::profile::Span miss("convolution.plan_miss",profile);miss.ok=false;
+     batch_plan=std::make_unique<mx::vk::Fft>();
++    batch_plan->profileOwner(profile.id);
+     if(!batch_plan->initReal(w,h,count)){int r=refuse(batch_plan->error());batch_plan.reset();return r;}
++    miss.ok=true;
+     ++plan_count;
+     if(std::getenv("MX_METAL_DEBUG_TIMING"))std::fprintf(stderr,"[mx-metal] convolve plan batch=%zu init_s=%.6f\n",count,seconds(stamp));
+   }
+   plan_seconds+=seconds(stamp);stamp=Clock::now();
+   std::vector<const float*> kp;kp.reserve(count);
+   for(size_t i=0;i<count;++i)kp.push_back(reinterpret_cast<const float*>(kernels[i]));
++  batch_plan->profileOwner(profile.id);
+   if(!batch_plan->submitConvolution(reinterpret_cast<const float*>(image),kp.data())||!batch_plan->wait())
+     return refuse(batch_plan->error());
+   execute_seconds+=seconds(stamp);gpu_seconds+=batch_plan->gpuSeconds();stamp=Clock::now();
++  auto output_context=profile;output_context.bytes=count*w*h*sizeof(float);
++  mx::profile::Span output_copy("convolution.copy_output",output_context);
+   const float* data=batch_plan->data();
+   for(size_t b=0;b<count;++b)for(size_t y=0;y<h;++y)
+     std::memcpy(images[b]+y*w,data+(b*h+y)*pitch,w*sizeof(float));
++  output_copy.finish();
+   copy_seconds+=seconds(stamp);
+   ++batches;planes+=count;
++  total.ok=true;
+   return 1;
+ }
+ extern "C" int mx_convolve_c2r(float* image,const std::complex<float>* product,size_t w,size_t h){
+   if(disabled())return 0;
+   if(!image||!product||!w||!h||w%2)return refuse("unsupported single C2R input");
+   // Opt-in compatibility adapter; multiscale uses the single shared batch above.
++  mx::profile::Context profile;
++  profile.id=mx::profile::nextId();profile.w=w;profile.h=h;profile.batch=1;
++  mx::profile::Span total("convolution.total",profile);total.ok=false;
+   thread_local std::unique_ptr<mx::vk::Fft> plan;
+   if(!plan||plan->width()!=w||plan->height()!=h){
++    mx::profile::Span miss("convolution.plan_miss",profile);miss.ok=false;
+     plan=std::make_unique<mx::vk::Fft>();
++    plan->profileOwner(profile.id);
+     if(!plan->initReal(w,h)){int r=refuse(plan->error());plan.reset();return r;}
++    miss.ok=true;
+   }
+   const size_t pitch=plan->rowFloats();
++  plan->profileOwner(profile.id);
++  auto copy_context=profile;copy_context.bytes=pitch*h*sizeof(float);
++  mx::profile::Span input_copy("convolution.copy_inputs",copy_context);
+   std::memcpy(plan->data(),product,pitch*h*sizeof(float));
++  input_copy.finish();
+   if(!plan->submit()||!plan->wait())return refuse(plan->error());
++  copy_context.bytes=w*h*sizeof(float);
++  mx::profile::Span output_copy("convolution.copy_output",copy_context);
+   for(size_t y=0;y<h;++y)std::memcpy(image+y*w,plan->data()+y*pitch,w*sizeof(float));
++  output_copy.finish();
+   ++singles;
++  total.ok=true;
+   return 1;
+ }
+ extern "C" void mx_convolve_report(){
+diff --git a/metal/mxpeak.mm b/metal/mxpeak.mm
+index add0aaca..0b9e3048 100644
+--- a/metal/mxpeak.mm
++++ b/metal/mxpeak.mm
+@@ -1,4 +1,5 @@
+ #include "metal/mxpeak.h"
++#include "metal/mxprofile.h"
+ 
+ #import <Foundation/Foundation.h>
+ #import <Metal/Metal.h>
+@@ -106,11 +107,14 @@ int Decline(Reason reason, const char* message) {
+   id<MTLCommandQueue> queue = nil;
+   id<MTLComputePipelineState> scan = nil, final = nil;
+   id<MTLBuffer> scratch = nil;
++  std::uint64_t scratch_id=0;
+   std::mutex mutex;
+   Reason failure = kDevice;
+   const char* why = "no Metal device";
+   bool ok = false;
+   Ctx() {
++    mx::profile::Context profile;profile.id=mx::profile::nextId();
++    mx::profile::Span setup("peak.pipeline_setup",profile);setup.ok=false;
+     @autoreleasepool {
+       device = MTLCreateSystemDefaultDevice();
+       if (!device) return;
+@@ -143,6 +147,7 @@ int Decline(Reason reason, const char* message) {
+         failure = kPipeline; why = "256-thread peak pipelines unavailable"; return;
+       }
+       ok = true;
++      setup.ok=true;
+     }
+   }
+ };
+@@ -172,6 +177,9 @@ int Decline(Reason reason, const char* message) {
+                                  std::size_t x_border, std::size_t y_border,
+                                  float* out_values, std::size_t* out_x, std::size_t* out_y) {
+   ++stats.calls;
++  mx::profile::Context profile;
++  profile.id=mx::profile::nextId();profile.w=width;profile.h=height;profile.batch=nscales;
++  mx::profile::Span total_span("peak.total",profile);total_span.ok=false;
+   if (!images || !out_values || !out_x || !out_y || !nscales)
+     return Decline(kArguments, "null arguments or empty batch");
+   // Bound dimensions before multiplication, narrowing, or reading caller arrays.
+@@ -187,9 +195,11 @@ int Decline(Reason reason, const char* message) {
+       nscales > kScratchLimit / (plane * sizeof(float)))
+     return Decline(kSize, "batch exceeds 512 MiB scratch budget");
+   bool has_mask = false;
++  std::size_t copied_mask_bytes=0;
+   for (std::size_t s = 0; s != nscales; ++s) {
+     if (!images[s]) return Decline(kArguments, "null image plane");
+     has_mask |= masks && masks[s];
++    if(profile.id && masks && masks[s]) copied_mask_bytes+=plane;
+   }
+   const std::size_t interior = (width - 2*x_border) * (height - 2*y_border);
+   const std::size_t tiles = (interior + kTile - 1) / kTile;
+@@ -204,16 +214,27 @@ int Decline(Reason reason, const char* message) {
+   Ctx& ctx = Context();
+   if (!ctx.ok) return Decline(ctx.failure, ctx.why);
+   const auto start = std::chrono::steady_clock::now();
++  mx::profile::Span mutex_wait("peak.mutex_wait",profile);
+   std::lock_guard<std::mutex> lock(ctx.mutex);
++  mutex_wait.finish();
+   @autoreleasepool {
+     if (total > ctx.device.maxBufferLength)
+       return Decline(kSize, "batch exceeds Metal maxBufferLength");
+     if (!ctx.scratch || ctx.scratch.length < total) {
++      auto allocation_context=profile;allocation_context.bytes=total;
++      mx::profile::Span allocation("peak.allocate_scratch",allocation_context);
+       // Release old storage before growth; at most one bounded arena is retained.
+       ctx.scratch = nil;
+       ctx.scratch = [ctx.device newBufferWithLength:total options:MTLResourceStorageModeShared];
++      allocation.ok=ctx.scratch!=nil;
++      ctx.scratch_id=ctx.scratch?mx::profile::nextId():0;
+     }
+     if (!ctx.scratch) return Decline(kAllocation, "shared scratch allocation failed");
++    profile.buffer=ctx.scratch_id;
++    auto copy_context=profile;copy_context.bytes=image_bytes+mask_bytes;
++    copy_context.copied_bytes=image_bytes+copied_mask_bytes;
++    copy_context.filled_bytes=mask_bytes-copied_mask_bytes;
++    mx::profile::Span copy("peak.copy_inputs",copy_context);
+     auto* data = static_cast<std::uint8_t*>(ctx.scratch.contents);
+     for (std::size_t s = 0; s != nscales; ++s) {
+       std::memcpy(data + s * plane * sizeof(float), images[s], plane * sizeof(float));
+@@ -222,10 +243,13 @@ int Decline(Reason reason, const char* message) {
+         else std::memset(data + mask_offset + s*plane, 1, plane);
+       }
+     }
++    copy.finish();
+     stats.bytes_copied += image_bytes + mask_bytes;
+     const Params p{std::uint32_t(width), std::uint32_t(height), std::uint32_t(x_border),
+                    std::uint32_t(y_border), std::uint32_t(tiles),
+                    allow_negative ? 1u : 0u, has_mask ? 1u : 0u, 0};
++    profile.command=mx::profile::nextId();profile.bytes=total;
++    mx::profile::Span encode("peak.encode_commit",profile);encode.ok=false;
+     id<MTLCommandBuffer> cb = [ctx.queue commandBuffer];
+     id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+     if (!cb || !enc) return Decline(kEncoder, "command buffer/encoder unavailable");
+@@ -248,7 +272,14 @@ int Decline(Reason reason, const char* message) {
+         threadsPerThreadgroup:MTLSizeMake(kThreads, 1, 1)];
+     [enc endEncoding];
+     [cb commit];
++    encode.ok=true;encode.finish();
++    mx::profile::Span blocking("peak.wait",profile);
+     [cb waitUntilCompleted];
++    blocking.ok=cb.status==MTLCommandBufferStatusCompleted;blocking.finish();
++    // Completed timestamps are captured while the command buffer is still live.
++    const double gpu_start=cb.GPUStartTime,gpu_end=cb.GPUEndTime;
++    if(profile.id && cb.status==MTLCommandBufferStatusCompleted)
++      mx::profile::emit("peak.gpu",profile,gpu_start,gpu_end);
+     if (cb.status != MTLCommandBufferStatusCompleted) {
+       return Decline(kCommand, "GPU command failed");
+     }
+@@ -259,8 +290,9 @@ int Decline(Reason reason, const char* message) {
+     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+         std::chrono::steady_clock::now() - start).count();
+     stats.wall_ns += ns;
+-    const double gpu_seconds = cb.GPUEndTime - cb.GPUStartTime;
++    const double gpu_seconds = gpu_end - gpu_start;
+     if (gpu_seconds > 0) stats.gpu_ns += std::uint64_t(gpu_seconds * 1e9);
++    mx::profile::Span finish("peak.final_reduce_return",profile);finish.ok=false;
+     const auto* result = reinterpret_cast<const Peak*>(data + result_offset);
+     // Validate the whole batch before publishing any output.
+     for (std::size_t s = 0; s != nscales; ++s)
+@@ -272,6 +304,8 @@ int Decline(Reason reason, const char* message) {
+       out_x[s] = result[s].index % width;
+       out_y[s] = result[s].index / width;
+     }
++    finish.ok=true;finish.finish();
++    total_span.ok=true;
+     const auto count = ++stats.successes;
+     // Exponential sampling keeps long imaging runs quiet even in debug mode.
+     if (Debug() && (count & (count - 1)) == 0)
+diff --git a/metal/mxpredict.cpp b/metal/mxpredict.cpp
+index 1ff07fb0..ff744d36 100644
+--- a/metal/mxpredict.cpp
++++ b/metal/mxpredict.cpp
+@@ -2,6 +2,7 @@
+ #include "metal/mxpredict.h"
+ #include "ducc0/wgridder/mx_prediction.h"
+ #include "metal/mxvkfft.h"
++#include "metal/mxprofile.h"
+ #include <atomic>
+ #include <chrono>
+ #include <cstdio>
+@@ -18,6 +19,23 @@ void refuse(const char* reason) noexcept {
+ }
+ class Session final : public ducc0::detail_gridder::PredictionSession {
+  public:
++  mx::profile::Context profile;
++  double profile_begin=0, event_begin[2]{};
++  bool profile_ready=false;
++  Session(size_t w,size_t h) {
++    profile.id=mx::profile::nextId();profile.w=w;profile.h=h;profile.batch=2;
++    profile.bytes=2*w*h*sizeof(std::complex<float>);
++    if(profile.id) profile_begin=mx::profile::now();
++  }
++  void profileBegin(const char*,size_t slot,size_t) noexcept override {
++    if(profile.id) event_begin[slot]=mx::profile::now();
++  }
++  void profileEnd(const char* stage,size_t slot,size_t plane) noexcept override {
++    if(!profile.id)return;
++    auto c=profile;c.slot=slot;c.plane=plane;c.batch=1;c.bytes/=2;
++    c.buffer=fft[slot].profileBufferId();
++    mx::profile::emit(stage,c,event_begin[slot],mx::profile::now());
++  }
+   mx::vk::Fft fft[2];
+   std::size_t submitted=0, completed=0, fallback=0, initialized_planes=0;
+   bool submitted_ok[2]{};
+@@ -26,6 +44,7 @@ class Session final : public ducc0::detail_gridder::PredictionSession {
+   ~Session() override {
+     // Drain before the proof line and before either shared plane releases.
+     for(auto& f:fft) f.wait();
++    if(profile.id) mx::profile::emit("prediction.session",profile,profile_begin,mx::profile::now(),profile_ready);
+     if (debug()) std::fprintf(stderr,
+       "MX prediction proof: shared_planes=%zu submitted=%zu completed=%zu cpu_fallback=%zu grid_memcpy_bytes=0 gpu_s=%.6f wall_s=%.6f\n",
+       initialized_planes,submitted,completed,fallback,gpu_seconds,
+@@ -35,6 +54,7 @@ class Session final : public ducc0::detail_gridder::PredictionSession {
+     return reinterpret_cast<std::complex<float>*>(fft[slot].data());
+   }
+   bool submit(std::size_t slot, std::size_t plane) noexcept override {
++    fft[slot].profileOwner(profile.id,slot,plane);
+     bool ok=fft[slot].submitForward();
+     submitted_ok[slot]=ok;
+     if(ok) ++submitted;
+@@ -61,8 +81,12 @@ mx_prediction_create(std::size_t nu, std::size_t nv, bool is_float) noexcept {
+   // At most 1 GiB of shared plane storage (two 8192-square complex planes).
+   if(!nu||!nv||nu>8192||nv>8192){refuse("shape outside two-plane memory budget");return nullptr;}
+   try {
+-    auto s=std::make_unique<Session>();
++    auto s=std::make_unique<Session>(nv,nu);
++    mx::profile::Span initialize("prediction.initialize",s->profile);
++    initialize.ok=false;
++    size_t slot=0;
+     for(auto& f:s->fft) {
++      f.profileOwner(s->profile.id,slot++);
+       if(!f.initShape(nv,nu)){refuse(f.error());return nullptr;}
+       ++s->initialized_planes;
+       if(f.width()!=nv||f.height()!=nu||f.rowFloats()!=2*nv||!f.data()) {
+@@ -71,6 +95,7 @@ mx_prediction_create(std::size_t nu, std::size_t nv, bool is_float) noexcept {
+     }
+     if(debug()) std::fprintf(stderr,"MX prediction session nu=%zu nv=%zu shared_bytes=%zu\n",
+       nu,nv,2*nu*nv*sizeof(std::complex<float>));
++    initialize.ok=true;s->profile_ready=true;
+     return s.release();
+   } catch(...) { refuse("FFT session allocation/planning exception");return nullptr; }
+ }
+diff --git a/metal/mxprofile.h b/metal/mxprofile.h
+new file mode 100644
+index 00000000..93871c53
+--- /dev/null
++++ b/metal/mxprofile.h
+@@ -0,0 +1,67 @@
++// Opt-in trace only: no synchronization, scheduling or numerical changes.
++#ifndef MX_METAL_PROFILE_H
++#define MX_METAL_PROFILE_H
++#include <mach/mach_time.h>
++#include <unistd.h>
++#include <atomic>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++
++namespace mx::profile {
++inline bool enabled() noexcept {
++  static const bool value=[] { const char* v=std::getenv("MX_METAL_PROFILE");
++    return v && std::strcmp(v,"1")==0; }();
++  return value;
++}
++inline double now() noexcept {
++  static const double scale=[] { mach_timebase_info_data_t t{};
++    mach_timebase_info(&t); return double(t.numer)/double(t.denom)*1e-9; }();
++  return double(mach_absolute_time())*scale;
++}
++inline uint64_t nextId() noexcept {
++  static std::atomic<uint64_t> sequence{0};
++  return enabled()?++sequence:0;
++}
++// id is process nonce + monotonic object ID. command_id joins encode/wait/GPU;
++// buffer_id identifies the plan's shared buffer, never a raw pointer.
++// bytes is event-specific allocated/copied/touched storage, NOT bandwidth.
++struct Context {
++  uint64_t id=0, command=0, buffer=0, parent=0;
++  size_t w=0,h=0,batch=0,bytes=0,copied_bytes=0,filled_bytes=0;
++  long long plane=-1,slot=-1;
++  int direction=0;
++};
++inline void emit(const char* stage,const Context& c,double start,double end,bool ok=true) noexcept {
++  if(!c.id) return;
++  static const uint64_t nonce=mach_absolute_time();
++  char indices[96]{};
++  if(c.plane>=0 && c.slot>=0) std::snprintf(indices,sizeof(indices),",\"plane\":%lld,\"slot\":%lld",c.plane,c.slot);
++  else if(c.plane>=0) std::snprintf(indices,sizeof(indices),",\"plane\":%lld",c.plane);
++  else if(c.slot>=0) std::snprintf(indices,sizeof(indices),",\"slot\":%lld",c.slot);
++  char byte_detail[128]{};
++  if(c.copied_bytes || c.filled_bytes)
++    std::snprintf(byte_detail,sizeof(byte_detail),",\"copied_bytes\":%zu,\"filled_bytes\":%zu",c.copied_bytes,c.filled_bytes);
++  // One stdio call keeps concurrent records intact; preserve overlapping spans.
++  std::fprintf(stderr,"MX_PROFILE {\"type\":\"span\",\"stage\":\"%s\",\"id\":\"%d-%llu-%llu\",\"command_id\":%llu,\"buffer_id\":%llu,\"parent_id\":%llu,\"w\":%zu,\"h\":%zu,\"batch\":%zu,\"bytes\":%zu%s%s,\"direction\":%d,\"start\":%.9f,\"end\":%.9f,\"ok\":%s}\n",
++    stage,int(getpid()),(unsigned long long)nonce,(unsigned long long)c.id,
++    (unsigned long long)c.command,(unsigned long long)c.buffer,(unsigned long long)c.parent,
++    c.w,c.h,c.batch,c.bytes,indices,byte_detail,c.direction,start,end,ok?"true":"false");
++}
++class Span {
++ public:
++  Span(const char* stage,Context context) noexcept:stage_(stage),context_(context),start_(context.id?now():0) {}
++  ~Span(){finish();}
++  Span(const Span&)=delete;
++  Span& operator=(const Span&)=delete;
++  void bytes(size_t value) noexcept { context_.bytes=value; }
++  void finish() noexcept { if(start_){const double end=now();emit(stage_,context_,start_,end,ok);start_=0;} }
++  bool ok=true;
++ private:
++  const char* stage_;
++  Context context_;
++  double start_;
++};
++} // namespace mx::profile
++#endif
+diff --git a/metal/mxvkfft.cpp b/metal/mxvkfft.cpp
+index 93364c28..899ff901 100644
+--- a/metal/mxvkfft.cpp
++++ b/metal/mxvkfft.cpp
+@@ -9,6 +9,7 @@
+ #define VKFFT_BACKEND 5
+ #include "thirdparty/vkFFT.h"
+ #include "mxvkfft.h"
++#include "mxprofile.h"
+ #include <cstring>
+ #include <limits>
+ #include <mutex>
+@@ -24,6 +25,9 @@ struct Pool {
+ };
+ }
+ struct Fft::Impl {
++  mx::profile::Context profile;
++  const char* command_stage="fft.gpu";
++  Impl(){profile.id=mx::profile::nextId();profile.buffer=profile.id;}
+   std::size_t w=0, h=0, batch=0, pitch=0;
+   uint64_t bytes=0;
+   MTL::Device* device=nullptr;
+@@ -38,9 +42,13 @@ struct Fft::Impl {
+   MTL::CommandBuffer* cb=nullptr;
+   double gpu_seconds=0;
+   std::string error;
++  bool wait();
+   ~Impl() {
+     Pool pool;
+-    if(cb){cb->waitUntilCompleted();cb->release();}
++    if(cb){
++      if(profile.id)wait();
++      else {cb->waitUntilCompleted();cb->release();}
++    }
+     if(planned){std::lock_guard lock(plannerMutex());deleteVkFFT(&app);}
+     if(product_pipeline) product_pipeline->release();
+     if(kernel_buffer) kernel_buffer->release();
+@@ -59,6 +67,9 @@ bool Fft::initReal(std::size_t w,std::size_t h,std::size_t b){return initialize(
+ bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
+   if(impl_->planned || impl_->buffer){delete impl_;impl_=new Impl;}
+   Impl& s=*impl_;
++  s.profile.w=w;s.profile.h=h;s.profile.batch=b;
++  mx::profile::Span initialize("fft.initialize",s.profile);
++  initialize.ok=false;
+   s.error.clear();
+   if(!w||!h||!b||w>16384||h>16384||b>64||(real && w%2)){
+     s.error="unsupported FFT dimensions/batch (real width must be even)";return false;
+@@ -68,6 +79,8 @@ bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
+     s.error="FFT buffer size overflow";return false;
+   }
+   s.bytes=s.pitch*h*b*sizeof(float);
++  s.profile.bytes=s.bytes;
++  initialize.bytes(s.bytes);
+   // Bound each plan. Consumers additionally bound the number of live plans.
+   if(s.bytes>(uint64_t(1)<<30)){s.error="FFT shared buffer exceeds 1 GiB budget";return false;}
+   Pool pool;
+@@ -76,19 +89,27 @@ bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
+   if(s.bytes>s.device->maxBufferLength()){s.error="FFT exceeds device maxBufferLength";return false;}
+   s.queue=s.device->newCommandQueue();
+   if(!s.queue){s.error="no Metal command queue";return false;}
++  mx::profile::Span allocation("fft.allocate_zero",s.profile);
+   s.buffer=s.device->newBuffer(s.bytes,MTL::ResourceStorageModeShared);
+-  if(!s.buffer){s.error="shared FFT allocation failed";return false;}
++  if(!s.buffer){allocation.ok=false;s.error="shared FFT allocation failed";return false;}
+   std::memset(s.buffer->contents(),0,s.bytes);
++  allocation.finish();
+   VkFFTConfiguration config={};
+   config.device=s.device;config.queue=s.queue;
+   config.FFTdim=2;config.size[0]=w;config.size[1]=h;
+   config.numberBatches=b;config.performR2C=real?1:0;config.normalize=0;
+   // These addresses must outlive the VkFFT plan: never point to stack locals.
+   config.buffer=&s.buffer;config.bufferSize=&s.bytes;
++  mx::profile::Span mutex_wait("fft.planner_mutex_wait",s.profile);
+   std::lock_guard lock(plannerMutex());
++  mutex_wait.finish();
++  mx::profile::Span planner("fft.planner",s.profile);
+   const VkFFTResult res=initializeVkFFT(&s.app,config);
++  planner.ok=res==VKFFT_SUCCESS;
++  planner.finish();
+   if(res!=VKFFT_SUCCESS){s.error="initializeVkFFT failed: "+std::to_string(int(res));return false;}
+   s.planned=true;
++  initialize.ok=true;
+   return true;
+ }
+ float* Fft::data(){return impl_->planned?static_cast<float*>(impl_->buffer->contents()):nullptr;}
+@@ -104,6 +125,9 @@ bool Fft::submitDirection(int direction){
+   if(!s.planned){s.error="FFT not initialized";return false;}
+   if(s.cb){s.error="FFT already in flight; wait before resubmitting";return false;}
+   Pool pool;
++  s.profile.direction=direction;s.profile.command=mx::profile::nextId();
++  s.command_stage="fft.gpu";
++  mx::profile::Span encode("fft.encode_commit",s.profile);encode.ok=false;
+   auto* cb=s.queue->commandBuffer();
+   if(!cb){s.error="no command buffer";return false;}
+   auto* encoder=cb->computeCommandEncoder();
+@@ -115,6 +139,7 @@ bool Fft::submitDirection(int direction){
+   if(res!=VKFFT_SUCCESS){s.error="VkFFTAppend failed: "+std::to_string(int(res));return false;}
+   s.cb=cb->retain();
+   cb->commit();
++  encode.ok=true;
+   return true;
+ }
+ bool Fft::submitConvolution(const float* image,const float* const* kernels){
+@@ -124,7 +149,10 @@ bool Fft::submitConvolution(const float* image,const float* const* kernels){
+   for(size_t b=0;b<s.batch;++b)if(!kernels[b]){s.error="null convolution kernel";return false;}
+   if(s.bytes>(uint64_t(1)<<29)){s.error="convolution exceeds 512 MiB FFT workspace budget";return false;}
+   Pool pool;
++  s.profile.direction=1;s.profile.command=mx::profile::nextId();
++  s.command_stage="convolution.gpu";
+   if(!s.product_pipeline){
++    mx::profile::Span compile("convolution.shader_compile",s.profile);compile.ok=false;
+     const char* source=R"MSL(
+       #include <metal_stdlib>
+       using namespace metal;
+@@ -149,12 +177,22 @@ bool Fft::submitConvolution(const float* image,const float* const* kernels){
+     if(fn){s.product_pipeline=s.device->newComputePipelineState(fn,&error);fn->release();}
+     lib->release();
+     if(!s.product_pipeline){s.error="convolution pipeline creation failed";return false;}
++    compile.ok=true;
+   }
+-  if(!s.image_buffer)s.image_buffer=s.device->newBuffer(nc*2*sizeof(float),MTL::ResourceStorageModeShared);
+-  if(!s.kernel_buffer)s.kernel_buffer=s.device->newBuffer(s.bytes,MTL::ResourceStorageModeShared);
+-  if(!s.image_buffer||!s.kernel_buffer){s.error="convolution input allocation failed";return false;}
++  if(!s.image_buffer || !s.kernel_buffer) {
++    auto allocation_context=s.profile;
++    allocation_context.bytes=(!s.image_buffer?nc*2*sizeof(float):0)+(!s.kernel_buffer?s.bytes:0);
++    mx::profile::Span allocation("convolution.allocate_inputs",allocation_context);
++    if(!s.image_buffer)s.image_buffer=s.device->newBuffer(nc*2*sizeof(float),MTL::ResourceStorageModeShared);
++    if(!s.kernel_buffer)s.kernel_buffer=s.device->newBuffer(s.bytes,MTL::ResourceStorageModeShared);
++    if(!s.image_buffer||!s.kernel_buffer){allocation.ok=false;s.error="convolution input allocation failed";return false;}
++  }
++  auto copy_context=s.profile;copy_context.bytes=(s.batch+1)*nc*2*sizeof(float);
++  mx::profile::Span copy("convolution.copy_inputs",copy_context);
+   std::memcpy(s.image_buffer->contents(),image,nc*2*sizeof(float));
+   for(size_t b=0;b<s.batch;++b)std::memcpy(static_cast<float*>(s.kernel_buffer->contents())+2*b*nc,kernels[b],nc*2*sizeof(float));
++  copy.finish();
++  mx::profile::Span encode("convolution.encode_commit",s.profile);encode.ok=false;
+   auto* cb=s.queue->commandBuffer();
+   if(!cb){s.error="no convolution command buffer";return false;}
+   auto* enc=cb->computeCommandEncoder();
+@@ -172,19 +210,29 @@ bool Fft::submitConvolution(const float* image,const float* const* kernels){
+   const auto result=VkFFTAppend(&s.app,+1,&launch);
+   enc->endEncoding();
+   if(result!=VKFFT_SUCCESS){s.error="convolution VkFFTAppend failed: "+std::to_string(int(result));return false;}
+-  s.cb=cb->retain();cb->commit();return true;
++  s.cb=cb->retain();cb->commit();encode.ok=true;return true;
+ }
+ 
+-bool Fft::wait(){
+-  Impl& s=*impl_;
++bool Fft::Impl::wait(){
++  Impl& s=*this;
+   if(!s.cb)return s.planned;
++  mx::profile::Span blocking(s.command_stage[0]=='c'?"convolution.wait":"fft.wait",s.profile);
+   s.cb->waitUntilCompleted();
+   const bool ok=s.cb->status()==MTL::CommandBufferStatusCompleted;
+-  s.gpu_seconds=ok?s.cb->GPUEndTime()-s.cb->GPUStartTime():0;
++  blocking.ok=ok;blocking.finish();
++  // Read timestamps after the existing completion wait and before releasing CB.
++  const double gpu_start=ok?s.cb->GPUStartTime():0,gpu_end=ok?s.cb->GPUEndTime():0;
++  s.gpu_seconds=ok?gpu_end-gpu_start:0;
++  if(s.profile.id && ok) mx::profile::emit(s.command_stage,s.profile,gpu_start,gpu_end,ok);
+   if(!ok){s.error="Metal command buffer failed";if(s.cb->error())s.error+=std::string(": ")+s.cb->error()->localizedDescription()->utf8String();}
+   s.cb->release();s.cb=nullptr;
+   return ok;
+ }
++bool Fft::wait(){return impl_->wait();}
+ double Fft::gpuSeconds()const{return impl_->gpu_seconds;}
++std::uint64_t Fft::profileBufferId()const noexcept{return impl_->profile.buffer;}
++void Fft::profileOwner(std::uint64_t parent,long long slot,long long plane){
++  impl_->profile.parent=parent;impl_->profile.slot=slot;impl_->profile.plane=plane;
++}
+ const char* Fft::error()const{return impl_->error.c_str();}
+ } // namespace mx::vk
+diff --git a/metal/mxvkfft.h b/metal/mxvkfft.h
+index 004f71d8..57f787be 100644
+--- a/metal/mxvkfft.h
++++ b/metal/mxvkfft.h
+@@ -2,6 +2,7 @@
+ #ifndef MX_MXVKFFT_H
+ #define MX_MXVKFFT_H
+ #include <cstddef>
++#include <cstdint>
+ namespace mx::vk {
+ class Fft {
+  public:
+@@ -31,6 +32,9 @@ class Fft {
+   bool submitConvolution(const float* image_fft, const float* const* kernel_ffts);
+   bool wait();
+   double gpuSeconds() const;
++  // Trace linkage only; no clock or Metal operation when profiling is off.
++  std::uint64_t profileBufferId() const noexcept;
++  void profileOwner(std::uint64_t parent, long long slot=-1, long long plane=-1);
+   const char* error() const;
+  private:
+   bool initialize(std::size_t width, std::size_t height, std::size_t batch, bool real);

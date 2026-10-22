@@ -3,6 +3,15 @@
 Updated 2026-10-22. Full evidence and plan:
 `docs/gpu-next-optimization-2026-10-22.md`.
 
+## Detailed utilization profile
+
+`docs/gpu-profiling-2026-10-22.md` contains the current bottleneck audit:
+52 real WSClean runs, same-clock CPU/GPU timelines, device gauges, CPU sampling,
+thread scaling and validated plan/resource-reuse ablations. Default prediction
+is CPU-fed; convolution suffers repeated resource creation and copies; peak
+search copies and serializes. 4K all-hooks shows memory pressure. Instrumentation
+is opt-in, not a delivered optimization. Raw scientific failures remain open.
+
 ## Follow-up
 
 `docs/gpu-followup-2026-10-22.md` supersedes the suite/quarantine status below.

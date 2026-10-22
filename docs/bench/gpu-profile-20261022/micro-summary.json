@@ -1,0 +1,90 @@
+{
+  "version": "v1, retained for provenance",
+  "superseded_by": "derived.json:micro_v2",
+  "reason": "Final harness hoists a repeated getter out of excluded inverse CPU preparation; original numeric results below are unchanged.",
+  "fixture": "synthetic dense spectrum and delta kernels, every real cell validated",
+  "calls": 63,
+  "results": [
+    {
+      "batch": 1,
+      "mode": "fresh-convolution",
+      "n": 6,
+      "init_ms": 3.714479,
+      "submit_wait_ms": 16.9837505,
+      "gpu_ms": 5.128437536768615,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 1,
+      "mode": "reused-convolution",
+      "n": 6,
+      "init_ms": 0.0,
+      "submit_wait_ms": 7.577604,
+      "gpu_ms": 4.314624995458871,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 1,
+      "mode": "reused-inverse",
+      "n": 6,
+      "init_ms": 0.0,
+      "submit_wait_ms": 3.7964585,
+      "gpu_ms": 3.152749966830015,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 4,
+      "mode": "fresh-convolution",
+      "n": 6,
+      "init_ms": 10.194021000000001,
+      "submit_wait_ms": 45.036083000000005,
+      "gpu_ms": 19.04531253967434,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 4,
+      "mode": "reused-convolution",
+      "n": 6,
+      "init_ms": 0.0,
+      "submit_wait_ms": 21.8179585,
+      "gpu_ms": 16.266958322376013,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 4,
+      "mode": "reused-inverse",
+      "n": 6,
+      "init_ms": 0.0,
+      "submit_wait_ms": 15.4358955,
+      "gpu_ms": 14.763479179237038,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 8,
+      "mode": "fresh-convolution",
+      "n": 6,
+      "init_ms": 19.425458499999998,
+      "submit_wait_ms": 78.1968755,
+      "gpu_ms": 32.589250011369586,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 8,
+      "mode": "reused-convolution",
+      "n": 6,
+      "init_ms": 0.0,
+      "submit_wait_ms": 46.771771,
+      "gpu_ms": 30.466437514405698,
+      "max_rms": 1.0194443855068125e-06
+    },
+    {
+      "batch": 8,
+      "mode": "reused-inverse",
+      "n": 6,
+      "init_ms": 0.0,
+      "submit_wait_ms": 23.139083000000003,
+      "gpu_ms": 22.51354168402031,
+      "max_rms": 1.0194443855068125e-06
+    }
+  ]
+}

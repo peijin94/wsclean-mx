@@ -5,6 +5,16 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- Current profiling: `docs/gpu-profiling-2026-10-22.md`. 52 completed WSClean
+  runs plus validated synthetic reuse ablations. Default prediction CPU degrid
+  dominates; command residency ~48-54% of session, ~5-6% whole run. Convolution
+  recreates 21 plans/22 calls and copies 7.175 GB; peak copies/fills 3.964 GB and
+  serializes callers. 4K all-hooks invokes a memory-cap fallback and coincides
+  with system swap growth. Prioritize bounded resource reuse/residency, not
+  more GPU inversion or unbounded caches. Hardware occupancy/power unavailable;
+  structured traces are opt-in via MX_METAL_PROFILE=1. This is profiling, not
+  a new optimization or scientific release certification.
+
 - Latest: `docs/gpu-followup-2026-10-22.md`. Production inversion is quarantined
   out of Metal linkage/routing; active CPU/Metal suites pass, separate archive
   gridding still fails. PSF reuse preserves WSCTBEAM in radians (including MFS

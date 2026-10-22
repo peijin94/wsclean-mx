@@ -1,0 +1,1481 @@
+{
+  "completed_runs": 52,
+  "excluded_timing_warmups": 5,
+  "existing_pipeline_reductions_percent": {
+    "wall_s": 2.719854941069799,
+    "prediction_s": 19.645874567538215
+  },
+  "default_trace": [
+    {
+      "tag": "gpuprof-trace-00-prediction-3072-j8",
+      "session_s": 2.2708417921094224,
+      "gpu_union_s": 1.228071166202426,
+      "residency_fraction": 0.540799966985657,
+      "host_exclusive_wall_s": {
+        "prediction.initialize": 0.04154212505090982,
+        "prediction.prepare": 0.4597889161668718,
+        "prediction.consume": 1.5507530389586464,
+        "fft.encode_commit": 0.003968122531659901,
+        "fft.wait": 0.20639499905519187
+      },
+      "host_unaccounted_s": 0.00839459034614265,
+      "gpu_idle_s": 1.0427706259069964,
+      "gpu_idle_with_pending_s": 0.022859050892293453,
+      "gpu_idle_without_pending_s": 1.019911575014703,
+      "prepare_overlap_gpu_s": 0.2713597541442141,
+      "consume_overlap_gpu_s": 0.7476247036829591,
+      "whole_run_gpu_fraction": 0.0580648305533062,
+      "device_gauge_prediction_percent": 66.12528253778656,
+      "cpu_prediction_cores": 6.535468873071981,
+      "empty_fraction_of_gpu_idle": 0.978078543522061
+    },
+    {
+      "tag": "gpuprof-trace-07-prediction-3072-j8",
+      "session_s": 2.572822167072445,
+      "gpu_union_s": 1.2332861259346828,
+      "residency_fraction": 0.47935148480861023,
+      "host_exclusive_wall_s": {
+        "prediction.initialize": 0.04327854095026851,
+        "prediction.prepare": 0.5047664979938418,
+        "prediction.consume": 1.8171867983182892,
+        "fft.encode_commit": 0.00393721298314631,
+        "fft.wait": 0.19566428766120225
+      },
+      "host_unaccounted_s": 0.007988829165697098,
+      "gpu_idle_s": 1.3395360411377624,
+      "gpu_idle_with_pending_s": 0.03442879265639931,
+      "gpu_idle_without_pending_s": 1.305107248481363,
+      "prepare_overlap_gpu_s": 0.2739673766773194,
+      "consume_overlap_gpu_s": 0.7624497094657272,
+      "whole_run_gpu_fraction": 0.0529080277106256,
+      "device_gauge_prediction_percent": 64.2574355726296,
+      "cpu_prediction_cores": 6.22509189354212,
+      "empty_fraction_of_gpu_idle": 0.9742979721343246
+    }
+  ],
+  "thread_sweep": {
+    "1": {
+      "session_s": [
+        8.25724516599439,
+        8.292670333990827
+      ],
+      "gpu_fraction": [
+        0.17121116220629476,
+        0.15958276872976582
+      ]
+    },
+    "2": {
+      "session_s": [
+        4.5304404579801485,
+        4.489170290995389
+      ],
+      "gpu_fraction": [
+        0.29069265195037275,
+        0.2983086042412966
+      ]
+    },
+    "4": {
+      "session_s": [
+        2.839522916940041,
+        2.856856207945384
+      ],
+      "gpu_fraction": [
+        0.4426734830910772,
+        0.43023269957850985
+      ]
+    },
+    "8": {
+      "session_s": [
+        2.2708417921094224,
+        2.572822167072445
+      ],
+      "gpu_fraction": [
+        0.540799966985657,
+        0.47935148480861023
+      ]
+    }
+  },
+  "convolution": [
+    {
+      "tag": "gpuprof-trace-01-convolution-3072-j8",
+      "calls": 22,
+      "plan_misses": 21,
+      "plan_shapes": [
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 8,
+          "seconds": 0.3598592500202358
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.1247342920396477
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.008701749960891902
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.011230416945181787
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.006516374996863306
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 6,
+          "seconds": 0.018089624936692417
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.01282145909499377
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.009372042026370764
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 4,
+          "seconds": 0.01342079194728285
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 5,
+          "seconds": 0.017585499910637736
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.012139416998252273
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.006504124961793423
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.008945708977989852
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.011327458079904318
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.006259333924390376
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 8,
+          "seconds": 0.023551875026896596
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.010713416035287082
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 8,
+          "seconds": 0.022407167009077966
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 7,
+          "seconds": 0.023654584074392915
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 5,
+          "seconds": 0.017585541936568916
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 7,
+          "seconds": 0.02134624996688217
+        }
+      ],
+      "input_bytes": 4003971072,
+      "output_bytes": 3170893824,
+      "queue_delay_ms": [
+        36.90887498669326,
+        6.253166939131916,
+        10.564500000327826,
+        12.185667059384286,
+        7.936959038488567,
+        17.656332929618657,
+        13.872292009182274,
+        11.660167016088963,
+        0.34958403557538986,
+        18.018667004071176,
+        18.355000065639615,
+        12.5021249987185,
+        7.968999911099672,
+        10.53241710178554,
+        14.275499968789518,
+        11.050999979488552,
+        29.037332977168262,
+        10.952875018119812,
+        23.097458062693477,
+        23.106834036298096,
+        17.232667072676122,
+        22.075333981774747
+      ],
+      "gpu_ms": [
+        30.673207947984338,
+        5.666707991622388,
+        9.27379191853106,
+        12.393582961522043,
+        4.728582920506597,
+        24.470875039696693,
+        12.365082977339625,
+        11.574000003747642,
+        11.048124986700714,
+        16.601250041276217,
+        26.351667009294033,
+        13.306707958690822,
+        5.701999994926155,
+        12.632832978852093,
+        13.976333080790937,
+        4.8903749557211995,
+        31.467166962102056,
+        9.35795798432082,
+        32.214291975833476,
+        28.127582976594567,
+        20.459124934859574,
+        26.976707973517478
+      ],
+      "wait_ms": [
+        67.722208914347,
+        12.15112500358373,
+        20.039041992276907,
+        24.759917054325342,
+        12.867207988165319,
+        42.32591693289578,
+        26.42879099585116,
+        23.453042027540505,
+        11.595375020988286,
+        34.806666895747185,
+        44.87583297304809,
+        25.955375051125884,
+        13.86737497523427,
+        23.37804203853011,
+        28.458416927605867,
+        16.113291028887033,
+        60.67649996839464,
+        20.496042096056044,
+        55.52199995145202,
+        51.420124946162105,
+        37.90279198437929,
+        49.21741702128202
+      ],
+      "service_s": 2.2732116237748414,
+      "gpu_s": 0.3642579555744305
+    },
+    {
+      "tag": "gpuprof-trace-06-convolution-3072-j8",
+      "calls": 22,
+      "plan_misses": 21,
+      "plan_shapes": [
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 8,
+          "seconds": 0.05911050003487617
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.015875459066592157
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.008820041082799435
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.01160845800768584
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.006624083034694195
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 6,
+          "seconds": 0.01794858300127089
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.012508124927990139
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.00902900006622076
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 4,
+          "seconds": 0.014430542010813951
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 5,
+          "seconds": 0.016847208025865257
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.012484667007811368
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.00665700004901737
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.009650542051531374
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 3,
+          "seconds": 0.01130137499421835
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 1,
+          "seconds": 0.006476124981418252
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 8,
+          "seconds": 0.024864292005077004
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 2,
+          "seconds": 0.013343374943360686
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 8,
+          "seconds": 0.023093707975931466
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 7,
+          "seconds": 0.02239454200025648
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 5,
+          "seconds": 0.017819707980379462
+        },
+        {
+          "w": 3072,
+          "h": 3072,
+          "batch": 7,
+          "seconds": 0.021160291973501444
+        }
+      ],
+      "input_bytes": 4003971072,
+      "output_bytes": 3170893824,
+      "queue_delay_ms": [
+        53.81429207045585,
+        7.8037920175120234,
+        10.156375006772578,
+        12.298207962885499,
+        8.022458991035819,
+        18.410208052955568,
+        13.666999991983175,
+        11.012875009328127,
+        0.3545840736478567,
+        15.526167000643909,
+        18.336708075366914,
+        14.120499952696264,
+        9.52716707251966,
+        12.130624963901937,
+        13.504083035513759,
+        7.815083023160696,
+        37.172417039982975,
+        13.10733298305422,
+        27.901416993699968,
+        24.079542024992406,
+        17.47300010174513,
+        24.374457891099155
+      ],
+      "gpu_ms": [
+        34.568707924336195,
+        5.532750044949353,
+        8.893333026207983,
+        12.622667010873556,
+        5.661208066157997,
+        24.100749986246228,
+        16.98199997190386,
+        11.585416970774531,
+        7.927207974717021,
+        18.67549994494766,
+        20.022416952997446,
+        15.14504209626466,
+        4.151124972850084,
+        10.035375016741455,
+        14.955042046494782,
+        4.168750019744039,
+        33.055791980586946,
+        11.54887501616031,
+        31.92083293106407,
+        27.22449996508658,
+        21.055666962638497,
+        29.43475008942187
+      ],
+      "wait_ms": [
+        88.61245808657259,
+        13.5014170082286,
+        19.29262501653284,
+        25.1506658969447,
+        13.893041992560029,
+        42.66445792745799,
+        30.8451660675928,
+        22.798874997533858,
+        8.516457979567349,
+        34.43079092539847,
+        38.562958012335,
+        29.457333032041788,
+        13.907333021052182,
+        22.380499984137714,
+        28.660584008321166,
+        12.179458048194647,
+        70.39775000885129,
+        24.88095802254975,
+        60.04866701550782,
+        51.45050003193319,
+        38.75220799818635,
+        53.96408401429653
+      ],
+      "service_s": 1.8323783343657851,
+      "gpu_s": 0.3692677089711651
+    }
+  ],
+  "overhead_pairs": [
+    {
+      "on_s": 19.54,
+      "off_s": 19.35,
+      "difference_s": 0.18999999999999773,
+      "fraction": 0.009819121447028234
+    },
+    {
+      "on_s": 18.79,
+      "off_s": 17.64,
+      "difference_s": 1.1499999999999986,
+      "fraction": 0.06519274376417217
+    },
+    {
+      "on_s": 17.05,
+      "off_s": 18.04,
+      "difference_s": -0.9899999999999984,
+      "fraction": -0.05487804878048774
+    }
+  ],
+  "health": {
+    "gpuprof-timing-00-cpu-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 121286,
+        "Pageouts": 16
+      }
+    },
+    "gpuprof-timing-01-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 117282,
+        "Pageouts": 78
+      }
+    },
+    "gpuprof-timing-02-convolution-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 125188,
+        "Pageouts": 53
+      }
+    },
+    "gpuprof-timing-03-peak-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 12,
+        "Swapouts": 0,
+        "Pageins": 141029,
+        "Pageouts": 40
+      }
+    },
+    "gpuprof-timing-04-all-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 24,
+        "Swapouts": 0,
+        "Pageins": 138829,
+        "Pageouts": 18
+      }
+    },
+    "gpuprof-timing-05-cpu-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 16,
+        "Swapouts": 0,
+        "Pageins": 157877,
+        "Pageouts": 51
+      }
+    },
+    "gpuprof-timing-06-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 24,
+        "Swapouts": 0,
+        "Pageins": 118470,
+        "Pageouts": 27
+      }
+    },
+    "gpuprof-timing-07-convolution-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 1,
+        "Swapouts": 0,
+        "Pageins": 160303,
+        "Pageouts": 69
+      }
+    },
+    "gpuprof-timing-08-peak-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 8,
+        "Swapouts": 0,
+        "Pageins": 131026,
+        "Pageouts": 59
+      }
+    },
+    "gpuprof-timing-09-all-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 116908,
+        "Pageouts": 36
+      }
+    },
+    "gpuprof-timing-10-all-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 144728,
+        "Pageouts": 125
+      }
+    },
+    "gpuprof-timing-11-peak-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 122819,
+        "Pageouts": 5
+      }
+    },
+    "gpuprof-timing-12-convolution-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 101163,
+        "Pageouts": 4
+      }
+    },
+    "gpuprof-timing-13-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 131888,
+        "Pageouts": 12
+      }
+    },
+    "gpuprof-timing-14-cpu-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 92480,
+        "Pageouts": 32
+      }
+    },
+    "gpuprof-timing-15-cpu-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 93993,
+        "Pageouts": 8
+      }
+    },
+    "gpuprof-timing-16-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 12,
+        "Swapouts": 0,
+        "Pageins": 89505,
+        "Pageouts": 0
+      }
+    },
+    "gpuprof-timing-17-convolution-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 114976,
+        "Pageouts": 62
+      }
+    },
+    "gpuprof-timing-18-peak-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 118080,
+        "Pageouts": 3
+      }
+    },
+    "gpuprof-timing-19-all-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 93721,
+        "Pageouts": 9
+      }
+    },
+    "gpuprof-trace-00-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 119715,
+        "Pageouts": 0
+      }
+    },
+    "gpuprof-trace-01-convolution-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 4,
+        "Swapouts": 0,
+        "Pageins": 124254,
+        "Pageouts": 35
+      }
+    },
+    "gpuprof-trace-02-peak-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 133516,
+        "Pageouts": 45
+      }
+    },
+    "gpuprof-trace-03-all-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 143085,
+        "Pageouts": 18
+      }
+    },
+    "gpuprof-trace-04-all-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 144779,
+        "Pageouts": 4
+      }
+    },
+    "gpuprof-trace-05-peak-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 140437,
+        "Pageouts": 7
+      }
+    },
+    "gpuprof-trace-06-convolution-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 141583,
+        "Pageouts": 39
+      }
+    },
+    "gpuprof-trace-07-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 125699,
+        "Pageouts": 8
+      }
+    },
+    "gpuprof-threads-00-prediction-3072-j1": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 4,
+        "Swapouts": 0,
+        "Pageins": 152529,
+        "Pageouts": 2
+      }
+    },
+    "gpuprof-threads-01-prediction-3072-j2": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 152706,
+        "Pageouts": 3
+      }
+    },
+    "gpuprof-threads-02-prediction-3072-j4": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 125058,
+        "Pageouts": 12
+      }
+    },
+    "gpuprof-threads-03-prediction-3072-j4": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 122429,
+        "Pageouts": 7
+      }
+    },
+    "gpuprof-threads-04-prediction-3072-j2": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 140851,
+        "Pageouts": 5
+      }
+    },
+    "gpuprof-threads-05-prediction-3072-j1": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 0,
+        "Swapouts": 0,
+        "Pageins": 150673,
+        "Pageouts": 3
+      }
+    },
+    "gpuprof-4k-00-cpu-4096-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1629.00M  free = 1443.00M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1745.88M  free = 1326.12M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 9295,
+        "Swapouts": 16184,
+        "Pageins": 195385,
+        "Pageouts": 332
+      }
+    },
+    "gpuprof-4k-01-prediction-4096-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1745.88M  free = 1326.12M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1705.88M  free = 1366.12M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 2392,
+        "Swapouts": 0,
+        "Pageins": 134165,
+        "Pageouts": 51
+      }
+    },
+    "gpuprof-4k-02-prediction-4096-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1705.88M  free = 1366.12M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1875.19M  free = 1196.81M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 994,
+        "Swapouts": 11860,
+        "Pageins": 196713,
+        "Pageouts": 67
+      }
+    },
+    "gpuprof-4k-03-cpu-4096-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1875.19M  free = 1196.81M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1867.19M  free = 1204.81M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 268,
+        "Swapouts": 0,
+        "Pageins": 137339,
+        "Pageouts": 32
+      }
+    },
+    "gpuprof-4k-04-prediction-4096-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1867.19M  free = 1204.81M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1867.19M  free = 1204.81M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 182,
+        "Swapouts": 0,
+        "Pageins": 127336,
+        "Pageouts": 3
+      }
+    },
+    "gpuprof-4k-05-prediction-4096-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1867.19M  free = 1204.81M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 3072.00M  used = 1867.19M  free = 1204.81M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 160,
+        "Swapouts": 0,
+        "Pageins": 124817,
+        "Pageouts": 41
+      }
+    },
+    "gpuprof-4k-06-all-4096-j8": {
+      "before_swap": "vm.swapusage: total = 3072.00M  used = 1867.19M  free = 1204.81M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 3072.25M  free = 1023.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 100,
+        "Swapouts": 77124,
+        "Pageins": 164891,
+        "Pageouts": 86
+      }
+    },
+    "gpuprof-overhead-00-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 3072.25M  free = 1023.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 252,
+        "Swapouts": 0,
+        "Pageins": 145834,
+        "Pageouts": 65
+      }
+    },
+    "gpuprof-overhead-01-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 84,
+        "Swapouts": 0,
+        "Pageins": 52121,
+        "Pageouts": 29
+      }
+    },
+    "gpuprof-overhead-02-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 16,
+        "Swapouts": 0,
+        "Pageins": 39471,
+        "Pageouts": 168
+      }
+    },
+    "gpuprof-overhead-03-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 32,
+        "Swapouts": 0,
+        "Pageins": 59342,
+        "Pageouts": 59
+      }
+    },
+    "gpuprof-overhead-04-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 3064.25M  free = 1031.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 4228,
+        "Swapouts": 0,
+        "Pageins": 57432,
+        "Pageouts": 6
+      }
+    },
+    "gpuprof-overhead-05-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 88,
+        "Swapouts": 0,
+        "Pageins": 63715,
+        "Pageouts": 170
+      }
+    },
+    "gpuprof-sample-00-cpu-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 36,
+        "Swapouts": 0,
+        "Pageins": 78986,
+        "Pageouts": 0
+      }
+    },
+    "gpuprof-sample-01-prediction-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 32,
+        "Swapouts": 0,
+        "Pageins": 120857,
+        "Pageouts": 1
+      }
+    },
+    "gpuprof-sample-02-all-3072-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 2992.25M  free = 1103.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 48,
+        "Swapouts": 0,
+        "Pageins": 116063,
+        "Pageouts": 4
+      }
+    },
+    "gpuprof-fullgrid-00-prediction-4096-j8": {
+      "before_swap": "vm.swapusage: total = 4096.00M  used = 2976.25M  free = 1119.75M  (encrypted)",
+      "after_swap": "vm.swapusage: total = 4096.00M  used = 2976.25M  free = 1119.75M  (encrypted)",
+      "page_deltas": {
+        "Swapins": 8,
+        "Swapouts": 0,
+        "Pageins": 137936,
+        "Pageouts": 63
+      }
+    }
+  },
+  "samples": {
+    "gpuprof-sample-00-cpu-3072-j8.sample.txt": {
+      "thread_id_sample_counts": {},
+      "top_of_stack": [
+        {
+          "symbol": "__psynch_cvwait  (in libsystem_kernel.dylib)",
+          "samples": 171407
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::x2grid_c_helper<7ul, true>(unsigned long, ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, unsigned long, double)::'lambda'(ducc0::detail_threading::Scheduler&)::operator()(ducc0::detail_threading::Scheduler&) const  (in wsclean)",
+          "samples": 30856
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_input<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul> const&, ducc0::detail_mav::cfmav<ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>::value_type>> const&, ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>>*)  (in wsclean)",
+          "samples": 15585
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::grid2x_c_helper<7ul, true>(unsigned long, ducc0::detail_mav::cmav<std::complex<float>, 2ul> const&, unsigned long, double)::'lambda'(ducc0::detail_threading::Scheduler&)::operator()(ducc0::detail_threading::Scheduler&) const  (in wsclean)",
+          "samples": 11646
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_output<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul> const&, ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>> const*, ducc0::detail_mav::vfmav<ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>::value_type>> const&)  (in wsclean)",
+          "samples": 7640
+        },
+        {
+          "symbol": "__sincosf_stret  (in libsystem_m.dylib)",
+          "samples": 5307
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp3<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 4274
+        },
+        {
+          "symbol": "<deduplicated_symbol>  (in wsclean)",
+          "samples": 3701
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::grid2dirty_post2(ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, ducc0::detail_mav::vmav<float, 2ul> const&, double)::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const  (in wsclean)",
+          "samples": 3348
+        },
+        {
+          "symbol": "schaapcommon::StaticFor<unsigned long>::Loop<schaapcommon::math::(anonymous namespace)::MultiplyAndInverse(float*, std::complex<float>*, std::complex<float> const*, std::complex<float> const*, unsigned long, unsigned long)::$_0>(schaapcommon::math::(anonymous namespace)::MultiplyAndInverse(float*, std::complex<float>*, std::complex<float> const*, std::complex<float> const*, unsigned long, unsigned long)::$_0&, unsigned long)  (in wsclean)",
+          "samples": 3236
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp8<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 2948
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp11<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 2781
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp5<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 2045
+        },
+        {
+          "symbol": "std::__function::__func<void ducc0::detail_fft::(anonymous namespace)::general_c2r<float>(ducc0::detail_mav::cfmav<ducc0::Cmplx<float>> const&, ducc0::detail_mav::vfmav<float> const&, unsigned long, bool, float, unsigned long)::'lambda'(ducc0::detail_threading::Scheduler&), void (ducc0::detail_threading::Scheduler&)>::operator()(ducc0::detail_threading::Scheduler&)  (in wsclean)",
+          "samples": 1581
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::rfftp4<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 1489
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::HelperX2g2<7ul, true>::dump()  (in wsclean)",
+          "samples": 1429
+        },
+        {
+          "symbol": "_platform_memset  (in libsystem_platform.dylib)",
+          "samples": 1291
+        },
+        {
+          "symbol": "std::__function::__func<void ducc0::detail_fft::(anonymous namespace)::general_r2c<float>(ducc0::detail_mav::cfmav<float> const&, ducc0::detail_mav::vfmav<ducc0::Cmplx<float>> const&, unsigned long, bool, float, unsigned long)::'lambda'(ducc0::detail_threading::Scheduler&), void (ducc0::detail_threading::Scheduler&)>::operator()(ducc0::detail_threading::Scheduler&)  (in wsclean)",
+          "samples": 1190
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_output<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<4ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<4ul> const&, ducc0::detail_simd::vtp<float, 4ul> const*, ducc0::detail_mav::vfmav<ducc0::detail_simd::vtp<float, 4ul>::value_type> const&)  (in wsclean)",
+          "samples": 1096
+        },
+        {
+          "symbol": "__bzero  (in libsystem_platform.dylib)",
+          "samples": 1075
+        },
+        {
+          "symbol": "_platform_memmove  (in libsystem_platform.dylib)",
+          "samples": 762
+        },
+        {
+          "symbol": "radler::algorithms::ThreadedDeconvolutionTools::FindSingleScalePeak(radler::algorithms::multiscale::MultiScaleTransforms*, aocommon::ImageBase<float>&, float, bool, bool const*, float, aocommon::ImageBase<float> const&, bool)  (in wsclean)",
+          "samples": 695
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp7<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 615
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::dirty2grid_pre2(ducc0::detail_mav::cmav<float, 2ul> const&, ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, double)::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const  (in wsclean)",
+          "samples": 591
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp2<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 497
+        }
+      ],
+      "caution": "All-thread sampled stacks include parked workers and kernel waits. Counts are not CPU-time percentages or inclusive-hotspot percentages."
+    },
+    "gpuprof-sample-01-prediction-3072-j8.sample.txt": {
+      "thread_id_sample_counts": {
+        "27542085": 19756
+      },
+      "top_of_stack": [
+        {
+          "symbol": "__psynch_cvwait  (in libsystem_kernel.dylib)",
+          "samples": 174109
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::x2grid_c_helper<7ul, true>(unsigned long, ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, unsigned long, double)::'lambda'(ducc0::detail_threading::Scheduler&)::operator()(ducc0::detail_threading::Scheduler&) const  (in wsclean)",
+          "samples": 31284
+        },
+        {
+          "symbol": "__workq_kernreturn  (in libsystem_kernel.dylib)",
+          "samples": 15860
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_input<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul> const&, ducc0::detail_mav::cfmav<ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>::value_type>> const&, ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>>*)  (in wsclean)",
+          "samples": 12370
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::grid2x_c_helper<7ul, true>(unsigned long, ducc0::detail_mav::cmav<std::complex<float>, 2ul> const&, unsigned long, double)::'lambda'(ducc0::detail_threading::Scheduler&)::operator()(ducc0::detail_threading::Scheduler&) const  (in wsclean)",
+          "samples": 11306
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_output<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul> const&, ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>> const*, ducc0::detail_mav::vfmav<ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>::value_type>> const&)  (in wsclean)",
+          "samples": 6105
+        },
+        {
+          "symbol": "__sincosf_stret  (in libsystem_m.dylib)",
+          "samples": 5341
+        },
+        {
+          "symbol": "<deduplicated_symbol>  (in wsclean)",
+          "samples": 4143
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp3<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 3333
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::grid2dirty_post2(ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, ducc0::detail_mav::vmav<float, 2ul> const&, double)::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const  (in wsclean)",
+          "samples": 3270
+        },
+        {
+          "symbol": "schaapcommon::StaticFor<unsigned long>::Loop<schaapcommon::math::(anonymous namespace)::MultiplyAndInverse(float*, std::complex<float>*, std::complex<float> const*, std::complex<float> const*, unsigned long, unsigned long)::$_0>(schaapcommon::math::(anonymous namespace)::MultiplyAndInverse(float*, std::complex<float>*, std::complex<float> const*, std::complex<float> const*, unsigned long, unsigned long)::$_0&, unsigned long)  (in wsclean)",
+          "samples": 3202
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp8<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 2330
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp11<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 2173
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp5<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 1536
+        },
+        {
+          "symbol": "std::__function::__func<void ducc0::detail_fft::(anonymous namespace)::general_c2r<float>(ducc0::detail_mav::cfmav<ducc0::Cmplx<float>> const&, ducc0::detail_mav::vfmav<float> const&, unsigned long, bool, float, unsigned long)::'lambda'(ducc0::detail_threading::Scheduler&), void (ducc0::detail_threading::Scheduler&)>::operator()(ducc0::detail_threading::Scheduler&)  (in wsclean)",
+          "samples": 1462
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::rfftp4<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 1437
+        },
+        {
+          "symbol": "_platform_memset  (in libsystem_platform.dylib)",
+          "samples": 1395
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::HelperX2g2<7ul, true>::dump()  (in wsclean)",
+          "samples": 1256
+        },
+        {
+          "symbol": "__bzero  (in libsystem_platform.dylib)",
+          "samples": 1206
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_output<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<4ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<4ul> const&, ducc0::detail_simd::vtp<float, 4ul> const*, ducc0::detail_mav::vfmav<ducc0::detail_simd::vtp<float, 4ul>::value_type> const&)  (in wsclean)",
+          "samples": 1133
+        },
+        {
+          "symbol": "std::__function::__func<void ducc0::detail_fft::(anonymous namespace)::general_r2c<float>(ducc0::detail_mav::cfmav<float> const&, ducc0::detail_mav::vfmav<ducc0::Cmplx<float>> const&, unsigned long, bool, float, unsigned long)::'lambda'(ducc0::detail_threading::Scheduler&), void (ducc0::detail_threading::Scheduler&)>::operator()(ducc0::detail_threading::Scheduler&)  (in wsclean)",
+          "samples": 1112
+        },
+        {
+          "symbol": "_platform_memmove  (in libsystem_platform.dylib)",
+          "samples": 913
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::dirty2grid_pre2(ducc0::detail_mav::cmav<float, 2ul> const&, ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, double)::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const  (in wsclean)",
+          "samples": 913
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::countRanges()::'lambda0'(ducc0::detail_threading::Scheduler&)::operator()(ducc0::detail_threading::Scheduler&) const  (in wsclean)",
+          "samples": 786
+        },
+        {
+          "symbol": "radler::algorithms::ThreadedDeconvolutionTools::FindSingleScalePeak(radler::algorithms::multiscale::MultiScaleTransforms*, aocommon::ImageBase<float>&, float, bool, bool const*, float, aocommon::ImageBase<float> const&, bool)  (in wsclean)",
+          "samples": 659
+        }
+      ],
+      "caution": "All-thread sampled stacks include parked workers and kernel waits. Counts are not CPU-time percentages or inclusive-hotspot percentages."
+    },
+    "gpuprof-sample-02-all-3072-j8.sample.txt": {
+      "thread_id_sample_counts": {
+        "27543038": 20252
+      },
+      "top_of_stack": [
+        {
+          "symbol": "__psynch_cvwait  (in libsystem_kernel.dylib)",
+          "samples": 187588
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::x2grid_c_helper<7ul, true>(unsigned long, ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, unsigned long, double)::'lambda'(ducc0::detail_threading::Scheduler&)::operator()(ducc0::detail_threading::Scheduler&) const  (in wsclean)",
+          "samples": 31321
+        },
+        {
+          "symbol": "__workq_kernreturn  (in libsystem_kernel.dylib)",
+          "samples": 24840
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::grid2x_c_helper<7ul, true>(unsigned long, ducc0::detail_mav::cmav<std::complex<float>, 2ul> const&, unsigned long, double)::'lambda'(ducc0::detail_threading::Scheduler&)::operator()(ducc0::detail_threading::Scheduler&) const  (in wsclean)",
+          "samples": 11318
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_input<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul> const&, ducc0::detail_mav::cfmav<ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>::value_type>> const&, ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>>*)  (in wsclean)",
+          "samples": 10654
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::copy_output<ducc0::detail_simd::vtp<float, 4ul>, ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul>>(ducc0::detail_fft::(anonymous namespace)::multi_iter<16ul> const&, ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>> const*, ducc0::detail_mav::vfmav<ducc0::Cmplx<ducc0::detail_simd::vtp<float, 4ul>::value_type>> const&)  (in wsclean)",
+          "samples": 5286
+        },
+        {
+          "symbol": "__sincosf_stret  (in libsystem_m.dylib)",
+          "samples": 5266
+        },
+        {
+          "symbol": "<deduplicated_symbol>  (in wsclean)",
+          "samples": 4140
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::grid2dirty_post2(ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, ducc0::detail_mav::vmav<float, 2ul> const&, double)::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const  (in wsclean)",
+          "samples": 3198
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp3<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 3128
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp11<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 2090
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp8<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 1864
+        },
+        {
+          "symbol": "_platform_memmove  (in libsystem_platform.dylib)",
+          "samples": 1782
+        },
+        {
+          "symbol": "schaapcommon::StaticFor<unsigned long>::Loop<schaapcommon::math::(anonymous namespace)::MultiplyAndInverse(float*, std::complex<float>*, std::complex<float> const*, std::complex<float> const*, unsigned long, unsigned long)::$_0>(schaapcommon::math::(anonymous namespace)::MultiplyAndInverse(float*, std::complex<float>*, std::complex<float> const*, std::complex<float> const*, unsigned long, unsigned long)::$_0&, unsigned long)  (in wsclean)",
+          "samples": 1605
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::cfftp5<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 1454
+        },
+        {
+          "symbol": "radler::algorithms::ThreadedDeconvolutionTools::FindSingleScalePeak(radler::algorithms::multiscale::MultiScaleTransforms*, aocommon::ImageBase<float>&, float, bool, bool const*, float, aocommon::ImageBase<float> const&, bool)  (in wsclean)",
+          "samples": 1375
+        },
+        {
+          "symbol": "_platform_memset  (in libsystem_platform.dylib)",
+          "samples": 1374
+        },
+        {
+          "symbol": "__bzero  (in libsystem_platform.dylib)",
+          "samples": 1303
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::HelperX2g2<7ul, true>::dump()  (in wsclean)",
+          "samples": 1257
+        },
+        {
+          "symbol": "std::__function::__func<void ducc0::detail_fft::(anonymous namespace)::general_r2c<float>(ducc0::detail_mav::cfmav<float> const&, ducc0::detail_mav::vfmav<ducc0::Cmplx<float>> const&, unsigned long, bool, float, unsigned long)::'lambda'(ducc0::detail_threading::Scheduler&), void (ducc0::detail_threading::Scheduler&)>::operator()(ducc0::detail_threading::Scheduler&)  (in wsclean)",
+          "samples": 1065
+        },
+        {
+          "symbol": "ducc0::detail_gridder::Wgridder<float, float, float, float, ducc0::detail_mav::cmav<std::complex<float>, 1ul>>::dirty2grid_pre2(ducc0::detail_mav::cmav<float, 2ul> const&, ducc0::detail_mav::vmav<std::complex<float>, 2ul> const&, double)::'lambda'(unsigned long, unsigned long)::operator()(unsigned long, unsigned long) const  (in wsclean)",
+          "samples": 836
+        },
+        {
+          "symbol": "__psynch_mutexwait  (in libsystem_kernel.dylib)",
+          "samples": 759
+        },
+        {
+          "symbol": "ducc0::detail_fft::(anonymous namespace)::rfftp4<float>::exec(std::type_index const&, void*, void*, void*, bool, unsigned long) const  (in wsclean)",
+          "samples": 747
+        },
+        {
+          "symbol": "std::__function::__func<void ducc0::detail_fft::(anonymous namespace)::general_c2r<float>(ducc0::detail_mav::cfmav<ducc0::Cmplx<float>> const&, ducc0::detail_mav::vfmav<float> const&, unsigned long, bool, float, unsigned long)::'lambda'(ducc0::detail_threading::Scheduler&), void (ducc0::detail_threading::Scheduler&)>::operator()(ducc0::detail_threading::Scheduler&)  (in wsclean)",
+          "samples": 643
+        },
+        {
+          "symbol": "__write_nocancel  (in libsystem_kernel.dylib)",
+          "samples": 634
+        }
+      ],
+      "caution": "All-thread sampled stacks include parked workers and kernel waits. Counts are not CPU-time percentages or inclusive-hotspot percentages."
+    }
+  },
+  "micro_v2": {
+    "calls": 63,
+    "measured": 54,
+    "excluded_warmups": 9,
+    "values": [
+      {
+        "batch": 1,
+        "mode": "fresh-convolution",
+        "samples": 6,
+        "init_median_ms": 4.1905,
+        "submit_wait_median_ms": 18.179833,
+        "init_plus_submit_wait_median_ms": 22.310917,
+        "gpu_median_ms": 5.118958360981196,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 1,
+        "mode": "reused-convolution",
+        "samples": 6,
+        "init_median_ms": 0.0,
+        "submit_wait_median_ms": 6.775167000000001,
+        "init_plus_submit_wait_median_ms": 6.775167000000001,
+        "gpu_median_ms": 4.222750081680715,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 1,
+        "mode": "reused-inverse",
+        "samples": 6,
+        "init_median_ms": 0.0,
+        "submit_wait_median_ms": 3.2233125,
+        "init_plus_submit_wait_median_ms": 3.2233125,
+        "gpu_median_ms": 2.559124957770109,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 4,
+        "mode": "fresh-convolution",
+        "samples": 6,
+        "init_median_ms": 10.478167000000001,
+        "submit_wait_median_ms": 48.254270500000004,
+        "init_plus_submit_wait_median_ms": 58.566312499999995,
+        "gpu_median_ms": 20.19612502772361,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 4,
+        "mode": "reused-convolution",
+        "samples": 6,
+        "init_median_ms": 0.0,
+        "submit_wait_median_ms": 22.994583,
+        "init_plus_submit_wait_median_ms": 22.994583,
+        "gpu_median_ms": 16.841041622683406,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 4,
+        "mode": "reused-inverse",
+        "samples": 6,
+        "init_median_ms": 0.0,
+        "submit_wait_median_ms": 12.3220005,
+        "init_plus_submit_wait_median_ms": 12.3220005,
+        "gpu_median_ms": 11.733583349268883,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 8,
+        "mode": "fresh-convolution",
+        "samples": 6,
+        "init_median_ms": 19.729375,
+        "submit_wait_median_ms": 86.186229,
+        "init_plus_submit_wait_median_ms": 105.8008125,
+        "gpu_median_ms": 33.58941664919257,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 8,
+        "mode": "reused-convolution",
+        "samples": 6,
+        "init_median_ms": 0.0,
+        "submit_wait_median_ms": 41.2353125,
+        "init_plus_submit_wait_median_ms": 41.2353125,
+        "gpu_median_ms": 30.757416679989547,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      },
+      {
+        "batch": 8,
+        "mode": "reused-inverse",
+        "samples": 6,
+        "init_median_ms": 0.0,
+        "submit_wait_median_ms": 24.969396,
+        "init_plus_submit_wait_median_ms": 24.969396,
+        "gpu_median_ms": 24.266291700769216,
+        "max_relative_rms": 1.0194443855068125e-06,
+        "max_rel_peak": 2.384185791015625e-06
+      }
+    ],
+    "limits": "Synthetic dense spectrum, delta kernels, all real cells validated. CPU inverse preparation, output validation and fresh teardown excluded. GPU-time differences are ablations, not exact individual-encoder timings. Earlier v1 retained; v2 removes repeated getter overhead from excluded CPU preparation."
+  }
+}

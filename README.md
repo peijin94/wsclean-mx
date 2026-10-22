@@ -248,6 +248,10 @@ its failing probe is available only through `WSCLEAN_MX_METAL_ARCHIVE=ON` and
 `scripts/test_archived_metal.sh`. The original full-pipeline source family still
 fails 4/10 candidates under unchanged limits. This remains experimental, not a
 blanket scientific-release approval.
+The [detailed GPU profiling report](docs/gpu-profiling-2026-10-22.md) includes
+CPU/GPU timelines, utilization limits, copy/plan budgets, thread scaling and
+resource-reuse ablations. Set `MX_METAL_PROFILE=1` for optional structured traces;
+GPU command residency is not shader occupancy.
 The broader CPU scientific-validation work remains in
 [the development plan](docs/development-plan.md).
 

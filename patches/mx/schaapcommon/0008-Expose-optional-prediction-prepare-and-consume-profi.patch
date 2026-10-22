@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 13:40:32 -0700
+Subject: [PATCH] Expose optional prediction prepare and consume profiling
+ hooks
+
+
+diff --git a/external/ducc0/wgridder/mx_prediction.h b/external/ducc0/wgridder/mx_prediction.h
+index 88853d2..7c2ab5b 100644
+--- a/external/ducc0/wgridder/mx_prediction.h
++++ b/external/ducc0/wgridder/mx_prediction.h
+@@ -6,6 +6,9 @@
+ namespace ducc0 { namespace detail_gridder {
+ class PredictionSession {
+  public:
++  // Default no-op hooks preserve CPU/mock providers and require no Metal types.
++  virtual void profileBegin(const char*, std::size_t, std::size_t) noexcept {}
++  virtual void profileEnd(const char*, std::size_t, std::size_t) noexcept {}
+   virtual ~PredictionSession() = default; // Must drain all outstanding work.
+   // Exactly two compact [nu,nv] planes. Storage lives until session destruction.
+   virtual std::complex<float>* data(std::size_t slot) noexcept = 0;
+diff --git a/external/ducc0/wgridder/wgridder_impl.h b/external/ducc0/wgridder/wgridder_impl.h
+index 82891ff..cccd51f 100644
+--- a/external/ducc0/wgridder/wgridder_impl.h
++++ b/external/ducc0/wgridder/wgridder_impl.h
+@@ -1561,7 +1561,9 @@ timers.pop();
+             auto prepare = [&](size_t pl)
+               {
+               auto slot = pl%2;
++              session->profileBegin("prediction.prepare", slot, pl);
+               dirty2grid_pre2(tdirty, planes[slot], wmin+pl*dw);
++              session->profileEnd("prediction.prepare", slot, pl);
+               submitted[slot] = session->submit(slot, pl);
+               };
+             if (nplanes) prepare(0);
+@@ -1574,9 +1576,15 @@ timers.pop();
+               bool completed = session->wait(slot, pl);
+               double w = wmin+pl*dw;
+               if (!submitted[slot] || !completed)
++                {
++                session->profileBegin("prediction.fallback", slot, pl);
+                 dirty2grid_c_wscreen(tdirty, planes[slot], w, pl);
++                session->profileEnd("prediction.fallback", slot, pl);
++                }
+               timers.push("degridding proper");
++              session->profileBegin("prediction.consume", slot, pl);
+               grid2x_c<true>(planes[slot], pl, w);
++              session->profileEnd("prediction.consume", slot, pl);
+               timers.pop();
+               }
+             return;
