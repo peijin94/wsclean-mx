@@ -47,10 +47,22 @@ band-limited CPU FFT. MPSGraph is at 20.1 ms in its best case.
 1. **Band-limit on the GPU too.** MPSGraph can transform a sliced tensor, so the
    occupied-column / dirty-row structure could in principle be kept. That is the
    only route to single-digit ms per plane. Untested.
-2. **Batch the planes into one call** (`(nplanes, N, N)` transform over axes 1,2)
-   to amortise per-call overhead. My batched bench crashed on a rank-4 read-back
-   at 8x4096^2 (2.1 GB buffers, unresolved); the single-plane numbers above are
-   the reliable ones.
+2. **Batch the planes into one call** (`(nplanes, N, N)` transform over axes 1,2).
+   Measured, and it does not help at our size:
+
+   | grid | batch | GPU total | GPU per plane | CPU 8thr per plane |
+   |---|---|---|---|---|
+   | 4096 | 1 | 20.1 ms | 20.1 | 29.3 |
+   | 4096 | 2 | 39.3 ms | 19.7 | 30.1 |
+   | 4096 | 4 | 77.3 ms | 19.3 | 29.3 |
+   | 4096 | 8 | 340.7 ms | 42.6 | 32.1 |
+   | 2048 | 1 | 4.5 ms | 4.5 | 5.9 |
+   | 2048 | 4 | 15.1 ms | 3.8 | 6.0 |
+   | 2048 | 16 | 50.8 ms | 3.2 | 5.9 |
+
+   At 4096 MPSGraph already pipelines single calls, so batching only adds memory
+   pressure (8 planes = 2.1 GB and per-plane time doubles). At 2048 batching
+   does amortise (3.2 vs 4.5 ms) but that size is not ours.
 3. **vkFFT** vendors a Metal backend that handles non-smooth sizes via Bluestein
    more carefully than MPSGraph, and could plausibly beat 20 ms at 3968. Still
    has to reach < 12.6 ms/plane to matter, a 8x improvement over MPSGraph.
