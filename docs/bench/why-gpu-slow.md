@@ -49,6 +49,12 @@ hardware is idle; the kernel cannot feed it.
    | Horner chain removed (constant weights) | 3.07 s |
    | float CAS atomics -> native integer atomics | 3.70 s |
    | empty-tile early return | ~-0.1 s |
+   | bounds checks replaced by masking (always 49 taps, ~23% more work) | 4.09-4.15 s |
+
+   The masked variant costs exactly the extra taps (4.12/3.30 = 1.25x time for
+   49/40 = 1.23x taps), so the in-tile `continue`s and their divergence are
+   free and the kernel time is strictly linear in tap count — about 0.78 ns per
+   tap.
 
    So neither the polynomial nor the atomic implementation is the limiter.
    Note the atomics are **float32, not double**: MSL on Apple silicon has no
