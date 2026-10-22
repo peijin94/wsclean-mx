@@ -63,9 +63,7 @@ band-limited CPU FFT. MPSGraph is at 20.1 ms in its best case.
    At 4096 MPSGraph already pipelines single calls, so batching only adds memory
    pressure (8 planes = 2.1 GB and per-plane time doubles). At 2048 batching
    does amortise (3.2 vs 4.5 ms) but that size is not ours.
-3. **vkFFT** vendors a Metal backend that handles non-smooth sizes via Bluestein
-   more carefully than MPSGraph, and could plausibly beat 20 ms at 3968. Still
-   has to reach < 12.6 ms/plane to matter, a 8x improvement over MPSGraph.
+3. **vkFFT — MEASURED, and it does deliver.** See below.
 4. **MLX** (`mlx.core.fft`) dispatches to MPSGraph/MLX primitives for FFT, so it
    inherits the same size sensitivity; it is also a C++/Python framework that
    would have to be linked into wsclean.
@@ -87,3 +85,55 @@ the FFT to the GPU cannot fix a path whose losses are in gridding (7.5x), extrac
 Padding the grid to 4096 (power of two, ~3% more samples) measured
 FFT 1.34 -> 1.28 s and inversion 9.32 -> 9.18 s (-1.5%). Reverted: not worth a
 layout change, because band-limiting already dilutes the size penalty.
+
+
+## vkFFT (native Metal backend) — this is the one that works
+
+`bench/metal/vkfft_bench.cpp`, vkFFT v1.2.31 monolithic header + the repo's
+`metal-cpp`, `-DVKFFT_BACKEND=5`. complex64 2-D transform, in-place, 5 reps,
+correctness checked against the exact DC sum.
+
+| grid | factorisation | vkFFT Metal | ducc0 CPU 8thr | speedup | MPSGraph (for contrast) |
+|---|---|---|---|---|---|
+| 512 | 2^9 | 0.1 ms | 0.3 ms | 2.0x | 1.4 ms |
+| 2048 | 2^11 | 3.7 ms | 6.6 ms | 1.78x | 4.5 ms |
+| **3968** | **2^7*31** | **14.2 ms** | **37.8 ms** | **2.67x** | **102.6 ms** |
+| 4096 | 2^12 | 14.6 ms | 29.8 ms | 2.04x | 20.1 ms |
+
+At the real grid (3968 = 2^7*31) vkFFT is **7.2x faster than MPSGraph** and
+2.67x faster than ducc0's full FFT. The 31-point factor that destroys MPSGraph
+costs vkFFT almost nothing.
+
+### What that is worth against the band-limited path
+
+Our production FFT only transforms the occupied lines (18.6 ms/plane at 3968),
+so vkFFT's full transform (14.2 ms/plane) is just 1.3x faster, worth ~0.3 s of
+a 9.2 s inversion. **But the point is not the raw speed, it is that the FFT is
+now on the GPU while the CPU is free**:
+
+    CPU gridding 0.44 s  ||  GPU FFT 1.02 s (72 x 14.2 ms)  ->  ~1.05 s
+    serial ducc0                                              ->   1.75 s
+
+The gridding fits entirely inside the FFT window, so a producer/consumer
+pipeline could take the inversion from 1.75 s to roughly 1.0-1.1 s (1.6x) while
+keeping ducc0's exact gridding maths. That is the first configuration in this
+whole investigation where the GPU has a defensible role.
+
+### Integration notes (learned the hard way)
+
+- vkFFT master (v2) changed the config API completely (`buffer` is now
+  `MTL::Buffer**`, `dimensionCount`, no `MTLDevice` field). The classic API used
+  here is **v1.2.31**, whose `vkFFT.h` is still a single 2 MB header
+  (`raw.githubusercontent.com/DTolm/VkFFT/v1.2.31/vkFFT/vkFFT.h`). v1.3.0+ split
+  the header into `vkFFT/vkFFT_*` subdirectories.
+- Metal needs `metal-cpp` (Apple's C++ bindings), included in the repo.
+- `VkFFTAppend` is **async and does not submit**: you must create
+  `queue->commandBuffer()` + `computeCommandEncoder()`, pass them in
+  `VkFFTLaunchParams`, then `endEncoding`, `commit`, `waitUntilCompleted`.
+  Timing without the wait reports 0.0 ms and the output buffer stays empty.
+- The plan is **in-place**: refresh the input buffer before each timed run or you
+  accumulate transforms.
+- `deleteVkFFT()` segfaults with this header/metal-cpp pairing; skip it at exit
+  (`MX_VKFFT_CLEANUP=1` to force it).
+- Build the TU with `-O3` is fine, but a `-O2` build of the same source
+  intermittently segfaulted during init; if that reappears use `-O1`.
