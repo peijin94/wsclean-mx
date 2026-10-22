@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 13:38:39 -0400
-Subject: [PATCH 18/33] Metal: w-path - whole-image nm1 scan, drop the false
+Subject: [PATCH 18/34] Metal: w-path - whole-image nm1 scan, drop the false
  normalisation
 
 Two more bugs, both found by instrumenting:

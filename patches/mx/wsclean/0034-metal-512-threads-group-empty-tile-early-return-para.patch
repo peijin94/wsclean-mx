@@ -1,0 +1,196 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 19:02:45 -0700
+Subject: [PATCH 34/34] metal: 512 threads/group, empty-tile early return,
+ parallel corrections
+
+gpu_exec 3.90->3.12s, 4096/2amin inversion 10.1->9.3s. Gates: probe
+2.95e-07, 50k 1.53e-08, 1024 dirty T2 4.94e-06.
+
+Diagnostics added: per-batch DMA byte counters and a tile-occupancy
+report (only ~2% of 15376 tiles carry work), which showed transfer and
+disk are not the bottleneck.
+
+diff --git a/metal/metaldevice.h b/metal/metaldevice.h
+index 3a7d309c..857052b8 100644
+--- a/metal/metaldevice.h
++++ b/metal/metaldevice.h
+@@ -51,7 +51,7 @@ struct GridAccumInput {
+   // Threads per threadgroup for the poly variants. Measured: fewer threads per
+   // tile is WORSE on clustered data (the tile's work is split less), so this is
+   // a throughput knob, not a contention fix.
+-  std::size_t threads_per_group = 256;
++  std::size_t threads_per_group = 512;
+   // Split a tile's bucket into slices of about this many visibilities, one
+   // threadgroup per slice (0 = one threadgroup per tile). This is the
+   // parallelism knob for clustered data, where a few tiles hold all the work.
+diff --git a/metal/metaldevice.mm b/metal/metaldevice.mm
+index bd1ebba9..f68095ff 100644
+--- a/metal/metaldevice.mm
++++ b/metal/metaldevice.mm
+@@ -288,6 +288,24 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     const std::size_t tiles_per_row = buckets.tiles_per_row;
+     const std::size_t tiles = tiles_per_row * tiles_per_row;
+ 
++    if (std::getenv("MX_METAL_DEBUG_TILES") != nullptr) {
++      // How much of the launched tile grid carries work? Empty tiles still
++      // zero and flush a 32x32 threadgroup tile, so this ratio caps the kernel.
++      std::size_t occupied = 0, max_items = 0;
++      for (std::size_t t = 0; t < tiles; ++t) {
++        const std::size_t n = buckets.start[t + 1] - buckets.start[t];
++        if (n > 0) ++occupied;
++        max_items = std::max(max_items, n);
++      }
++      std::fprintf(stderr,
++                   "[mx-metal] tiles total=%zu occupied=%zu (%.1f%%) items=%zu "
++                   "mean_per_occupied=%.1f max_per_tile=%zu\n",
++                   tiles, occupied, 100.0 * double(occupied) / double(tiles),
++                   buckets.items.size(),
++                   occupied ? double(buckets.items.size()) / double(occupied) : 0.0,
++                   max_items);
++    }
++
+     NSError* error = nil;
+     id<MTLComputePipelineState> pipeline = nil;
+     {
+@@ -371,6 +389,9 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+                                        options:MTLResourceStorageModeShared];
+     }
+ 
++    // Bytes moved per batch, for the "why is the GPU slow" accounting:
++    // visibility uploads (host->GPU), and the grid zero-fill + grid copy
++    // (GPU<->GPU) that happen per plane on top of the actual compute.
+     id<MTLCommandQueue> queue = [device newCommandQueue];
+     id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
+     id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
+@@ -557,6 +578,21 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+                            job.packed = packBuckets(in, job.buckets);
+                          job.tiles_per_row = job.buckets.tiles_per_row;
+                          job.tiles = job.tiles_per_row * job.tiles_per_row;
++                         if (std::getenv("MX_METAL_DEBUG_TILES") != nullptr) {
++                           std::size_t occupied = 0;
++                           for (std::size_t t = 0; t < job.tiles; ++t) {
++                             if (job.buckets.start[t + 1] > job.buckets.start[t]) ++occupied;
++                           }
++                           std::fprintf(stderr,
++                                        "[mx-metal] tiles total=%zu occupied=%zu (%.1f%%) "
++                                        "items=%zu mean_per_occupied=%.1f\n",
++                                        job.tiles, occupied,
++                                        100.0 * double(occupied) / double(job.tiles),
++                                        job.buckets.items.size(),
++                                        occupied ? double(job.buckets.items.size()) /
++                                                       double(occupied)
++                                                 : 0.0);
++                         }
+                          if (job.split) {
+                            const std::size_t target = std::max<std::size_t>(1, in.split_target);
+                            for (std::size_t t = 0;
+@@ -654,6 +690,9 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+     const bool dump_timing = std::getenv("MX_METAL_DEBUG_TIMING") != nullptr;
+     const auto t_prep_done = std::chrono::steady_clock::now();
+ 
++    // Bytes moved per batch: visibility uploads (host->GPU) plus the per-plane
++    // grid zero-fill and grid copy, i.e. everything that is not the kernel.
++    struct Traffic { std::size_t upload = 0, grid_zero = 0, grid_copy = 0; } traffic;
+     id<MTLCommandQueue> queue = [device newCommandQueue];
+     id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
+     // One shared compute grid (max plane size); blit-filled to zero before
+@@ -665,9 +704,11 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+                             options:MTLResourceStorageModeShared];
+     for (auto& job : jobs) {
+       const auto& in = job.input;
+-      id<MTLBlitCommandEncoder> blit = [command_buffer blitCommandEncoder];
+-      [blit fillBuffer:work_grid range:NSMakeRange(0, job.grid_bytes) value:0];
+-      [blit endEncoding];
++      {
++        id<MTLBlitCommandEncoder> blit = [command_buffer blitCommandEncoder];
++        [blit fillBuffer:work_grid range:NSMakeRange(0, job.grid_bytes) value:0];
++        [blit endEncoding];
++      }
+       id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoder];
+       [encoder setComputePipelineState:job.pipeline];
+       const unsigned grid_size = static_cast<unsigned>(job.g);
+@@ -748,6 +789,10 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+           destinationOffset:0
+                          size:job.grid_bytes];
+       [blitOut endEncoding];
++      traffic.upload += job.visibility_buffer != nil
++                            ? static_cast<std::size_t>(job.visibility_buffer.length) : 0;
++      traffic.grid_zero += job.grid_bytes;
++      traffic.grid_copy += job.grid_bytes;
+     }
+ 
+     const auto begin = std::chrono::steady_clock::now();
+@@ -765,6 +810,12 @@ GridAccumResult gridAccumulate(const GridAccumInput& input) {
+                    "[mx-metal] batch host prep=%.1fms encode=%.1fms gpu_exec=%.1fms\n",
+                    ms(t_prep_done - host_begin).count(), ms(begin - t_prep_done).count(),
+                    1000.0 * gpu_seconds);
++      std::fprintf(stderr,
++                   "[mx-metal] traffic planes=%zu upload=%.1fMB grid_zero=%.1fMB "
++                   "grid_copy=%.1fMB total=%.1fMB\n",
++                   jobs.size(), traffic.upload / 1048576.0, traffic.grid_zero / 1048576.0,
++                   traffic.grid_copy / 1048576.0,
++                   (traffic.upload + traffic.grid_zero + traffic.grid_copy) / 1048576.0);
+     }
+ 
+     std::vector<GridAccumResult> results;
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index 48e75b51..0e3d1fcf 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -964,18 +964,22 @@ bool inversion(const InversionInput& input, float* dirty) {
+   }  // end row chunk
+ 
+   // ---------------- ducc0's apply_global_corrections ----------------
+-  for (std::size_t i = 0; i < input.image_width; ++i) {
++  // Per-row writes are disjoint, so this parallelises bit-identically. At 4k it
++  // is 16.8M nm1Of + corfunc evaluations and was purely serial (~1.5 s).
++  dispatch_apply(input.image_width, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
++                 ^(std::size_t i) {
+     const double l = x0 + static_cast<double>(i) * input.pixel_size_x;
+     const int icfu = std::abs(static_cast<int>(input.image_width / 2) - static_cast<int>(i));
++    const double cf = geometry.cfu[icfu];
+     for (std::size_t j = 0; j < input.image_height; ++j) {
+       const double m = y0 + static_cast<double>(j) * input.pixel_size_y;
+       const double nm1 = nm1Of(l, m);
+       const double correction = geometry.kernel->corfunc((nm1 + layout.nshift) * layout.dw);
+       const int icfv = std::abs(static_cast<int>(input.image_height / 2) - static_cast<int>(j));
+       dirty[i * input.image_height + j] *=
+-          static_cast<float>(correction * geometry.cfu[icfu] * geometry.cfv[icfv]);
++          static_cast<float>(correction * cf * geometry.cfv[icfv]);
+     }
+-  }
++  });
+   const double scale = debugDouble("MX_METAL_DEBUG_SCALE", 1.0);
+   if (scale != 1.0) {
+     for (std::size_t i = 0; i < image_pixels; ++i) dirty[i] = static_cast<float>(dirty[i] * scale);
+diff --git a/metal/mxshaders.h b/metal/mxshaders.h
+index c5a57100..b9ca8395 100644
+--- a/metal/mxshaders.h
++++ b/metal/mxshaders.h
+@@ -500,6 +500,14 @@ kernel void grid_accumulate_poly(device const float* visibilities,
+                                  uint2 tid2 [[thread_position_in_threadgroup]],
+                                  uint2 tile_id [[threadgroup_position_in_grid]],
+                                  uint tid [[thread_index_in_threadgroup]]) {
++  // Empty tiles dominate the dispatch at full-sky uv coverage (~97% here) and
++  // would otherwise only zero then flush a threadgroup tile. The grid is
++  // blitted to zero before every plane, so skipping them is exact; begin/end
++  // are uniform across the threadgroup, so all threads return together.
++  const uint tile_index = tile_id.y * tiles_per_row + tile_id.x;
++  const uint begin = bucket_start[tile_index];
++  const uint end = bucket_start[tile_index + 1];
++  if (begin >= end) return;
+   threadgroup atomic_uint tile[(kTile * kTile) * 2];
+   for (uint i = tid; i < kTile * kTile; i += group_threads) {
+     atomic_store_explicit(&tile[2 * i], 0u, memory_order_relaxed);
+@@ -507,9 +515,6 @@ kernel void grid_accumulate_poly(device const float* visibilities,
+   }
+   threadgroup_barrier(mem_flags::mem_threadgroup);
+ 
+-  const uint tile_index = tile_id.y * tiles_per_row + tile_id.x;
+-  const uint begin = bucket_start[tile_index];
+-  const uint end = bucket_start[tile_index + 1];
+   const int half_support = int(support) / 2;
+   const int tile_x0 = int(tile_id.x) * int(kTile);
+   const int tile_y0 = int(tile_id.y) * int(kTile);

@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Wed, 21 Oct 2026 10:18:35 -0400
-Subject: [PATCH 32/33] metal: skip exact-zero visibilities (ducc0 nvis mask),
+Subject: [PATCH 32/34] metal: skip exact-zero visibilities (ducc0 nvis mask),
  float vForce screens
 
 Count only nonzero ms for kernel selection (ducc0's nvis excludes
