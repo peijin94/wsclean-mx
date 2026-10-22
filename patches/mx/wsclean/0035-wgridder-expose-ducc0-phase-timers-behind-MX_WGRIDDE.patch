@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 19:33:49 -0700
+Subject: [PATCH 35/35] wgridder: expose ducc0 phase timers behind
+ MX_WGRIDDER_VERBOSE
+
+wsclean never sets the wgridder verbosity flag, so ducc0's TimerHierarchy
+table (gridding proper / FFT / wscreen / zeroing) was unreachable. Off by
+default; default behaviour unchanged.
+
+diff --git a/wgridder/wgridder_implementation.h b/wgridder/wgridder_implementation.h
+index 4ed7c21c..2f79ca10 100644
+--- a/wgridder/wgridder_implementation.h
++++ b/wgridder/wgridder_implementation.h
+@@ -41,7 +41,7 @@ WGridder<NumT>::WGridder(size_t width, size_t height, size_t trimmed_width, size
+       l_shift_(l_shift),
+       m_shift_(m_shift),
+       epsilon_(epsilon),
+-      verbosity_(verbosity),
++      verbosity_(std::max<size_t>(verbosity, std::getenv("MX_WGRIDDER_VERBOSE") ? 1u : 0u)),
+       use_metal_(use_metal) {
+   MR_assert(verbosity <= 2, "verbosity must be 0, 1, or 2");
+ }

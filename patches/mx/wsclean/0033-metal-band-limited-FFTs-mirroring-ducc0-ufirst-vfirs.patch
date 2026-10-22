@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Wed, 21 Oct 2026 11:34:17 -0400
-Subject: [PATCH 33/34] metal: band-limited FFTs mirroring ducc0 ufirst/vfirst
+Subject: [PATCH 33/35] metal: band-limited FFTs mirroring ducc0 ufirst/vfirst
 
 Per-plane occupied line ranges from the centered-frame tap footprints;
 FFT axis-0 over occupied columns (or axis-1 over occupied rows), then

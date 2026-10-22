@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Mon, 19 Oct 2026 13:26:45 -0400
-Subject: [PATCH 17/34] Metal: restore the -mgpu call site for the new
+Subject: [PATCH 17/35] Metal: restore the -mgpu call site for the new
  inversion API
 
 The w-layer work renamed the entry point (inversion2D -> inversion, with

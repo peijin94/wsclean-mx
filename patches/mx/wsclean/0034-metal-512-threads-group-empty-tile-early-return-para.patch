@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Wed, 21 Oct 2026 19:02:45 -0700
-Subject: [PATCH 34/34] metal: 512 threads/group, empty-tile early return,
+Subject: [PATCH 34/35] metal: 512 threads/group, empty-tile early return,
  parallel corrections
 
 gpu_exec 3.90->3.12s, 4096/2amin inversion 10.1->9.3s. Gates: probe

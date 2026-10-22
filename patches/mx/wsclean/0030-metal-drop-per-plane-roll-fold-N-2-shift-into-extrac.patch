@@ -2,7 +2,7 @@ From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
  <peijin@ustc.edu>
 Date: Wed, 21 Oct 2026 08:40:31 -0400
-Subject: [PATCH 30/34] metal: drop per-plane roll, fold N/2 shift into extract
+Subject: [PATCH 30/35] metal: drop per-plane roll, fold N/2 shift into extract
  checkerboard
 
 FFT the centered grid in place; cornered[n]=centered[n+N/2] gives
