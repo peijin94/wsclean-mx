@@ -10,8 +10,25 @@ gridding on the CPU, vkFFT's 2-D inverse transform on the GPU through a shared
 |---|---|---|
 | ducc0 CPU (baseline) | 1.11 s | 2.65 s |
 | Metal engine (gridding on GPU) | 4.87 s | 30.5 s |
-| **cpu-vkfft engine** | **3.6-4.3 s** | **7.2 s** |
-| numerical gate vs ducc0 | rel_rms 4.83e-06 | rel_rms 5.25e-06 |
+| cpu-vkfft, serial | 3.6-4.3 s | 7.2 s |
+| **cpu-vkfft, pipelined (current)** | **4.00 s** | **6.02 s** |
+| numerical gate vs ducc0 | rel_rms 4.82e-06 | rel_rms 5.24e-06 |
+
+## The FFT is now free
+
+Two vkFFT buffers (2x126 MB at 4k) with `submit()` decoupled from `wait()`:
+plane N's transform runs on the GPU while plane N+1 is gridded and plane N-1 is
+extracted, so the pipeline never waits on a buffer whose result it still needs.
+
+| 4096^2, 2amin | serial | pipelined |
+|---|---|---|
+| gridding (CPU) | 2.90 s | 2.91 s |
+| FFT + extract (wall) | 1.43 s | **0.34 s** |
+| inversion total | 6.79 s | **6.02 s** |
+
+The transform itself still takes 72 x ~14 ms = 1.0 s of GPU time, but none of it
+is on the critical path any more: it is entirely hidden behind the CPU's
+gridding. That is the goal this round was aiming at.
 
 Both PASS at the T2 tolerance the Metal path uses (5e-6). The grid the CPU
 produces matches the Metal kernel's grid to rel_rms 4.1e-07, i.e. float32
@@ -75,6 +92,11 @@ gridding and FFT themselves are already at the right order of magnitude.
 
 ## Next
 
+0. Gridding is now 2.9 s of the 6.0 s and bookkeeping (item pass 0.70, gather
+   0.79, preamble + corrections ~1.4) the rest; total CPU user time is 27 s for
+   8 threads. ducc0's equivalent gridding is ~1.4 s because it vectorises over
+   visibilities (its `TemplateKernel::eval2s` evaluates W taps for a whole SIMD
+   vector at once) while this port evaluates one visibility at a time in double.
 1. Fold the per-plane gather into the gridding call: grid straight from the
    w-buckets, computing the w-weight inline, instead of materialising 71M
    `(item, weight)` pairs. That is the 5.7 s.
