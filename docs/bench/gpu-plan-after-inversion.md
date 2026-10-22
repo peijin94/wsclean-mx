@@ -150,3 +150,30 @@ mx-vkfft-fwd-probe (3.3e-07/5.9e-07), expand-gpu-test (3.0e-07/5.1e-07).
 Patches: wsclean 0036-0047, schaapcommon 0005-0006, radler 0006 (all
 verify against mx-base). Harness: 125/128 (3 pre-existing metal-build
 assertion failures in files untouched by this work).
+
+## Batched transforms: measured, regresses -- convolve hook is opt-in
+
+vkFFT numberBatches at 3072^2 (rel_rms ~6.4e-07 PASS all): B=2: 13.0,
+B=4: 13.6, B=8: 23.7 ms/plane vs 12.5 serialized singles vs CPU ducc0
+c2r 7.1 ms (8 threads). Batching never beats serialized singles, which
+never beat the CPU: the 9.4M-point FFT is memory-bound and 8 CPU cores
+beat GPU dispatch here, and ducc0 does half the work (4.7M-point c2r vs
+9.4M c2c). Direct vkFFT R2C was abandoned after four config variants
+(100% mismatch incl. sign-flip character -- Metal-backend R2C gap, not a
+stride fix). Consequence: the convolve hook is opt-in
+(MX_METAL_CONVOLVE=1); default -mgpu is peak + predict hooks only.
+15-slot deconv: CPU 4.82 / peak-only 5.17 / full 5.39 s -- the hook
+overhead is real, batching would worsen it. Probe mx-vkfft-batch-probe
+pins the negative result so it is not retried blindly.
+
+## Prediction pipeline: copy-swap ties, shared-buffer loop scoped
+
+The live predict hook (copy in / forward c2c / copy out per plane) ties
+the CPU (3.41 vs 3.35 s at 15-slot): the full GPU transform roughly
+equals ducc0's band-limited bands, and the two 75 MB copies eat the rest.
+A true zero-copy pipeline needs dirty2x() restructured around grids that
+live in shared MTLBuffers from birth (ducc0 vmav cannot wrap them;
+signatures would change) plus chunked overlap of FFT(N+1) with
+degrid(N). Scoped but deferred: the FFT itself ties, so the prize is
+copy-only (~0.5 s max), and the surgery risk in vendored ducc0 outweighs
+it until the deconv side has a proven win to pair with.

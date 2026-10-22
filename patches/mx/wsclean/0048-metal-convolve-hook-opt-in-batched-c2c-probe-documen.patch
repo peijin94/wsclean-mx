@@ -1,0 +1,202 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 05:00:34 -0700
+Subject: [PATCH] metal: convolve hook opt-in; batched c2c probe documents
+ negative result
+
+Per-scale GPU c2r ties/loses (12ms+expansion vs CPU 7ms); batched
+numberBatches regresses (B=2: 13.0, B=4: 13.6, B=8: 23.7 ms/plane vs
+12.5 serialized). Gate the convolve hook behind MX_METAL_CONVOLVE=1.
+Default -mgpu is peak + predict hooks (both neutral-or-better).
+
+diff --git a/main/main.cpp b/main/main.cpp
+index 850bec28..f014319c 100644
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ -13,6 +13,7 @@
+ #include <aocommon/checkblas.h>
+ #include <aocommon/logger.h>
+ 
++#include <cstdlib>
+ #include <exception>
+ #include <iostream>
+ 
+@@ -35,9 +36,13 @@ int main(int argc, char* argv[]) {
+       // keeps its own CPU peak_finder.
+       if (wsclean.GetSettings().useGpu) {
+         radler::algorithms::SetPeakScanHook(&mx_peak_find);
+-        // Multiscale convolution's c2r (26-49% of deconvolution): Hermitian
+-        // expansion + vkFFT c2c, falls back to ducc0 per call on failure.
+-        schaapcommon::math::SetConvolveC2RHook(&mx_convolve_c2r);
++        // Multiscale convolution c2r: measured overhead per scale at 3k
++        // (GPU 12ms + expansion vs CPU 7ms; batched 13-24ms/plane -- worse),
++        // so opt-in only (MX_METAL_CONVOLVE=1) pending true-C2R batching.
++        // The hook code stays as validated infrastructure.
++        if (std::getenv("MX_METAL_CONVOLVE") != nullptr) {
++          schaapcommon::math::SetConvolveC2RHook(&mx_convolve_c2r);
++        }
+         // Prediction forward FFT: full GPU transform instead of ducc0's
+         // band-limited bands, copy-swap per plane with CPU fallback.
+         mx_predict_register();
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 247c69c9..f89c7703 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -84,3 +84,15 @@ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0
+             "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+ endif()
+ set_source_files_properties(vkfft_fwd_probe.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
++
++
++add_executable(mx-vkfft-batch-probe vkfft_batch_probe.cpp)
++target_link_libraries(mx-vkfft-batch-probe PRIVATE mx-metal)
++if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
++  target_sources(
++    mx-vkfft-batch-probe
++    PRIVATE "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
++            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
++            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
++endif()
++set_source_files_properties(vkfft_batch_probe.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+diff --git a/metal/mxvkfft.cpp b/metal/mxvkfft.cpp
+index 13b8762b..7820e2ca 100644
+--- a/metal/mxvkfft.cpp
++++ b/metal/mxvkfft.cpp
+@@ -21,6 +21,7 @@ namespace mx::vk {
+ 
+ struct Fft::Impl {
+   std::size_t n = 0;
++  std::size_t batch = 1;
+   MTL::Device* device = nullptr;
+   MTL::CommandQueue* queue = nullptr;
+   MTL::Buffer* buffer = nullptr;
+@@ -40,9 +41,12 @@ Fft::~Fft() {
+   }
+ }
+ 
+-bool Fft::init(std::size_t n) {
++bool Fft::init(std::size_t n) { return initBatched(n, 1); }
++
++bool Fft::initBatched(std::size_t n, std::size_t batch) {
+   Impl& s = *impl_;
+   s.n = n;
++  s.batch = batch;
+   s.device = MTL::CreateSystemDefaultDevice();
+   if (s.device == nullptr) {
+     s.error = "no Metal device";
+@@ -53,7 +57,7 @@ bool Fft::init(std::size_t n) {
+     s.error = "no Metal command queue";
+     return false;
+   }
+-  const std::size_t bytes = 2 * n * n * sizeof(float);
++  const std::size_t bytes = 2 * batch * n * n * sizeof(float);
+   s.buffer = s.device->newBuffer(bytes, MTL::ResourceStorageModeShared);
+   if (s.buffer == nullptr) {
+     s.error = "no shared buffer";
+@@ -67,6 +71,7 @@ bool Fft::init(std::size_t n) {
+   config.FFTdim = 2;
+   config.size[0] = n;
+   config.size[1] = n;
++  config.numberBatches = batch;
+   uint64_t buffer_size = bytes;
+   MTL::Buffer* buf = s.buffer;
+   config.buffer = &buf;
+@@ -88,6 +93,8 @@ float* Fft::data() { return static_cast<float*>(impl_->buffer->contents()); }
+ 
+ std::size_t Fft::n() const { return impl_->n; }
+ 
++std::size_t Fft::batch() const { return impl_->batch; }
++
+ bool Fft::submit() {
+   Impl& s = *impl_;
+   if (!s.planned) return false;
+diff --git a/metal/mxvkfft.h b/metal/mxvkfft.h
+index 147370ce..dcfe8b09 100644
+--- a/metal/mxvkfft.h
++++ b/metal/mxvkfft.h
+@@ -23,10 +23,16 @@ class Fft {
+ 
+   bool init(std::size_t n);
+ 
++  // Batched variant: B independent (n x n) transforms in one plan/call.
++  // Buffer holds B planes back-to-back (plane b at data() + b*2*n*n).
++  // Used for the 8-scale multiscale batch: one GPU call for all scales.
++  bool initBatched(std::size_t n, std::size_t batch);
++
+   // Shared-memory grid: 2*n*n floats, interleaved re/im, layout
+   // g[cx * n + cy] (same as the Metal kernel's output, so no transpose).
+   float* data();
+   std::size_t n() const;
++  std::size_t batch() const;
+ 
+   // Encode + commit without blocking; pair with wait() before reusing data().
+   // submit() runs the inverse (adjoint, +1); submitForward() the forward (-1).
+diff --git a/metal/vkfft_batch_probe.cpp b/metal/vkfft_batch_probe.cpp
+new file mode 100644
+index 00000000..8bbc60bb
+--- /dev/null
++++ b/metal/vkfft_batch_probe.cpp
+@@ -0,0 +1,62 @@
++// Gate for batched vkFFT c2c inverse: B planes, one plan, one submit.
++// Must match ducc0 c2c BACKWARD per plane. Also reports wall time to judge
++// whether one batched call beats B serialized singles.
++#include <algorithm>
++#include <chrono>
++#include <cmath>
++#include <complex>
++#include <cstdio>
++#include <cstring>
++#include <random>
++#include <vector>
++
++#include "ducc0/fft/fft.h"
++#include "ducc0/fft/fftnd_impl.h"
++#include "ducc0/infra/mav.h"
++
++#include "metal/mxvkfft.h"
++
++int main(int argc, char** argv) {
++  setvbuf(stdout, nullptr, _IONBF, 0);
++  const std::size_t n = argc > 1 ? std::stoul(argv[1]) : 1024;
++  const std::size_t B = argc > 2 ? std::stoul(argv[2]) : 8;
++  const int nthreads = 8;
++  mx::vk::Fft fft;
++  if (!fft.initBatched(n, B)) {
++    std::printf("fft init failed: %s\n", fft.error());
++    return 1;
++  }
++  float* gpu = fft.data();
++  std::vector<std::complex<float>> host(B * n * n), ref;
++  std::mt19937 rng(7);
++  for (auto& v : host)
++    v = {static_cast<float>(rng() % 1000) / 1000.0f - 0.5f,
++         static_cast<float>(rng() % 1000) / 1000.0f - 0.5f};
++  std::memcpy(gpu, host.data(), 2 * B * n * n * sizeof(float));
++  ref = host;
++  for (std::size_t b = 0; b < B; ++b) {
++    ducc0::vfmav<std::complex<float>> io(ref.data() + b * n * n, {n, n});
++    ducc0::detail_fft::c2c(io, io, {0}, false, 1.0f, nthreads);
++    ducc0::detail_fft::c2c(io, io, {1}, false, 1.0f, nthreads);
++  }
++  auto t0 = std::chrono::steady_clock::now();
++  if (!fft.submit() || !fft.wait()) {
++    std::printf("batched transform failed: %s\n", fft.error());
++    return 1;
++  }
++  auto t1 = std::chrono::steady_clock::now();
++  double num = 0, den = 0, md = 0, ma = 0;
++  for (std::size_t i = 0; i < B * n * n; ++i) {
++    const std::complex<float> a(gpu[2 * i], gpu[2 * i + 1]);
++    const std::complex<float> b = ref[i];
++    num += std::norm(a - b);
++    den += std::norm(b);
++    md = std::max<double>(md, std::abs(a - b));
++    ma = std::max<double>(ma, std::abs(b));
++  }
++  const double rel = std::sqrt(num / (den + 1e-30));
++  const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
++  std::printf("batch n=%zu B=%zu rel_rms=%.3e max_abs=%.4g max_diff=%.4g gpu_ms=%.1f (%.1f ms/plane) %s\n",
++              n, B, rel, ma, md, ms, ms / B, rel < 5e-6 ? "PASS" : "FAIL");
++  return rel < 5e-6 ? 0 : 1;
++}
