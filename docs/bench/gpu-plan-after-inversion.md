@@ -116,3 +116,37 @@ deconvolution, so vkFFT r2c/c2r is worth roughly 1.5-2.5 s of the 6.31 s.
 Same r2c/c2r situation for the image->grid direction; the FFT is 1.05 s of the
 1.85 s prediction cost at 4k. Both work items now share one dependency: an
 r2c/c2r vkFFT plan.
+
+## Delivered: GPU deconvolution + prediction behind -mgpu (inversion stays ducc0)
+
+Inversion is locked to ducc0: the Metal/cpu-vkfft path only runs when
+MX_METAL_ENGINE=metal|cpu-vkfft is set explicitly, and the peak/convolution/
+prediction hooks register only when -mgpu was given (same binary without
+-mgpu is pure CPU).
+
+- Deconv peak scan (radler hook + mx_peak_find): 8.3x isolated, 6% end to end
+  (the scan is 8-11% of deconv, not 78% -- that was inclusive time).
+- Deconv convolution (schaapcommon ConvolveC2RHook + mx_convolve_c2r):
+  Hermitian expansion (8e-08 vs ducc0 CPU) + proven vkFFT c2c inverse
+  (3.0e-07 at 1024, 5.1e-07 at 3072). Thread-local plans, square-only with
+  CPU fallback. Direct vkFFT R2C was tried and abandoned (systematic layout
+  mismatch); the expansion path supersedes it.
+- Prediction FFT (ducc0 dirty2grid hook + mx_predict_fft): full forward c2c
+  (3.3e-07 at 1024, 5.9e-07 at 3072) as copy-swap per plane with CPU
+  fallback. Degrid uses ducc0 SIMD eval2s (same structural gap as gridding),
+  so no GPU degrid was attempted.
+
+15-slot 3k deep (931,920 rows, exo template): CPU 23.27 s
+(inv 11.84 / pred 3.35 / deconv 4.82) vs -mgpu 23.72 s
+(inv 12.12 / pred 3.41 / deconv 5.39). Numerical gate: dirty, psf, image,
+model, residual ALL T2 PASS (1-2e-06) -- the deep run converged to one
+basin this time. Per-scale GPU c2r (12ms + expansion) ties/loses to CPU
+8-threaded c2r (7.1ms); the win needs batched transforms (one GPU call
+for all scales) and, for prediction, a pipelined shared-buffer loop.
+The hooks are the correct, validated infrastructure for both.
+
+Probes: mx-peak-probe (ALL MATCH), mx-vkfft-probe (3.2e-07),
+mx-vkfft-fwd-probe (3.3e-07/5.9e-07), expand-gpu-test (3.0e-07/5.1e-07).
+Patches: wsclean 0036-0047, schaapcommon 0005-0006, radler 0006 (all
+verify against mx-base). Harness: 125/128 (3 pre-existing metal-build
+assertion failures in files untouched by this work).

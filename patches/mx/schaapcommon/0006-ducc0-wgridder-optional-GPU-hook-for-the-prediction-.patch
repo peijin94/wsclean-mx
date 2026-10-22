@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:51:45 -0700
+Subject: [PATCH 6/6] ducc0 wgridder: optional GPU hook for the prediction
+ forward FFT
+
+dirty2grid_c_wscreen calls the registered PredictFftHook (square float
+grids) instead of the band-limited c2c bands; unset/failed/non-square
+falls back to ducc0 untouched.
+
+diff --git a/external/ducc0/wgridder/wgridder_impl.h b/external/ducc0/wgridder/wgridder_impl.h
+index d126e0d..25c0ccc 100644
+--- a/external/ducc0/wgridder/wgridder_impl.h
++++ b/external/ducc0/wgridder/wgridder_impl.h
+@@ -58,6 +58,18 @@ namespace ducc0 {
+ 
+ namespace detail_gridder {
+ 
++// Optional GPU hook for the prediction (dirty2grid) forward FFT. When set,
++// it replaces the band-limited c2c block in dirty2grid_c_wscreen with a
++// single in-place forward transform on the square n x n complex grid.
++// Returns 1 on success, 0 to fall back to ducc0. Only float is attempted.
++using PredictFftHook = int (*)(std::complex<float>*, size_t);
++inline PredictFftHook& predictFftHookRef() {
++  static PredictFftHook h = nullptr;
++  return h;
++}
++inline void SetPredictFftHook(PredictFftHook h) { predictFftHookRef() = h; }
++inline PredictFftHook GetPredictFftHook() { return predictFftHookRef(); }
++
+ using namespace std;
+ 
+ template<typename T> constexpr inline int mysimdlen
+@@ -692,6 +704,19 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tm
+       {
+       dirty2grid_pre2(dirty, grid, w);
+       timers.push("FFT");
++      // GPU prediction FFT (registered by wsclean -mgpu): one full forward
++      // transform instead of the band-limited bands. Falls back to ducc0
++      // when unset, non-square, non-float, or on any GPU failure.
++      if constexpr (std::is_same<Tcalc, float>::value) {
++        if (nu == nv && GetPredictFftHook() != nullptr) {
++          vfmav<complex<Tcalc>> inout_full(grid);
++          if (GetPredictFftHook()(reinterpret_cast<std::complex<float>*>(inout_full.data()),
++                                  nu) != 0) {
++            timers.pop();
++            return;
++          }
++        }
++      }
+       vfmav<complex<Tcalc>> inout(grid);
+ 
+       const auto &rsu(uranges[iplane]);

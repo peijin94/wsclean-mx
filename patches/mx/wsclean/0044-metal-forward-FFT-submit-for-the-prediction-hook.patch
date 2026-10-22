@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:47:00 -0700
+Subject: [PATCH 44/47] metal: forward FFT submit for the prediction hook
+
+Bidirectional vkFFT plan already handles both signs; submitForward()
+runs VkFFTAppend(-1). Needed for dirty2grid (prediction) FFTs.
+
+diff --git a/metal/mxvkfft.cpp b/metal/mxvkfft.cpp
+index fb4ac05a..13b8762b 100644
+--- a/metal/mxvkfft.cpp
++++ b/metal/mxvkfft.cpp
+@@ -121,6 +121,37 @@ bool Fft::submit() {
+   return true;
+ }
+ 
++bool Fft::submitForward() {
++  Impl& s = *impl_;
++  if (!s.planned) return false;
++  s.cb = s.queue->commandBuffer();
++  if (s.cb == nullptr) {
++    s.error = "no command buffer";
++    return false;
++  }
++  s.cb->retain();
++  MTL::ComputeCommandEncoder* enc = s.cb->computeCommandEncoder();
++  if (enc == nullptr) {
++    s.error = "no compute encoder";
++    return false;
++  }
++  enc->retain();
++  VkFFTLaunchParams launch = {};
++  launch.commandBuffer = s.cb;
++  launch.commandEncoder = enc;
++  MTL::Buffer* buf = s.buffer;
++  launch.buffer = &buf;
++  const VkFFTResult res = VkFFTAppend(&s.app, -1, &launch);  // -1 = forward
++  enc->endEncoding();
++  enc->release();
++  if (res != VKFFT_SUCCESS) {
++    s.error = std::string("VkFFTAppend failed: ") + std::to_string(static_cast<int>(res));
++    return false;
++  }
++  s.cb->commit();
++  return true;
++}
++
+ bool Fft::wait() {
+   Impl& s = *impl_;
+   if (s.cb == nullptr) return true;
+diff --git a/metal/mxvkfft.h b/metal/mxvkfft.h
+index 9ca89c8f..147370ce 100644
+--- a/metal/mxvkfft.h
++++ b/metal/mxvkfft.h
+@@ -29,7 +29,10 @@ class Fft {
+   std::size_t n() const;
+ 
+   // Encode + commit without blocking; pair with wait() before reusing data().
++  // submit() runs the inverse (adjoint, +1); submitForward() the forward (-1).
++  // The plan is bidirectional, so both share one init().
+   bool submit();
++  bool submitForward();
+   // Block until the last submit() finished. Returns false if the GPU reported
+   // an error (buffer contents are then undefined).
+   bool wait();

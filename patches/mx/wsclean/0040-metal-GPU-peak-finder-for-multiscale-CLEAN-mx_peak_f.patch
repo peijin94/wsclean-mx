@@ -1,0 +1,380 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:02:19 -0700
+Subject: [PATCH 40/47] metal: GPU peak finder for multiscale CLEAN
+ (mx_peak_find)
+
+Masked, bordered, negative-capable argmax over an image stack, one
+threadgroup per scale. Verified bit-identical to a CPU reference on six
+configurations up to 3072x3072 with masks and borders (mx-peak-probe).
+
+Two bugs found and fixed while validating: MSL packs {float,uint,uint} to
+12 bytes so the host 16-byte stride read the wrong record, and reading the
+uint index fields through float* truncates them to 0.
+
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 278ee254..e7b4e432 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -6,7 +6,8 @@
+ # The kernels are compiled from source at runtime, so no metallib toolchain is
+ # required; only the Metal and Foundation frameworks are linked.
+ 
+-add_library(mx-metal STATIC metaldevice.mm metalinversion.mm mxvkfft.cpp mxcpugrid.cpp)
++add_library(mx-metal STATIC metaldevice.mm metalinversion.mm mxvkfft.cpp mxcpugrid.cpp
++                            mxpeak.mm)
+ target_include_directories(mx-metal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+ # metal-cpp's headers are rooted at its own directory ("Foundation/...").
+ target_include_directories(mx-metal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
+@@ -17,7 +18,7 @@ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0
+   # "fft/..."), matching the include the wgridder target uses.
+   target_include_directories(mx-metal PUBLIC "${SCHAAPCOMMON_SOURCE_DIR}/external")
+ endif()
+-set_source_files_properties(metaldevice.mm metalinversion.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++set_source_files_properties(metaldevice.mm metalinversion.mm mxpeak.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+ # vkFFT + Apple's metal-cpp are plain C++ and use manual retain/release, so this
+ # translation unit must NOT be compiled with ARC.
+ set_source_files_properties(mxvkfft.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+@@ -52,3 +53,7 @@ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0
+             "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
+             "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+ endif()
++
++# Equivalence test for the GPU peak finder against a CPU reference.
++add_executable(mx-peak-probe mxpeak_probe.cpp)
++target_link_libraries(mx-peak-probe PRIVATE mx-metal)
+diff --git a/metal/mxpeak.h b/metal/mxpeak.h
+new file mode 100644
+index 00000000..167dd315
+--- /dev/null
++++ b/metal/mxpeak.h
+@@ -0,0 +1,35 @@
++// GPU peak finding for radler's multiscale CLEAN.
++//
++// FindSingleScalePeak (78% of deconvolution time at 3k) is a masked, bordered
++// argmax over one convolved image per scale; the scales are independent, so one
++// threadgroup per scale scans in parallel. This exposes a C API so radler can
++// call it without knowing about Metal or Objective-C.
++#ifndef MX_MXPEAK_H
++#define MX_MXPEAK_H
++
++#include <cstddef>
++#include <cstdint>
++
++extern "C" {
++
++// Returns 1 and fills the result when the GPU path ran, 0 if unavailable.
++// Semantics match radler's math::peak_finder::FindWithMask:
++//   - scan rows [y_border, height - y_border), columns [x_border, width - x_border)
++//   - mask != NULL skips pixels with mask[i] == 0
++//   - allow_negative compares on the value itself, otherwise only positives win
++//   - out_value is the winning pixel value; out_x/out_y its coordinates
++int mx_peak_find(const float* image, std::size_t width, std::size_t height,
++                 const std::uint8_t* mask, int allow_negative, std::size_t x_border,
++                 std::size_t y_border, float* out_value, std::size_t* out_x,
++                 std::size_t* out_y);
++
++// Batch form: nscales independent images, one dispatch. Results are written per
++// scale. Returns 1 on success.
++int mx_peak_find_many(const float* const* images, std::size_t nscales, std::size_t width,
++                      std::size_t height, const std::uint8_t* const* masks,
++                      int allow_negative, std::size_t x_border, std::size_t y_border,
++                      float* out_values, std::size_t* out_x, std::size_t* out_y);
++
++}  // extern "C"
++
++#endif  // MX_MXPEAK_H
+diff --git a/metal/mxpeak.mm b/metal/mxpeak.mm
+new file mode 100644
+index 00000000..011c7400
+--- /dev/null
++++ b/metal/mxpeak.mm
+@@ -0,0 +1,201 @@
++#include "metal/mxpeak.h"
++
++#import <Foundation/Foundation.h>
++#import <Metal/Metal.h>
++
++#include <vector>
++
++namespace {
++
++// One threadgroup per image. Each thread strides over the interior, keeps its
++// own best, then a threadgroup tree reduction picks the winner. The comparison
++// is (value, index) lexicographic on value only, first index wins ties, which
++// matches the CPU scan order in peak_finder.
++const char* kSource = R"(
++#include <metal_stdlib>
++using namespace metal;
++
++// 16-byte record so the host can read a plain float[4] per scale.
++struct Peak { float value; uint x; uint y; uint pad; };
++
++inline bool better(float a, float b) { return a > b; }
++
++kernel void peak_scan(device const float* image      [[buffer(0)]],
++                      device const uchar* mask       [[buffer(1)]],
++                      device Peak* out               [[buffer(2)]],
++                      constant uint& width           [[buffer(3)]],
++                      constant uint& height          [[buffer(4)]],
++                      constant uint& x_border        [[buffer(5)]],
++                      constant uint& y_border        [[buffer(6)]],
++                      constant int& allow_negative   [[buffer(7)]],
++                      constant int& has_mask         [[buffer(8)]],
++                      uint gid   [[threadgroup_position_in_grid]],
++                      uint tid   [[thread_position_in_threadgroup]],
++                      uint tcnt  [[threads_per_threadgroup]]) {
++  const uint plane = gid;
++  const device float* img = image + (size_t)plane * width * height;
++  const device uchar* m = has_mask ? (mask + (size_t)plane * width * height) : nullptr;
++
++  const uint x0 = x_border, x1 = width - x_border;
++  const uint y0 = y_border, y1 = height - y_border;
++
++  float best = -INFINITY;
++  uint bx = 0, by = 0;
++  for (uint y = y0 + tid; y < y1; y += tcnt) {
++    const device float* row = img + (size_t)y * width;
++    const device uchar* mrow = m ? (m + (size_t)y * width) : nullptr;
++    for (uint x = x0; x < x1; ++x) {
++      if (mrow && mrow[x] == 0) continue;
++      const float v = row[x];
++      const float cand = allow_negative ? v : (v > 0.0f ? v : -INFINITY);
++      if (cand > best) { best = cand; bx = x; by = y; }
++    }
++  }
++
++  threadgroup float sval[256];
++  threadgroup uint sx[256];
++  threadgroup uint sy[256];
++  sval[tid] = best; sx[tid] = bx; sy[tid] = by;
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  for (uint s = tcnt / 2; s > 0; s >>= 1) {
++    if (tid < s) {
++      if (sval[tid + s] > sval[tid]) {
++        sval[tid] = sval[tid + s];
++        sx[tid] = sx[tid + s];
++        sy[tid] = sy[tid + s];
++      }
++    }
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++  }
++  if (tid == 0) {
++    Peak p;
++    p.value = sval[0];
++    p.x = sx[0];
++    p.y = sy[0];
++    p.pad = 0u;
++    out[plane] = p;
++  }
++}
++)";
++
++struct Ctx {
++  id<MTLDevice> device = nil;
++  id<MTLCommandQueue> queue = nil;
++  id<MTLComputePipelineState> pipe = nil;
++  bool ok = false;
++};
++
++Ctx& context() {
++  static Ctx ctx;
++  static bool tried = false;
++  if (tried) return ctx;
++  tried = true;
++  @autoreleasepool {
++    ctx.device = MTLCreateSystemDefaultDevice();
++    if (ctx.device == nil) return ctx;
++    ctx.queue = [ctx.device newCommandQueue];
++    NSError* error = nil;
++    id<MTLLibrary> lib =
++        [ctx.device newLibraryWithSource:[NSString stringWithUTF8String:kSource]
++                                 options:nil
++                                   error:&error];
++    if (lib == nil) return ctx;
++    id<MTLFunction> fn = [lib newFunctionWithName:@"peak_scan"];
++    if (fn == nil) return ctx;
++    ctx.pipe = [ctx.device newComputePipelineStateWithFunction:fn error:&error];
++    ctx.ok = (ctx.pipe != nil);
++  }
++  return ctx;
++}
++
++}  // namespace
++
++extern "C" int mx_peak_find_many(const float* const* images, std::size_t nscales,
++                                 std::size_t width, std::size_t height,
++                                 const std::uint8_t* const* masks, int allow_negative,
++                                 std::size_t x_border, std::size_t y_border,
++                                 float* out_values, std::size_t* out_x, std::size_t* out_y) {
++  if (nscales == 0 || width == 0 || height == 0) return 0;
++  if (x_border * 2 >= width || y_border * 2 >= height) return 0;
++  Ctx& ctx = context();
++  if (!ctx.ok) return 0;
++
++  @autoreleasepool {
++    const std::size_t plane = width * height;
++    // One contiguous buffer for the stack keeps it to a single allocation and a
++    // single copy; the sizes here (8 x 9 M floats = 300 MB) are the reason the
++    // scan is memory bound on the CPU.
++    std::vector<float> packed(nscales * plane);
++    for (std::size_t s = 0; s < nscales; ++s)
++      std::copy(images[s], images[s] + plane, packed.begin() + s * plane);
++
++    bool has_mask = false;
++    for (std::size_t s = 0; s < nscales; ++s)
++      if (masks != nullptr && masks[s] != nullptr) has_mask = true;
++    std::vector<std::uint8_t> mask_packed;
++    if (has_mask) {
++      mask_packed.assign(nscales * plane, 1);
++      for (std::size_t s = 0; s < nscales; ++s)
++        if (masks != nullptr && masks[s] != nullptr)
++          std::copy(masks[s], masks[s] + plane, mask_packed.begin() + s * plane);
++    }
++
++    id<MTLBuffer> img = [ctx.device newBufferWithBytes:packed.data()
++                                                length:packed.size() * sizeof(float)
++                                               options:MTLResourceStorageModeShared];
++    id<MTLBuffer> msk = nil;
++    if (has_mask) {
++      msk = [ctx.device newBufferWithBytes:mask_packed.data()
++                                    length:mask_packed.size()
++                                   options:MTLResourceStorageModeShared];
++    }
++    id<MTLBuffer> res = [ctx.device newBufferWithLength:nscales * 16
++                                                options:MTLResourceStorageModeShared];
++    uint32_t w = static_cast<uint32_t>(width), h = static_cast<uint32_t>(height);
++    uint32_t xb = static_cast<uint32_t>(x_border), yb = static_cast<uint32_t>(y_border);
++    int32_t an = allow_negative ? 1 : 0, hm = has_mask ? 1 : 0;
++
++    id<MTLCommandBuffer> cb = [ctx.queue commandBuffer];
++    id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
++    [enc setComputePipelineState:ctx.pipe];
++    [enc setBuffer:img offset:0 atIndex:0];
++    [enc setBuffer:(msk ? msk : img) offset:0 atIndex:1];
++    [enc setBuffer:res offset:0 atIndex:2];
++    [enc setBytes:&w length:sizeof(w) atIndex:3];
++    [enc setBytes:&h length:sizeof(h) atIndex:4];
++    [enc setBytes:&xb length:sizeof(xb) atIndex:5];
++    [enc setBytes:&yb length:sizeof(yb) atIndex:6];
++    [enc setBytes:&an length:sizeof(an) atIndex:7];
++    [enc setBytes:&hm length:sizeof(hm) atIndex:8];
++    [enc dispatchThreadgroups:MTLSizeMake(nscales, 1, 1)
++        threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
++    [enc endEncoding];
++    [cb commit];
++    [cb waitUntilCompleted];
++    if (cb.status != MTLCommandBufferStatusCompleted) return 0;
++
++    // Read through the exact struct: casting the uint fields through a float*
++    // turns index 194 into the float 2.7e-43 and then truncates it to 0.
++    struct PeakOut {
++      float value;
++      std::uint32_t x, y, pad;
++    };
++    const PeakOut* r = static_cast<const PeakOut*>(res.contents);
++    for (std::size_t s = 0; s < nscales; ++s) {
++      out_values[s] = r[s].value;
++      out_x[s] = static_cast<std::size_t>(r[s].x);
++      out_y[s] = static_cast<std::size_t>(r[s].y);
++    }
++  }
++  return 1;
++}
++
++extern "C" int mx_peak_find(const float* image, std::size_t width, std::size_t height,
++                            const std::uint8_t* mask, int allow_negative,
++                            std::size_t x_border, std::size_t y_border, float* out_value,
++                            std::size_t* out_x, std::size_t* out_y) {
++  const float* imgs[1] = {image};
++  const std::uint8_t* msks[1] = {mask};
++  return mx_peak_find_many(imgs, 1, width, height, msks, allow_negative, x_border, y_border,
++                           out_value, out_x, out_y);
++}
+diff --git a/metal/mxpeak_probe.cpp b/metal/mxpeak_probe.cpp
+new file mode 100644
+index 00000000..e97a61c4
+--- /dev/null
++++ b/metal/mxpeak_probe.cpp
+@@ -0,0 +1,80 @@
++// Verifies the GPU peak finder against a CPU reference with identical
++// semantics (mask, borders, negative components, first-wins ties).
++#include "metal/mxpeak.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <random>
++#include <vector>
++
++namespace {
++
++struct Ref {
++  float value = -INFINITY;
++  std::size_t x = 0, y = 0;
++};
++
++Ref cpu_scan(const std::vector<float>& img, std::size_t w, std::size_t h,
++             const std::vector<std::uint8_t>& mask, bool has_mask, bool allow_negative,
++             std::size_t xb, std::size_t yb) {
++  Ref r;
++  for (std::size_t y = yb; y + yb < h; ++y) {
++    for (std::size_t x = xb; x + xb < w; ++x) {
++      const std::size_t i = y * w + x;
++      if (has_mask && mask[i] == 0) continue;
++      const float v = img[i];
++      const float cand = allow_negative ? v : (v > 0.0f ? v : -INFINITY);
++      if (cand > r.value) {
++        r.value = cand;
++        r.x = x;
++        r.y = y;
++      }
++    }
++  }
++  return r;
++}
++
++bool run_case(std::size_t w, std::size_t h, bool has_mask, bool allow_negative,
++              std::size_t xb, std::size_t yb, unsigned seed, std::mt19937& rng) {
++  std::uniform_real_distribution<float> d(-1.0f, 1.0f);
++  std::vector<float> img(w * h);
++  for (auto& v : img) v = d(rng);
++  std::vector<std::uint8_t> mask(w * h, 1);
++  if (has_mask) {
++    std::uniform_int_distribution<int> keep(0, 3);
++    for (auto& m : mask) m = keep(rng) ? 1 : 0;
++  }
++
++  const Ref ref = cpu_scan(img, w, h, mask, has_mask, allow_negative, xb, yb);
++  float got_value = 0.0f;
++  std::size_t got_x = 0, got_y = 0;
++  const int ok = mx_peak_find(img.data(), w, h, has_mask ? mask.data() : nullptr,
++                              allow_negative ? 1 : 0, xb, yb, &got_value, &got_x, &got_y);
++  if (!ok) {
++    std::printf("  w=%zu h=%zu mask=%d neg=%d b=(%zu,%zu): GPU UNAVAILABLE\n", w, h,
++                has_mask ? 1 : 0, allow_negative ? 1 : 0, xb, yb);
++    return false;
++  }
++  const bool match = (got_value == ref.value) && (got_x == ref.x) && (got_y == ref.y);
++  std::printf("  w=%zu h=%zu mask=%d neg=%d b=(%zu,%zu): %s  gpu=(%.6f,%zu,%zu) cpu=(%.6f,%zu,%zu)\n",
++              w, h, has_mask ? 1 : 0, allow_negative ? 1 : 0, xb, yb, match ? "MATCH" : "DIFF",
++              got_value, got_x, got_y, ref.value, ref.x, ref.y);
++  return match;
++}
++
++}  // namespace
++
++int main() {
++  std::mt19937 rng(7);
++  bool all = true;
++  std::printf("peak-finder equivalence (GPU vs CPU reference):\n");
++  all &= run_case(256, 256, false, true, 0, 0, 1, rng);
++  all &= run_case(256, 256, true, true, 0, 0, 2, rng);
++  all &= run_case(256, 256, true, false, 0, 0, 3, rng);
++  all &= run_case(512, 384, true, true, 17, 9, 4, rng);
++  all &= run_case(1024, 1024, true, true, 32, 32, 5, rng);
++  all &= run_case(3072, 3072, true, true, 50, 50, 6, rng);
++  std::printf("%s\n", all ? "ALL MATCH" : "MISMATCH");
++  return all ? 0 : 1;
++}

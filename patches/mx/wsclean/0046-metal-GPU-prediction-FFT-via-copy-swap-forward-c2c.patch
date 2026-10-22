@@ -1,0 +1,134 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:51:45 -0700
+Subject: [PATCH 46/47] metal: GPU prediction FFT via copy-swap forward c2c
+
+mx_predict_fft copies the ducc0-owned plane to the shared vkFFT buffer,
+runs the proven forward transform (5.9e-07 at 3072), copies back.
+Thread-local plans, MX_METAL_NO_PREDICT kill-switch, registered behind
+-mgpu. 1024 multiscale gate with all three hooks: all T2 PASS.
+
+diff --git a/main/main.cpp b/main/main.cpp
+index 6e80e0db..850bec28 100644
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "metal/mxconvolve.h"
+ #include "metal/mxpeak.h"
++#include "metal/mxpredict.h"
+ #endif
+ 
+ #include <aocommon/checkblas.h>
+@@ -37,6 +38,9 @@ int main(int argc, char* argv[]) {
+         // Multiscale convolution's c2r (26-49% of deconvolution): Hermitian
+         // expansion + vkFFT c2c, falls back to ducc0 per call on failure.
+         schaapcommon::math::SetConvolveC2RHook(&mx_convolve_c2r);
++        // Prediction forward FFT: full GPU transform instead of ducc0's
++        // band-limited bands, copy-swap per plane with CPU fallback.
++        mx_predict_register();
+       }
+ #endif
+       CommandLine::Run(wsclean);
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 03e0f0be..4bb395de 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -7,7 +7,7 @@
+ # required; only the Metal and Foundation frameworks are linked.
+ 
+ add_library(mx-metal STATIC metaldevice.mm metalinversion.mm mxvkfft.cpp mxcpugrid.cpp
+-                            mxpeak.mm mxconvolve.cpp)
++                            mxpeak.mm mxconvolve.cpp mxpredict.cpp)
+ target_include_directories(mx-metal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+ # metal-cpp's headers are rooted at its own directory ("Foundation/...").
+ target_include_directories(mx-metal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
+@@ -21,7 +21,7 @@ endif()
+ set_source_files_properties(metaldevice.mm metalinversion.mm mxpeak.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+ # vkFFT + Apple's metal-cpp are plain C++ and use manual retain/release, so this
+ # translation unit must NOT be compiled with ARC.
+-set_source_files_properties(mxvkfft.cpp mxconvolve.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
++set_source_files_properties(mxvkfft.cpp mxconvolve.cpp mxpredict.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+ 
+ find_library(MX_METAL_FRAMEWORK Metal REQUIRED)
+ find_library(MX_FOUNDATION_FRAMEWORK Foundation REQUIRED)
+diff --git a/metal/mxpredict.cpp b/metal/mxpredict.cpp
+new file mode 100644
+index 00000000..fef4891d
+--- /dev/null
++++ b/metal/mxpredict.cpp
+@@ -0,0 +1,41 @@
++// GPU prediction FFT: synchronous copy-swap around the proven forward c2c.
++#include "metal/mxpredict.h"
++
++#include <complex>
++#include <cstddef>
++#include <cstdlib>
++#include <cstring>
++#include <memory>
++
++#include "ducc0/wgridder/wgridder_impl.h"
++
++#include "metal/mxvkfft.h"
++
++extern "C" void mx_predict_register() {
++  ducc0::detail_gridder::SetPredictFftHook(&mx_predict_fft);
++}
++
++extern "C" int mx_predict_fft(std::complex<float>* grid, std::size_t n) {
++  if (std::getenv("MX_METAL_NO_PREDICT") != nullptr) return 0;
++  if (grid == nullptr || n == 0 || n > 8192) return 0;
++
++  thread_local std::unique_ptr<mx::vk::Fft> plan;
++  thread_local std::size_t planned_n = 0;
++  if (plan == nullptr || planned_n != n) {
++    plan = std::make_unique<mx::vk::Fft>();
++    if (!plan->init(n)) {
++      plan.reset();
++      planned_n = 0;
++      return 0;
++    }
++    planned_n = n;
++  }
++  mx::vk::Fft& fft = *plan;
++  float* buf = fft.data();
++  if (buf == nullptr) return 0;
++  const std::size_t bytes = 2 * n * n * sizeof(float);
++  std::memcpy(buf, grid, bytes);
++  if (!fft.submitForward() || !fft.wait()) return 0;
++  std::memcpy(grid, buf, bytes);
++  return 1;
++}
+diff --git a/metal/mxpredict.h b/metal/mxpredict.h
+new file mode 100644
+index 00000000..0e1b667b
+--- /dev/null
++++ b/metal/mxpredict.h
+@@ -0,0 +1,26 @@
++// GPU forward FFT for prediction (dirty2grid): copy-swap wrapper.
++//
++// ducc0's dirty2grid_c_wscreen owns its grid (vmav, not shared), so this
++// hook copies the n x n complex plane into the shared vkFFT buffer, runs
++// the proven forward c2c (5.9e-07 at 3072), and copies back. Two copies of
++// ~75 MB per plane at 3k is the cost this design pays; the pipelined
++// shared-buffer version (chunked plane loop) is the follow-up if this ties.
++#ifndef MX_MXPREDICT_H
++#define MX_MXPREDICT_H
++
++#include <complex>
++#include <cstddef>
++
++extern "C" {
++
++// In-place forward FFT on the square n x n complex grid. Returns 1 when
++// the GPU path ran, 0 to fall back to ducc0's band-limited bands.
++int mx_predict_fft(std::complex<float>* grid, std::size_t n);
++
++// Registers mx_predict_fft with ducc0's dirty2grid hook. Called once at
++// startup when -mgpu is given; keeps ducc0 includes out of main.cpp.
++void mx_predict_register();
++
++}  // extern "C"
++
++#endif  // MX_MXPREDICT_H

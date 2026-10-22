@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 21:26:10 -0700
+Subject: [PATCH 38/47] metal(cpu-vkfft): skip occupancy bitsets for the
+ GPU-FFT engine
+
+The band-limit sets only exist for the Metal engine's CPU FFT; building
+them for every plane was dead work. 6.02 -> 5.73s, gate 5.27e-06.
+Also adds MX_METAL_DEBUG_GRIDTIMING (bucket vs tap-loop split).
+
+diff --git a/metal/metalinversion.mm b/metal/metalinversion.mm
+index a7978bb9..015300fe 100644
+--- a/metal/metalinversion.mm
++++ b/metal/metalinversion.mm
+@@ -856,8 +856,10 @@ bool inversion(const InversionInput& input, float* dirty) {
+         if (weight != 0.0) weighted_items.emplace_back(item, weight);
+       }
+     }
+-    {  // Occupied-line bitsets for band-limited FFTs (mirror ducc0's
++    if (!cpu_engine) {  // Occupied-line bitsets for band-limited FFTs (mirror ducc0's
+       // uranges/vranges): a line is occupied if any kept tap touches it.
++      // Only the Metal engine band-limits its CPU FFT; the cpu-vkfft engine
++      // always transforms the full grid, so building these is dead work.
+       // Taps span ±(support/2) around the base; reach covers it with margin
+       // (superset only costs FFT time, never correctness).
+       std::vector<unsigned char> orows(grid, 0), ocols(grid, 0);
+diff --git a/metal/mxcpugrid.cpp b/metal/mxcpugrid.cpp
+index b1c6f3be..b19309e2 100644
+--- a/metal/mxcpugrid.cpp
++++ b/metal/mxcpugrid.cpp
+@@ -3,6 +3,7 @@
+ #include <algorithm>
+ #include <atomic>
+ #include <cmath>
++#include <chrono>
+ #include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
+@@ -80,6 +81,7 @@ void cpuGridPlane(const float* vis, std::size_t n_items, std::size_t grid,
+     }
+   }
+ 
++  const auto t_start = std::chrono::steady_clock::now();
+   // ---- Bucket items by the tile(s) their tap window can write into.
+   // The tap window for one item is a contiguous run of `support` cells, shorter
+   // than a tile, so it touches at most two tiles per axis (more only when it
+@@ -123,6 +125,7 @@ void cpuGridPlane(const float* vis, std::size_t n_items, std::size_t grid,
+     }
+   }
+ 
++  const auto t_bucket = std::chrono::steady_clock::now();
+   // ---- Grid: one thread per tile, private accumulation buffer per thread.
+   const int nthreads_eff =
+       std::max(1, std::min<int>(nthreads, static_cast<int>(ntiles)));
+@@ -202,6 +205,12 @@ void cpuGridPlane(const float* vis, std::size_t n_items, std::size_t grid,
+     for (int t = 0; t < nthreads_eff; ++t) pool.emplace_back(worker);
+     for (auto& th : pool) th.join();
+   }
++  if (std::getenv("MX_METAL_DEBUG_GRIDTIMING") != nullptr) {
++    const auto t_end = std::chrono::steady_clock::now();
++    using ms = std::chrono::duration<double, std::milli>;
++    std::fprintf(stderr, "[grid] items=%zu bucket=%.2fms tiles=%.2fms\n", n_items,
++                 ms(t_bucket - t_start).count(), ms(t_end - t_bucket).count());
++  }
+ }
+ 
+ }  // namespace mx::metal

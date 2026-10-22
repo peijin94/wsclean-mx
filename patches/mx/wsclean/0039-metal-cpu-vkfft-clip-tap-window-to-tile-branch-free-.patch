@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 21:33:57 -0700
+Subject: [PATCH 39/47] metal(cpu-vkfft): clip tap window to tile, branch-free
+ inner loop
+
+Every tap used to carry two range compares and a wrap branch, and items
+are bucketed into up to four tiles, so ~53 taps were examined per 36
+kept. Clipping once per item/tile and walking contiguous acc cells:
+tile loop 2.14s -> 1.76s, gate unchanged (5.27e-06).
+
+diff --git a/metal/mxcpugrid.cpp b/metal/mxcpugrid.cpp
+index b19309e2..eb37f317 100644
+--- a/metal/mxcpugrid.cpp
++++ b/metal/mxcpugrid.cpp
+@@ -160,29 +160,52 @@ void cpuGridPlane(const float* vis, std::size_t n_items, std::size_t grid,
+         }
+         const float vr = v[4], vi = v[5];
+ 
+-        // One wrap per axis, then walk the taps with an increment: a modulo per
+-        // tap was the single hottest instruction in this loop.
+-        long cy = wrapTap(j0 + jlo, n);
+-        for (long jy = 0; jy < support; ++jy) {
+-          if (cy >= y0 && cy < y1) {
+-            float* acc_row = acc.data() + 2 * ((cy - y0) * static_cast<long>(kTile));
+-            const float wys = wy[jy];
+-            if (wys != 0.0f) {
+-              long cx = wrapTap(i0 + jlo, n);
+-              for (long jx = 0; jx < support; ++jx) {
+-                if (cx >= x0 && cx < x1) {
+-                  const float wt = wx[jx] * wys;
+-                  float* cell = acc_row + 2 * (cx - x0);
+-                  cell[0] += wt * vr;
+-                  cell[1] += wt * vi;
++        // Clip the tap window to this tile ONCE, then run a branch-free loop
++        // over contiguous accumulation cells. Testing every tap against the
++        // tile range (two compares and a wrap branch per tap) is what kept the
++        // compiler from vectorising: an item is bucketed into up to four tiles,
++        // so ~53 taps were examined per 36 kept.
++        const long bx0 = i0 + jlo, by0 = j0 + jlo;
++        if (bx0 >= 0 && bx0 + support <= n && by0 >= 0 && by0 + support <= n) {
++          const long kx0 = std::max(0L, x0 - bx0), kx1 = std::min(support, x1 - bx0);
++          const long ky0 = std::max(0L, y0 - by0), ky1 = std::min(support, y1 - by0);
++          for (long ky = ky0; ky < ky1; ++ky) {
++            const float wys = wy[ky];
++            if (wys == 0.0f) continue;
++            float* cell = acc.data() +
++                          2 * ((by0 + ky - y0) * static_cast<long>(kTile) + (bx0 + kx0 - x0));
++            for (long kx = kx0; kx < kx1; ++kx, cell += 2) {
++              const float wt = wx[kx] * wys;
++              cell[0] += wt * vr;
++              cell[1] += wt * vi;
++            }
++          }
++        } else {
++          // Window crosses the grid seam (only visibilities within `support`
++          // cells of the edge): walk it with wrapping.
++          long cy = wrapTap(by0, n);
++          for (long jy = 0; jy < support; ++jy) {
++            if (cy >= y0 && cy < y1) {
++              float* acc_row = acc.data() + 2 * ((cy - y0) * static_cast<long>(kTile));
++              const float wys = wy[jy];
++              if (wys != 0.0f) {
++                long cx = wrapTap(bx0, n);
++                for (long jx = 0; jx < support; ++jx) {
++                  if (cx >= x0 && cx < x1) {
++                    const float wt = wx[jx] * wys;
++                    float* cell = acc_row + 2 * (cx - x0);
++                    cell[0] += wt * vr;
++                    cell[1] += wt * vi;
++                  }
++                  if (++cx == n) cx = 0;
+                 }
+-                if (++cx == n) cx = 0;
+               }
+             }
++            if (++cy == n) cy = 0;
+           }
+-          if (++cy == n) cy = 0;
+         }
+       }
++
+       // Flush this tile's own cells; tiles are disjoint so no atomics needed.
+       // Grid layout is [cx*grid + cy] (u slowest), matching the Metal kernel.
+       for (long cy = y0; cy < y1; ++cy) {

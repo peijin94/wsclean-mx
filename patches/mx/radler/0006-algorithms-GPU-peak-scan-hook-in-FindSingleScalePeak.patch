@@ -1,0 +1,127 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:06:34 -0700
+Subject: [PATCH] algorithms: GPU peak-scan hook in FindSingleScalePeak
+
+Optional hook registered by the application; falls back to peak_finder
+when unset, when the scan fails, or when no finite peak exists.
+
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.cc b/cpp/algorithms/threaded_deconvolution_tools.cc
+index 824e545..ed8b613 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.cc
++++ b/cpp/algorithms/threaded_deconvolution_tools.cc
+@@ -29,6 +29,37 @@ void ThreadedDeconvolutionTools::SubtractImage(float* image,
+   });
+ }
+ 
++namespace {
++PeakScanHook g_peak_scan_hook = nullptr;
++}  // namespace
++
++void SetPeakScanHook(PeakScanHook hook) { g_peak_scan_hook = hook; }
++
++namespace {
++// Runs the registered GPU scan when it is available and trustworthy. Returns
++// false (so the caller uses peak_finder) whenever the hook is absent or the scan
++// found nothing finite - the empty-image case, where peak_finder's OptionalNumber
++// semantics differ from a bare float.
++bool TryGpuPeak(const aocommon::Image& image, const bool* mask,
++                bool allow_negative, size_t x_border, size_t y_border,
++                ThreadedDeconvolutionTools::PeakData& result) {
++  if (g_peak_scan_hook == nullptr) return false;
++  float value = 0.0f;
++  size_t x = 0, y = 0;
++  const int ok = g_peak_scan_hook(
++      image.Data(), image.Width(), image.Height(),
++      reinterpret_cast<const unsigned char*>(mask), allow_negative ? 1 : 0,
++      x_border, y_border, &value, &x, &y);
++  if (!ok || !std::isfinite(value)) return false;
++  result.unnormalized_value = value;
++  result.x = x;
++  result.y = y;
++  return true;
++}
++}  // namespace
++
++PeakScanHook GetPeakScanHook() { return g_peak_scan_hook; }
++
+ void ThreadedDeconvolutionTools::FindMultiScalePeak(
+     multiscale::MultiScaleTransforms* ms_transforms, const Image& image,
+     const aocommon::UVector<float>& scales,
+@@ -86,14 +117,17 @@ ThreadedDeconvolutionTools::FindSingleScalePeak(
+     result.rms = -1.0;
+   }
+   if (rms_factor_image.Empty()) {
+-    if (mask == nullptr) {
+-      result.unnormalized_value = math::peak_finder::Find(
+-          image.Data(), width, height, result.x, result.y,
+-          allow_negative_components, 0, height, x_border, y_border);
+-    } else {
+-      result.unnormalized_value = math::peak_finder::FindWithMask(
+-          image.Data(), width, height, result.x, result.y,
+-          allow_negative_components, 0, height, mask, x_border, y_border);
++    if (!TryGpuPeak(image, mask, allow_negative_components, x_border, y_border,
++                    result)) {
++      if (mask == nullptr) {
++        result.unnormalized_value = math::peak_finder::Find(
++            image.Data(), width, height, result.x, result.y,
++            allow_negative_components, 0, height, x_border, y_border);
++      } else {
++        result.unnormalized_value = math::peak_finder::FindWithMask(
++            image.Data(), width, height, result.x, result.y,
++            allow_negative_components, 0, height, mask, x_border, y_border);
++      }
+     }
+ 
+     result.normalized_value = result.unnormalized_value;
+@@ -103,14 +137,17 @@ ThreadedDeconvolutionTools::FindSingleScalePeak(
+       scratch[i] = image[i] * rms_factor_image[i];
+     }
+ 
+-    if (mask == nullptr) {
+-      result.unnormalized_value = math::peak_finder::Find(
+-          scratch.Data(), width, height, result.x, result.y,
+-          allow_negative_components, 0, height, x_border, y_border);
+-    } else {
+-      result.unnormalized_value = math::peak_finder::FindWithMask(
+-          scratch.Data(), width, height, result.x, result.y,
+-          allow_negative_components, 0, height, mask, x_border, y_border);
++    if (!TryGpuPeak(scratch, mask, allow_negative_components, x_border, y_border,
++                    result)) {
++      if (mask == nullptr) {
++        result.unnormalized_value = math::peak_finder::Find(
++            scratch.Data(), width, height, result.x, result.y,
++            allow_negative_components, 0, height, x_border, y_border);
++      } else {
++        result.unnormalized_value = math::peak_finder::FindWithMask(
++            scratch.Data(), width, height, result.x, result.y,
++            allow_negative_components, 0, height, mask, x_border, y_border);
++      }
+     }
+ 
+     if (result.unnormalized_value) {
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.h b/cpp/algorithms/threaded_deconvolution_tools.h
+index d8cff5b..7f1b1f9 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.h
++++ b/cpp/algorithms/threaded_deconvolution_tools.h
+@@ -16,6 +16,19 @@
+ 
+ namespace radler::algorithms {
+ 
++// Optional GPU scan for FindSingleScalePeak. radler never links the GPU code
++// itself: an application (wsclean) registers a function here at startup and the
++// CPU peak_finder remains the fallback whenever the hook is null or declines.
++// Returns 1 on success. `mask` uses the same one-byte true/false layout as
++// radler's own bool array.
++using PeakScanHook = int (*)(const float* image, size_t width, size_t height,
++                             const unsigned char* mask, int allow_negative,
++                             size_t x_border, size_t y_border, float* out_value,
++                             size_t* out_x, size_t* out_y);
++
++void SetPeakScanHook(PeakScanHook hook);
++PeakScanHook GetPeakScanHook();
++
+ class ThreadedDeconvolutionTools {
+  public:
+   struct PeakData {

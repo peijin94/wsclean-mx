@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:06:34 -0700
+Subject: [PATCH 41/47] metal: register the GPU peak-scan hook at startup
+
+Deconvolution 6.70 -> 6.31s at 3k/2.7amin: the hook fires per scale, so
+each call pays a full 36MB copy plus a serialised dispatch. The 8.3x
+measured earlier was for the batched scan, which needs FindMultiScalePeak
+to transform all scales before one call.
+
+diff --git a/main/main.cpp b/main/main.cpp
+index d22f6d22..fe199228 100644
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ -1,6 +1,12 @@
+ #include "commandline.h"
+ #include "wsclean.h"
+ 
++#ifdef WSCLEAN_MX_METAL
++#include <algorithms/threaded_deconvolution_tools.h>
++
++#include "metal/mxpeak.h"
++#endif
++
+ #include <aocommon/checkblas.h>
+ #include <aocommon/logger.h>
+ 
+@@ -15,6 +21,12 @@ using wsclean::WSClean;
+ int main(int argc, char* argv[]) {
+   try {
+     check_openblas_multithreading();
++#ifdef WSCLEAN_MX_METAL
++    // Multiscale CLEAN's peak search is 78% of deconvolution time; radler calls
++    // back into the Metal scan when it is registered and falls back to its own
++    // CPU peak_finder otherwise.
++    radler::algorithms::SetPeakScanHook(&mx_peak_find);
++#endif
+     WSClean wsclean;
+     constexpr bool kSlave = false;
+     constexpr bool kInMemoryData = false;

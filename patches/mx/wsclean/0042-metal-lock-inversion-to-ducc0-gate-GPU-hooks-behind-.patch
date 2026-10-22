@@ -1,0 +1,193 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:36:04 -0700
+Subject: [PATCH 42/47] metal: lock inversion to ducc0, gate GPU hooks behind
+ -mgpu
+
+-mgpu now means GPU for prediction and deconvolution only. Metal
+inversion only runs when MX_METAL_ENGINE=metal|cpu-vkfft is set
+explicitly; otherwise ducc0 runs untouched. The peak-scan hook is
+registered only when settings.useGpu is true, so the same binary
+without -mgpu is pure CPU.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f0d24d9b..37977990 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -547,3 +547,8 @@ endif()
+ get_directory_property(MAIN_COMPILE_OPTIONS COMPILE_OPTIONS)
+ string(REPLACE ";" " " MAIN_COMPILE_OPTIONS "${MAIN_COMPILE_OPTIONS}")
+ message(STATUS "Flags passed to C++ compiler: ${MAIN_COMPILE_OPTIONS}")
++
++# Standalone MS cutout (materialises a TaQL selection; the MS storage manager
++# rejects DELETE/INSERT, so Table::copy is the only supported route).
++add_executable(mx-mscutout tools/mscutout_rows.cpp)
++target_link_libraries(mx-mscutout PRIVATE ${CASACORE_LIBRARIES})
+diff --git a/main/main.cpp b/main/main.cpp
+index fe199228..80575007 100644
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ -21,17 +21,21 @@ using wsclean::WSClean;
+ int main(int argc, char* argv[]) {
+   try {
+     check_openblas_multithreading();
+-#ifdef WSCLEAN_MX_METAL
+-    // Multiscale CLEAN's peak search is 78% of deconvolution time; radler calls
+-    // back into the Metal scan when it is registered and falls back to its own
+-    // CPU peak_finder otherwise.
+-    radler::algorithms::SetPeakScanHook(&mx_peak_find);
+-#endif
+     WSClean wsclean;
+     constexpr bool kSlave = false;
+     constexpr bool kInMemoryData = false;
+-    if (CommandLine::Parse(wsclean, argc, const_cast<const char**>(argv), kSlave, kInMemoryData))
++    if (CommandLine::Parse(wsclean, argc, const_cast<const char**>(argv), kSlave, kInMemoryData)) {
++#ifdef WSCLEAN_MX_METAL
++      // GPU deconvolution (peak scan; convolution follows) is a -mgpu
++      // feature. Without -mgpu this build must behave as pure CPU, so the
++      // hook is registered only when the flag was given; otherwise radler
++      // keeps its own CPU peak_finder.
++      if (wsclean.GetSettings().useGpu) {
++        radler::algorithms::SetPeakScanHook(&mx_peak_find);
++      }
++#endif
+       CommandLine::Run(wsclean);
++    }
+     return 0;
+   } catch (std::exception& e) {
+     Logger::Error << "+ + + + + + + + + + + + + + + + + + +\n"
+diff --git a/tools/mscutout.cpp b/tools/mscutout.cpp
+new file mode 100644
+index 00000000..c4c17b57
+--- /dev/null
++++ b/tools/mscutout.cpp
+@@ -0,0 +1,39 @@
++// Materialise a time-range cutout of a Measurement Set.
++//
++// taql can only make *reference* tables for this MS (its storage manager
++// supports neither DELETE nor INSERT), and a reference table re-reads the
++// parent on every pass - a 108 s imaging run became 17 minutes. Table::copy()
++// on a selection is the supported way to get a standalone copy, and it is what
++// python-casacore's table.copy() uses underneath.
++//
++// usage: mscutout <in.ms> <out.ms> "<taql where clause>"
++#include <casacore/casa/Arrays/Vector.h>
++#include <casacore/casa/Exceptions/Error.h>
++#include <casacore/tables/Tables/Table.h>
++#include <casacore/tables/TaQL/TableParse.h>
++
++#include <cstdio>
++#include <cstdlib>
++#include <string>
++
++int main(int argc, char** argv) {
++  if (argc < 4) {
++    std::fprintf(stderr, "usage: %s <in.ms> <out.ms> \"<where clause>\"\n", argv[0]);
++    return 2;
++  }
++  try {
++    const std::string cmd = "select from " + std::string(argv[1]) + " where " + argv[3];
++    std::fprintf(stderr, "[mscutout] %s\n", cmd.c_str());
++    casacore::Table selected = casacore::tableCommand(casacore::String(cmd)).table();
++    std::fprintf(stderr, "[mscutout] selected %lld rows; copying...\n",
++                 static_cast<long long>(selected.nrow()));
++    selected.copy(casacore::String(argv[2]), casacore::Table::New);
++    casacore::Table out(casacore::String(argv[2]), casacore::Table::Old);
++    std::fprintf(stderr, "[mscutout] wrote %lld rows to %s\n",
++                 static_cast<long long>(out.nrow()), argv[2]);
++    return 0;
++  } catch (const casacore::AipsError& e) {
++    std::fprintf(stderr, "[mscutout] casacore error: %s\n", e.getMesg().c_str());
++    return 1;
++  }
++}
+diff --git a/tools/mscutout_rows.cpp b/tools/mscutout_rows.cpp
+new file mode 100644
+index 00000000..ac706132
+--- /dev/null
++++ b/tools/mscutout_rows.cpp
+@@ -0,0 +1,46 @@
++// Materialise a time-range cutout of a Measurement Set.
++//
++// Neither DELETE nor INSERT works on this MS ("storage managers do not support
++// it"), and both `taql ... GIVING` and `Table::copy()` on a TaQL selection yield
++// a *reference* table that re-reads the 16 GB parent on every pass (a 108 s
++// imaging run became 17 minutes). Physically writing the rows with
++// TableCopy::copyRows is the only route that produces a standalone MS.
++//
++// usage: mscutout <in.ms> <out.ms> "<taql where clause>"
++#include <casacore/casa/Exceptions/Error.h>
++#include <casacore/tables/TaQL/TableParse.h>
++#include <casacore/tables/Tables/SetupNewTab.h>
++#include <casacore/tables/Tables/Table.h>
++#include <casacore/tables/Tables/TableCopy.h>
++#include <casacore/tables/Tables/TableDesc.h>
++
++#include <cstdio>
++#include <cstdlib>
++#include <string>
++
++int main(int argc, char** argv) {
++  if (argc < 4) {
++    std::fprintf(stderr, "usage: %s <in.ms> <out.ms> \"<where clause>\"\n", argv[0]);
++    return 2;
++  }
++  try {
++    const std::string cmd = "select from " + std::string(argv[1]) + " where " + argv[3];
++    std::fprintf(stderr, "[mscutout] %s\n", cmd.c_str());
++    casacore::Table selected = casacore::tableCommand(casacore::String(cmd)).table();
++    const casacore::uInt n = selected.nrow();
++    std::fprintf(stderr, "[mscutout] selected %u rows; writing...\n", n);
++
++    casacore::SetupNewTable setup(casacore::String(argv[2]), selected.tableDesc(),
++                                  casacore::Table::New);
++    casacore::Table out(setup, n);
++    casacore::TableCopy::copyInfo(out, selected);
++    casacore::TableCopy::copySubTables(out, selected);
++    casacore::TableCopy::copyRows(out, selected, 0, 0, n);
++    out.flush();
++    std::fprintf(stderr, "[mscutout] wrote %u rows to %s\n", n, argv[2]);
++    return 0;
++  } catch (const casacore::AipsError& e) {
++    std::fprintf(stderr, "[mscutout] casacore error: %s\n", e.getMesg().c_str());
++    return 1;
++  }
++}
+diff --git a/wgridder/wgridder.h b/wgridder/wgridder.h
+index 6ab2f383..575766b5 100644
+--- a/wgridder/wgridder.h
++++ b/wgridder/wgridder.h
+@@ -5,6 +5,8 @@
+ #ifdef WSCLEAN_MX_METAL
+ #include "metal/metalinversion.h"
+ #include <cstdio>
++#include <cstdlib>
++#include <string>
+ #endif
+ 
+ namespace wsclean {
+@@ -337,15 +339,18 @@ class WGridder final : public WGridderBase {
+     constexpr bool kDivideByN = false;
+     constexpr bool kAllowNShift = true;
+ #ifdef WSCLEAN_MX_METAL
+-    // Experimental Metal path: only taken when it performs exactly the same
+-    // maths as the ducc0 call below (float visible data, no image shift, and
+-    // either a negligible w-term or the w-layer path). inversion() refuses
+-    // otherwise, and the ducc0 call then runs untouched.
++    // Inversion stays on ducc0. The Metal/cpu-vkfft inversion experiment lives
++    // behind MX_METAL_ENGINE explicitly (see metal/metalinversion.mm); plain
++    // -mgpu means "GPU for prediction and deconvolution only" and never takes
++    // this path, so the ducc0 call below runs untouched.
+     // if constexpr so the float-only body is not instantiated for double or for
+     // the callback/proxy visibility buffers.
+     if constexpr (std::is_same<NumT, float>::value &&
+                   std::is_same<Tms, ducc0::cmav<std::complex<float>, 1>>::value) {
+-      if (use_metal_) {
++      const char* engine = std::getenv("MX_METAL_ENGINE");
++      const bool allow_metal_inversion =
++          (engine != nullptr) && (std::string(engine) == "metal" || std::string(engine) == "cpu-vkfft");
++      if (use_metal_ && allow_metal_inversion) {
+         mx::metal::InversionInput input;
+         input.n_rows = n_rows;
+         input.uvws = uvw;

@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:48:48 -0700
+Subject: [PATCH 45/47] metal: gate forward FFT probe (prediction path)
+
+submitForward() matches ducc0 c2c FORWARD to 3.3e-07 at 1024 and
+5.9e-07 at 3072 (12.5ms). Both c2c directions are now proven.
+
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 4f4d05c4..03e0f0be 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -115,3 +115,14 @@ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0
+             "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
+             "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+ endif()
++
++add_executable(mx-vkfft-fwd-probe vkfft_fwd_probe.cpp)
++target_link_libraries(mx-vkfft-fwd-probe PRIVATE mx-metal)
++if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
++  target_sources(
++    mx-vkfft-fwd-probe
++    PRIVATE "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
++            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
++            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
++endif()
++set_source_files_properties(vkfft_fwd_probe.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+diff --git a/metal/vkfft_fwd_probe.cpp b/metal/vkfft_fwd_probe.cpp
+new file mode 100644
+index 00000000..1fe06326
+--- /dev/null
++++ b/metal/vkfft_fwd_probe.cpp
+@@ -0,0 +1,60 @@
++// Gate for vkFFT forward (prediction) path: must match ducc0 c2c(FORWARD).
++#include <algorithm>
++#include <chrono>
++#include <cmath>
++#include <complex>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <random>
++#include <vector>
++
++#include "ducc0/fft/fft.h"
++#include "ducc0/fft/fftnd_impl.h"
++#include "ducc0/infra/mav.h"
++
++#include "metal/mxvkfft.h"
++
++int main(int argc, char** argv) {
++  setvbuf(stdout, nullptr, _IONBF, 0);
++  const std::size_t n = argc > 1 ? std::stoul(argv[1]) : 1024;
++  const int nthreads = argc > 2 ? std::stoi(argv[2]) : 8;
++  mx::vk::Fft fft;
++  if (!fft.init(n)) {
++    std::printf("fft init failed: %s\n", fft.error());
++    return 1;
++  }
++  float* gpu = fft.data();
++  std::vector<std::complex<float>> host(n * n), ref;
++  std::mt19937 rng(11);
++  for (auto& v : host)
++    v = {static_cast<float>(rng() % 1000) / 1000.0f - 0.5f,
++         static_cast<float>(rng() % 1000) / 1000.0f - 0.5f};
++  std::memcpy(gpu, host.data(), 2 * n * n * sizeof(float));
++  ref = host;
++  {
++    ducc0::vfmav<std::complex<float>> io(ref.data(), {n, n});
++    ducc0::detail_fft::c2c(io, io, {0}, true, 1.0f, nthreads);
++    ducc0::detail_fft::c2c(io, io, {1}, true, 1.0f, nthreads);
++  }
++  auto t0 = std::chrono::steady_clock::now();
++  if (!fft.submitForward() || !fft.wait()) {
++    std::printf("forward failed: %s\n", fft.error());
++    return 1;
++  }
++  auto t1 = std::chrono::steady_clock::now();
++  double num = 0, den = 0, md = 0, ma = 0;
++  for (std::size_t i = 0; i < n * n; ++i) {
++    const std::complex<float> a(gpu[2 * i], gpu[2 * i + 1]);
++    const std::complex<float> b = ref[i];
++    num += std::norm(a - b);
++    den += std::norm(b);
++    md = std::max<double>(md, std::abs(a - b));
++    ma = std::max<double>(ma, std::abs(b));
++  }
++  const double rel = std::sqrt(num / (den + 1e-30));
++  const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
++  std::printf("forward n=%zu rel_rms=%.3e max_abs=%.4g max_diff=%.4g gpu_ms=%.1f %s\n", n, rel,
++              ma, md, ms, rel < 5e-6 ? "PASS" : "FAIL");
++  return rel < 5e-6 ? 0 : 1;
++}

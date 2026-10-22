@@ -1,0 +1,417 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:57:40 -0700
+Subject: [PATCH 47/47] metal: drop superseded R2C probe and debug scaffolding
+
+Direct vkFFT R2C (useMergeSequences path) produced a systematic layout
+mismatch; the Hermitian expansion + c2c path supersedes it (8e-08 CPU,
+5e-07 GPU). Keeps the meaningful gates: peak, c2c, forward, expand-gpu.
+
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 4bb395de..247c69c9 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -58,43 +58,10 @@ endif()
+ add_executable(mx-peak-probe mxpeak_probe.cpp)
+ target_link_libraries(mx-peak-probe PRIVATE mx-metal)
+ 
+-# Probe for the R2C/C2R real-transform path (deconvolution convolution).
+-#   ./mx-vkfft-r2c-probe 1024
+-#   ./mx-vkfft-r2c-probe 3072
+-add_executable(mx-vkfft-r2c-probe vkfft_r2c_probe.cpp)
+-target_link_libraries(mx-vkfft-r2c-probe PRIVATE mx-metal)
+-target_include_directories(mx-vkfft-r2c-probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
+-if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
+-  target_sources(
+-    mx-vkfft-r2c-probe
+-    PRIVATE "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+-endif()
+-set_source_files_properties(vkfft_r2c_probe.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+-
+-add_executable(dbg-r2c dbg_r2c.cpp)
+-target_link_libraries(dbg-r2c PRIVATE mx-metal)
+-target_include_directories(dbg-r2c PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
+-if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
+-  target_sources(
+-    dbg-r2c
+-    PRIVATE "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+-endif()
+-set_source_files_properties(dbg_r2c.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+-
+-add_executable(expand-test expand_test.cpp)
+-target_link_libraries(expand-test PRIVATE mx-metal)
+-if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
+-  target_sources(
+-    expand-test
+-    PRIVATE "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+-endif()
+ 
++# GPU chain gate for the deconv convolution (expansion + vkFFT c2c).
++#   ./expand-gpu-test 1024
++#   ./expand-gpu-test 3072
+ add_executable(expand-gpu-test expand_gpu_test.cpp)
+ target_link_libraries(expand-gpu-test PRIVATE mx-metal)
+ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
+@@ -106,16 +73,7 @@ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0
+ endif()
+ set_source_files_properties(expand_gpu_test.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+ 
+-add_executable(time-c2r time_c2r.cpp)
+-target_link_libraries(time-c2r PRIVATE mx-metal)
+-if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
+-  target_sources(
+-    time-c2r
+-    PRIVATE "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
+-            "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+-endif()
+-
++# Gate for the prediction forward FFT (must match ducc0 c2c FORWARD).
+ add_executable(mx-vkfft-fwd-probe vkfft_fwd_probe.cpp)
+ target_link_libraries(mx-vkfft-fwd-probe PRIVATE mx-metal)
+ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
+diff --git a/metal/dbg_r2c.cpp b/metal/dbg_r2c.cpp
+deleted file mode 100644
+index 829343f3..00000000
+--- a/metal/dbg_r2c.cpp
++++ /dev/null
+@@ -1,66 +0,0 @@
+-#define NS_PRIVATE_IMPLEMENTATION
+-#define MTL_PRIVATE_IMPLEMENTATION
+-#define CA_PRIVATE_IMPLEMENTATION
+-#include <iostream>
+-#include "thirdparty/metal-cpp/Foundation/Foundation.hpp"
+-#include "thirdparty/metal-cpp/Metal/Metal.hpp"
+-#include "thirdparty/metal-cpp/QuartzCore/QuartzCore.hpp"
+-#define VKFFT_BACKEND 5
+-#include "thirdparty/vkFFT.h"
+-#include <complex>
+-#include <cstdio>
+-#include <cstring>
+-#include <vector>
+-#include "ducc0/fft/fft.h"
+-#include "ducc0/fft/fftnd_impl.h"
+-#include "ducc0/infra/mav.h"
+-int main() {
+-  setvbuf(stdout, nullptr, _IONBF, 0);
+-  const size_t w=8,h=8,cw=w/2+1;
+-  MTL::Device* device = MTL::CreateSystemDefaultDevice();
+-  MTL::CommandQueue* queue = device->newCommandQueue();
+-  MTL::Buffer* cbuf = device->newBuffer(h*cw*sizeof(std::complex<float>), MTL::ResourceStorageModeShared);
+-  MTL::Buffer* rbuf = device->newBuffer(h*w*sizeof(float), MTL::ResourceStorageModeShared);
+-  std::vector<std::complex<float>> host(h*cw, {0,0});
+-  host[0] = {1.0f, 0.0f};
+-  std::memcpy(cbuf->contents(), host.data(), h*cw*sizeof(std::complex<float>));
+-  std::memset(rbuf->contents(), 0, h*w*sizeof(float));
+-  std::vector<std::complex<float>> hm = host;
+-  std::vector<float> ref(h*w, 0);
+-  { ducc0::vfmav<std::complex<float>> in(hm.data(), {h, cw});
+-    ducc0::vfmav<float> out(ref.data(), {h, w});
+-    ducc0::c2r_mut(in, out, {0,1}, false, 1.0f, 1); }
+-  printf("CPU ref[0..7]:");
+-  for (int i=0;i<8;i++) printf(" %.4g", ref[i]);
+-  printf("\nCPU ref row1[0..3]: %.4g %.4g %.4g %.4g\n", ref[w], ref[w+1], ref[w+2], ref[w+3]);
+-  VkFFTApplication app = {};
+-  VkFFTConfiguration config = {};
+-  config.device = device; config.queue = queue;
+-  config.FFTdim = 2; config.size[0]=w; config.size[1]=h;
+-  config.performR2C=1; config.normalize=0;
+-  config.isInputFormatted=1;
+-  MTL::Buffer* bp=rbuf; MTL::Buffer* ip=cbuf;
+-  uint64_t bs=h*w*sizeof(float), is=h*cw*sizeof(std::complex<float>);
+-  config.buffer=&bp; config.bufferSize=&bs;
+-  config.inputBuffer=&ip; config.inputBufferSize=&is;
+-  VkFFTResult res = initializeVkFFT(&app, config);
+-  printf("init=%d\n", (int)res);
+-  if (res!=VKFFT_SUCCESS) return 1;
+-  MTL::CommandBuffer* cb = queue->commandBuffer(); cb->retain();
+-  MTL::ComputeCommandEncoder* enc = cb->computeCommandEncoder(); enc->retain();
+-  VkFFTLaunchParams lp={};
+-  lp.commandBuffer=cb; lp.commandEncoder=enc;
+-  MTL::Buffer* b=rbuf; MTL::Buffer* ib=cbuf;
+-  lp.buffer=&b; lp.inputBuffer=&ib;
+-  res = VkFFTAppend(&app, +1, &lp);
+-  enc->endEncoding(); enc->release();
+-  printf("append=%d\n",(int)res);
+-  cb->commit(); cb->waitUntilCompleted();
+-  printf("status=%d\n",(int)cb->status());
+-  cb->release();
+-  const float* gpu=(const float*)rbuf->contents();
+-  printf("GPU [0..7]:");
+-  for(int i=0;i<8;i++) printf(" %.4g", gpu[i]);
+-  printf("\nGPU row1[0..3]: %.4g %.4g %.4g %.4g\n", gpu[w], gpu[w+1], gpu[w+2], gpu[w+3]);
+-  return 0;
+-}
+diff --git a/metal/expand_test.cpp b/metal/expand_test.cpp
+deleted file mode 100644
+index 133f5ffe..00000000
+--- a/metal/expand_test.cpp
++++ /dev/null
+@@ -1,50 +0,0 @@
+-// CPU-only: half-spectrum -> full via Hermitian symmetry, then c2c inverse,
+-// must equal ducc0 c2r. Validates the expansion before any GPU is involved.
+-#include <complex>
+-#include <cstdio>
+-#include <cmath>
+-#include <vector>
+-#include <random>
+-#include "ducc0/fft/fft.h"
+-#include "ducc0/fft/fftnd_impl.h"
+-#include "ducc0/infra/mav.h"
+-int main() {
+-  const size_t w=32,h=32,cw=w/2+1;
+-  std::mt19937 rng(7);
+-  std::vector<std::complex<float>> half(h*cw);
+-  for (auto& v: half) v={float(rng()%1000)/1000-0.5f, float(rng()%1000)/1000-0.5f};
+-  // enforce Hermitian consistency as a true r2c output would have?
+-  // (skip - use as-is; c2r of inconsistent half is still well-defined)
+-  std::vector<std::complex<float>> hm=half;
+-  std::vector<float> ref(h*w,0);
+-  { ducc0::vfmav<std::complex<float>> in(hm.data(),{h,cw});
+-    ducc0::vfmav<float> out(ref.data(),{h,w});
+-    ducc0::c2r_mut(in,out,{0,1},false,1.0f,1); }
+-  // expand to full
+-  std::vector<std::complex<float>> full(h*w);
+-  for(size_t i=0;i<h;i++) for(size_t j=0;j<w;j++) {
+-    if(j<cw) full[i*w+j]=half[i*cw+j];
+-    else {
+-      size_t si=(h-i)%h, sj=w-j;
+-      full[i*w+j]=std::conj(half[si*cw+sj]);
+-    }
+-  }
+-  std::vector<std::complex<float>> fm=full;
+-  { ducc0::vfmav<std::complex<float>> io(fm.data(),{h,w});
+-    ducc0::detail_fft::c2c(io,io,{0},false,1.0f,1);
+-    ducc0::detail_fft::c2c(io,io,{1},false,1.0f,1); }
+-  // c2c inverse of full should give real=ref*w? or ref? check scale
+-  double num=0,den=0;
+-  // try both scales: /1 and /w? Actually c2c unnormalized vs c2r unnormalized may differ by factor
+-  // first compare shapes: imag should be ~0
+-  double imax=0;
+-  for(auto& v: fm) imax=std::max(imax,(double)std::abs(v.imag()));
+-  printf("max imag after c2c: %.4g\n", imax);
+-  // find best scale
+-  for(float s : {1.0f, 1.0f/(w*h)}) {
+-    num=0;den=0;
+-    for(size_t i=0;i<h*w;i++){ double a=fm[i].real()*s, b=ref[i]; num+=(a-b)*(a-b); den+=b*b; }
+-    printf("scale %.4g rel=%.4e\n", s, sqrt(num/(den+1e-30)));
+-  }
+-  return 0;
+-}
+diff --git a/metal/time_c2r.cpp b/metal/time_c2r.cpp
+deleted file mode 100644
+index bf53015b..00000000
+--- a/metal/time_c2r.cpp
++++ /dev/null
+@@ -1,48 +0,0 @@
+-#include <complex>
+-#include <cstdio>
+-#include <vector>
+-#include <random>
+-#include <chrono>
+-#include "ducc0/fft/fft.h"
+-#include "ducc0/fft/fftnd_impl.h"
+-#include "ducc0/infra/mav.h"
+-int main() {
+-  const size_t w=3072,h=3072,cw=w/2+1;
+-  std::mt19937 rng(7);
+-  std::vector<std::complex<float>> half(h*cw);
+-  for(auto& v: half) v={float(rng()%1000)/1000-0.5f,float(rng()%1000)/1000-0.5f};
+-  std::vector<std::complex<float>> kern(h*cw);
+-  for(auto& v: kern) v={float(rng()%1000)/1000-0.5f,float(rng()%1000)/1000-0.5f};
+-  const float fact=1.0/(w*h);
+-  // multiply + c2r, single-threaded equivalent of one scale
+-  auto t0=std::chrono::steady_clock::now();
+-  std::vector<std::complex<float>> prod=half;
+-  for(size_t i=0;i<h*cw;i++) prod[i]*=fact*kern[i];
+-  auto t1=std::chrono::steady_clock::now();
+-  std::vector<float> out(h*w);
+-  { ducc0::vfmav<std::complex<float>> in(prod.data(),{h,cw});
+-    ducc0::vfmav<float> o(out.data(),{h,w});
+-    ducc0::c2r_mut(in,o,{0,1},false,1.0f,1); }
+-  auto t2=std::chrono::steady_clock::now();
+-  // 8-thread c2r
+-  std::vector<std::complex<float>> prod2=half;
+-  for(size_t i=0;i<h*cw;i++) prod2[i]*=fact*kern[i];
+-  std::vector<float> out2(h*w);
+-  auto t3=std::chrono::steady_clock::now();
+-  { ducc0::vfmav<std::complex<float>> in(prod2.data(),{h,cw});
+-    ducc0::vfmav<float> o(out2.data(),{h,w});
+-    ducc0::c2r_mut(in,o,{0,1},false,1.0f,8); }
+-  auto t4=std::chrono::steady_clock::now();
+-  // expansion timing
+-  auto t5=std::chrono::steady_clock::now();
+-  std::vector<std::complex<float>> full(h*w);
+-  for(size_t i=0;i<h;i++) for(size_t j=0;j<w;j++) {
+-    if(j<cw) full[i*w+j]=prod[i*cw+j];
+-    else { size_t si=(h-i)%h, sj=w-j; full[i*w+j]=std::conj(prod[si*cw+sj]); }
+-  }
+-  auto t6=std::chrono::steady_clock::now();
+-  using ms=std::chrono::duration<double,std::milli>;
+-  printf("multiply(1thr)=%.1fms c2r(1thr)=%.1fms c2r(8thr)=%.1fms expand(1thr)=%.1fms\n",
+-    ms(t1-t0).count(), ms(t2-t1).count(), ms(t4-t3).count(), ms(t6-t5).count());
+-  return 0;
+-}
+diff --git a/metal/vkfft_r2c_probe.cpp b/metal/vkfft_r2c_probe.cpp
+deleted file mode 100644
+index 26eb5493..00000000
+--- a/metal/vkfft_r2c_probe.cpp
++++ /dev/null
+@@ -1,150 +0,0 @@
+-// Probe for vkFFT R2C/C2R (real transforms) on Metal.
+-// Validates the C2R inverse path that schaapcommon's MultiplyAndInverse needs:
+-// complex half-spectrum (h x (w/2+1)) -> real image (h x w), unnormalised,
+-// matching ducc0::c2r_mut(..., {0,1}, false, 1.0f).
+-//
+-//   ./mx-vkfft-r2c-probe         1024
+-//   ./mx-vkfft-r2c-probe 3072 8   3k production size
+-#define NS_PRIVATE_IMPLEMENTATION
+-#define MTL_PRIVATE_IMPLEMENTATION
+-#define CA_PRIVATE_IMPLEMENTATION
+-#include <iostream>  // vkFFT 1.2.31 uses std::cout in its error path
+-
+-#include "thirdparty/metal-cpp/Foundation/Foundation.hpp"
+-#include "thirdparty/metal-cpp/Metal/Metal.hpp"
+-#include "thirdparty/metal-cpp/QuartzCore/QuartzCore.hpp"
+-
+-#define VKFFT_BACKEND 5
+-#include "thirdparty/vkFFT.h"
+-
+-#include <algorithm>
+-#include <cmath>
+-#include <complex>
+-#include <cstdio>
+-#include <cstdlib>
+-#include <cstring>
+-#include <random>
+-#include <vector>
+-
+-#include "ducc0/fft/fft.h"
+-#include "ducc0/fft/fftnd_impl.h"
+-#include "ducc0/infra/mav.h"
+-
+-static int run_c2r(std::size_t w, std::size_t h, int nthreads) {
+-  const std::size_t cw = w / 2 + 1;
+-  const std::size_t nComplex = h * cw;
+-  const std::size_t nReal = h * w;
+-
+-  MTL::Device* device = MTL::CreateSystemDefaultDevice();
+-  if (!device) {
+-    std::printf("no Metal device\n");
+-    return 1;
+-  }
+-  MTL::CommandQueue* queue = device->newCommandQueue();
+-  if (!queue) {
+-    std::printf("no Metal queue\n");
+-    return 1;
+-  }
+-  const std::size_t complexBytes = nComplex * sizeof(std::complex<float>);
+-  const std::size_t realBytes = nReal * sizeof(float);
+-  MTL::Buffer* cbuf = device->newBuffer(complexBytes, MTL::ResourceStorageModeShared);
+-  MTL::Buffer* rbuf = device->newBuffer(realBytes, MTL::ResourceStorageModeShared);
+-  if (!cbuf || !rbuf) {
+-    std::printf("no shared buffers\n");
+-    return 1;
+-  }
+-
+-  // Fill the half-spectrum with random data; keep a copy for the CPU.
+-  std::mt19937 rng(7);
+-  std::vector<std::complex<float>> host(nComplex);
+-  for (auto& v : host) {
+-    v = {static_cast<float>(rng() % 1000) / 1000.0f - 0.5f,
+-         static_cast<float>(rng() % 1000) / 1000.0f - 0.5f};
+-  }
+-  std::memcpy(cbuf->contents(), host.data(), complexBytes);
+-  std::memset(rbuf->contents(), 0, realBytes);
+-
+-  // CPU reference: exactly what MultiplyAndInverse does after the multiply.
+-  std::vector<std::complex<float>> host_mut = host;
+-  std::vector<float> ref(nReal, 0.0f);
+-  {
+-    ducc0::vfmav<std::complex<float>> in(host_mut.data(), {h, cw});
+-    ducc0::vfmav<float> out(ref.data(), {h, w});
+-    ducc0::c2r_mut(in, out, {0, 1}, false, 1.0f, nthreads);
+-  }
+-
+-  // GPU plan: C2R inverse-only, out-of-place complex -> real.
+-  VkFFTApplication app = {};
+-  VkFFTConfiguration config = {};
+-  config.device = device;
+-  config.queue = queue;
+-  config.FFTdim = 2;
+-  config.size[0] = w;
+-  config.size[1] = h;
+-  config.performR2C = 1;
+-  config.makeInversePlanOnly = 1;
+-  config.normalize = 0;
+-  config.isInputFormatted = 1;
+-  MTL::Buffer* bufPtr = rbuf;    // output (real)
+-  MTL::Buffer* inPtr = cbuf;     // input (complex)
+-  uint64_t bufSize = realBytes;
+-  uint64_t inSize = complexBytes;
+-  config.buffer = &bufPtr;
+-  config.bufferSize = &bufSize;
+-  config.inputBuffer = &inPtr;
+-  config.inputBufferSize = &inSize;
+-
+-  VkFFTResult res = initializeVkFFT(&app, config);
+-  if (res != VKFFT_SUCCESS) {
+-    std::printf("w=%zu h=%zu init failed: %d\n", w, h, (int)res);
+-    return 1;
+-  }
+-
+-  MTL::CommandBuffer* cb = queue->commandBuffer();
+-  cb->retain();
+-  MTL::ComputeCommandEncoder* enc = cb->computeCommandEncoder();
+-  enc->retain();
+-  VkFFTLaunchParams launch = {};
+-  launch.commandBuffer = cb;
+-  launch.commandEncoder = enc;
+-  MTL::Buffer* b = rbuf;
+-  MTL::Buffer* ib = cbuf;
+-  launch.buffer = &b;
+-  launch.inputBuffer = &ib;
+-  res = VkFFTAppend(&app, +1, &launch);  // +1 = inverse (C2R)
+-  enc->endEncoding();
+-  enc->release();
+-  if (res != VKFFT_SUCCESS) {
+-    std::printf("w=%zu h=%zu append failed: %d\n", w, h, (int)res);
+-    return 1;
+-  }
+-  cb->commit();
+-  cb->waitUntilCompleted();
+-  const bool ok = cb->status() == MTL::CommandBufferStatusCompleted;
+-  cb->release();
+-  if (!ok) {
+-    std::printf("w=%zu h=%zu GPU execution failed\n", w, h);
+-    return 1;
+-  }
+-
+-  const float* gpu = static_cast<const float*>(rbuf->contents());
+-  double num = 0.0, den = 0.0, maxdiff = 0.0, maxabs = 0.0;
+-  for (std::size_t i = 0; i < nReal; ++i) {
+-    const double a = gpu[i], b = ref[i];
+-    num += (a - b) * (a - b);
+-    den += b * b;
+-    maxdiff = std::max(maxdiff, std::fabs(a - b));
+-    maxabs = std::max(maxabs, std::fabs(b));
+-  }
+-  const double rel = std::sqrt(num / (den + 1e-30));
+-  std::printf("c2r w=%zu h=%zu rel_rms=%.3e max_abs=%.4g max_diff=%.4g %s\n", w, h, rel,
+-              maxabs, maxdiff, rel < 5e-6 ? "PASS" : "FAIL");
+-  return rel < 5e-6 ? 0 : 1;
+-}
+-
+-int main(int argc, char** argv) {
+-  setvbuf(stdout, nullptr, _IONBF, 0);
+-  const std::size_t n = argc > 1 ? std::stoul(argv[1]) : 1024;
+-  const int nthreads = argc > 2 ? std::stoi(argv[2]) : 8;
+-  return run_c2r(n, n, nthreads);
+-}

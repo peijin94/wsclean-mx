@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Wed, 21 Oct 2026 22:45:38 -0700
+Subject: [PATCH 5/6] math: optional GPU hook for the convolution c2r
+
+MultiplyAndInverse calls the registered ConvolveC2RHook after the
+frequency-domain multiply; on success ducc0 c2r is skipped, on 0 or
+unset the CPU path runs untouched.
+
+diff --git a/include/schaapcommon/math/convolution.h b/include/schaapcommon/math/convolution.h
+index 0b58204..d8f9c6d 100644
+--- a/include/schaapcommon/math/convolution.h
++++ b/include/schaapcommon/math/convolution.h
+@@ -79,6 +79,17 @@ void ConvolutionFft(std::complex<float>* dest, const float* image, size_t image_
+ void ConvolveTransformed(float* image, const std::complex<float>* image_fft,
+                          const std::complex<float>* kernel_fft, size_t image_width,
+                          size_t image_height);
++
++/**
++ * Optional GPU hook for the inverse half-spectrum transform inside
++ * ConvolveTransformed(). When set, it is called after the frequency-domain
++ * multiply with the already-scaled product and must write the real image.
++ * Returns 1 on success (ducc0 c2r is then skipped), 0 to fall back to CPU.
++ */
++using ConvolveC2RHook = int (*)(float* image, const std::complex<float>* product,
++                                 size_t width, size_t height);
++void SetConvolveC2RHook(ConvolveC2RHook hook);
++ConvolveC2RHook GetConvolveC2RHook();
+ }  // namespace schaapcommon::math
+ 
+ #endif
+diff --git a/src/*.cpp b/src/*.cpp
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/math/convolution.cc b/src/math/convolution.cc
+index dd42784..fafe3fe 100644
+--- a/src/math/convolution.cc
++++ b/src/math/convolution.cc
+@@ -18,6 +18,13 @@
+ 
+ namespace schaapcommon::math {
+ 
++namespace {
++ConvolveC2RHook g_c2r_hook = nullptr;
++}  // namespace
++
++void SetConvolveC2RHook(ConvolveC2RHook hook) { g_c2r_hook = hook; }
++ConvolveC2RHook GetConvolveC2RHook() { return g_c2r_hook; }
++
+ void MakeFftwfPlannerThreadSafe() { fftwf_make_planner_thread_safe(); }
+ 
+ void ResizeAndConvolve(float* image, size_t image_width, size_t image_height, const float* kernel,
+@@ -137,7 +144,10 @@ void MultiplyAndInverse(float* image, std::complex<float>* product,
+ 
+   const ducc0::vfmav<std::complex<float>> product_fft(product, {image_height, complex_width});
+   const ducc0::vfmav<float> image_out(image, {image_height, image_width});
+-  ducc0::c2r_mut(product_fft, image_out, {0, 1}, false, 1.0f, ThreadPool::GetInstance().NThreads());
++  if (g_c2r_hook == nullptr ||
++      g_c2r_hook(image, product, image_width, image_height) == 0) {
++    ducc0::c2r_mut(product_fft, image_out, {0, 1}, false, 1.0f, ThreadPool::GetInstance().NThreads());
++  }
+ }
+ }  // namespace
+ 
