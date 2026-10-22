@@ -35,12 +35,26 @@ hardware is idle; the kernel cannot feed it.
 
 ## What it actually is
 
-1. **The grid kernel is scalar and atomic-bound.** Each visibility is one
-   thread doing 49 taps, each tap = one `poly_sample` (degree-10 Horner chain)
-   + two threadgroup atomic adds. There is no vectorisation, no register
-   blocking, and neighbouring taps from different threads collide in the same
-   tile cells. ducc0's CPU kernel instead does 4 taps per SIMD instruction into
-   a register-resident line and never uses atomics.
+1. **The grid kernel is scalar and tap-loop bound.** Each visibility is one
+   thread doing ~49 taps, each tap = one `poly_sample` (degree-10 Horner chain)
+   + two threadgroup atomic adds, with two bound checks. There is no
+   vectorisation and no register blocking.
+
+   Ablations (4096/2amin, `gpu_exec`, run-to-run spread measured at +/-5% over
+   three repeats of the unmodified build: 3.23/3.37/3.56 s):
+
+   | build | gpu_exec |
+   |---|---|
+   | baseline | 3.23-3.56 s |
+   | Horner chain removed (constant weights) | 3.07 s |
+   | float CAS atomics -> native integer atomics | 3.70 s |
+   | empty-tile early return | ~-0.1 s |
+
+   So neither the polynomial nor the atomic implementation is the limiter.
+   Note the atomics are **float32, not double**: MSL on Apple silicon has no
+   `double`, and the tile is `atomic_uint` holding float bits, added with a
+   compare-exchange loop because Metal has no native float atomic add. Removing
+   that loop entirely buys nothing, so the CAS retry is not the problem.
 
 2. **Only ~2% of the dispatched tiles carry work**, but every one of the 15,376
    threadgroups is launched. Guarding them (`if (begin >= end) return;`) is now
@@ -54,8 +68,8 @@ hardware is idle; the kernel cannot feed it.
 
 ## Changes from this round
 
-- `threads_per_group` 256 -> 512: `gpu_exec` 3.90 -> 3.12 s (-20%),
-  inversion 10.1 -> 9.3 s. Re-verified: probe 2.95e-07, 50k slice 1.53e-08,
+- `threads_per_group` 256 -> 512: `gpu_exec` 3.81-3.96 -> 3.23-3.56 s
+  (-10 to -15% given the +/-5% spread), inversion 10.1 -> 9.3 s. Re-verified: probe 2.95e-07, 50k slice 1.53e-08,
   1024 dirty T2 4.94e-06.
 - Empty-tile early return in `grid_accumulate_poly` (exact: the grid is zeroed
   per plane and skipped tiles have no taps).
