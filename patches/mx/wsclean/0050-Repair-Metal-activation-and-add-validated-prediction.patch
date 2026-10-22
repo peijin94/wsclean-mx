@@ -1,0 +1,2241 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 09:00:35 -0700
+Subject: [PATCH] Repair Metal activation and add validated prediction and
+ real-FFT backends
+
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 37977990..9df77c32 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -472,6 +472,10 @@ if(WSCLEAN_MX_METAL)
+   # The gridder sources live in the wsclean-object OBJECT library, so the define
+   # has to be on that target; the static/shared libs only need the link.
+   target_compile_definitions(wsclean-object PUBLIC WSCLEAN_MX_METAL=1)
++  # Object-library usage requirements do not propagate through TARGET_OBJECTS.
++  # main.cpp owns registration and must receive the same feature definition.
++  target_compile_definitions(wsclean PRIVATE WSCLEAN_MX_METAL=1)
++  target_include_directories(wsclean PRIVATE "${RADLER_SOURCE_DIR}/cpp")
+   # so the gridder can #include "metal/metalinversion.h"
+   target_include_directories(wsclean-object PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+   target_link_libraries(wsclean-lib PUBLIC mx-metal)
+diff --git a/main/commandline.cpp b/main/commandline.cpp
+index d35eff9f..47d183c2 100644
+--- a/main/commandline.cpp
++++ b/main/commandline.cpp
+@@ -298,9 +298,10 @@ Options can be:
+ 
+   ** GRIDDER-SPECIFIC SETTINGS **
+ -mgpu
+-Use the experimental Apple Metal backend for gridding (2-D and w-layer
+-paths, both verified against ducc0). Falls back to the CPU wherever the
+-data need maths the GPU does not perform exactly. mx fork only, macOS only.
++   Enable the experimental Apple Metal prediction FFT pipeline (mx/macOS build).
++   Inversion and gridding/degridding stay on ducc0; unsupported cases use CPU.
++   Optional deconvolution experiments: MX_METAL_CONVOLVE=1 and MX_METAL_PEAK=1.
++   Runtime evidence: MX_METAL_DEBUG_TIMING=1. CPU-only builds reject this flag.
+ 
+ -wstack-nwlayers <nwlayers>
+    Number of w-layers to use. Default: minimum suggested #w-layers for first MS.
+@@ -759,6 +760,9 @@ bool CommandLine::ParseWithoutValidation(WSClean& wsclean, int argc, const char*
+     }
+     // == w-stacking-specific parameters ==
+     else if (param == "mgpu") {
++#ifndef WSCLEAN_MX_METAL
++      throw std::runtime_error("-mgpu requires a build with WSCLEAN_MX_METAL=ON");
++#endif
+       settings.useGpu = true;
+     }
+     else if (param == "nwlayers" || param == "wstack-nwlayers") {
+diff --git a/main/main.cpp b/main/main.cpp
+index f014319c..7dd998d5 100644
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ -3,6 +3,7 @@
+ 
+ #ifdef WSCLEAN_MX_METAL
+ #include <algorithms/threaded_deconvolution_tools.h>
++#include <algorithms/multiscale/multiscale_transforms.h>
+ #include <schaapcommon/math/convolution.h>
+ 
+ #include "metal/mxconvolve.h"
+@@ -14,6 +15,7 @@
+ #include <aocommon/logger.h>
+ 
+ #include <cstdlib>
++#include <cstring>
+ #include <exception>
+ #include <iostream>
+ 
+@@ -22,6 +24,15 @@ using aocommon::Logger;
+ using wsclean::CommandLine;
+ using wsclean::WSClean;
+ 
++#ifdef WSCLEAN_MX_METAL
++namespace {
++bool Enabled(const char* name) {
++  const char* value=std::getenv(name);
++  return value && *value && std::strcmp(value,"0") != 0;
++}
++}
++#endif
++
+ int main(int argc, char* argv[]) {
+   try {
+     check_openblas_multithreading();
+@@ -30,25 +41,34 @@ int main(int argc, char* argv[]) {
+     constexpr bool kInMemoryData = false;
+     if (CommandLine::Parse(wsclean, argc, const_cast<const char**>(argv), kSlave, kInMemoryData)) {
+ #ifdef WSCLEAN_MX_METAL
+-      // GPU deconvolution (peak scan; convolution follows) is a -mgpu
+-      // feature. Without -mgpu this build must behave as pure CPU, so the
+-      // hook is registered only when the flag was given; otherwise radler
+-      // keeps its own CPU peak_finder.
++      // Only prediction demonstrated an end-to-end gain. The correct but
++      // copy-bound deconvolution backends remain explicit experiments.
++      // No hooks are registered in a same-binary CPU control.
+       if (wsclean.GetSettings().useGpu) {
+-        radler::algorithms::SetPeakScanHook(&mx_peak_find);
+-        // Multiscale convolution c2r: measured overhead per scale at 3k
+-        // (GPU 12ms + expansion vs CPU 7ms; batched 13-24ms/plane -- worse),
+-        // so opt-in only (MX_METAL_CONVOLVE=1) pending true-C2R batching.
+-        // The hook code stays as validated infrastructure.
+-        if (std::getenv("MX_METAL_CONVOLVE") != nullptr) {
++        if (Enabled("MX_METAL_PEAK") && !Enabled("MX_METAL_NO_PEAK"))
++          radler::algorithms::SetPeakScanHook(&mx_peak_find);
++        if (Enabled("MX_METAL_CONVOLVE") && !Enabled("MX_METAL_NO_CONVOLVE"))
++          radler::algorithms::multiscale::MultiScaleTransforms::SetBatchTransformHook(&mx_convolve_many);
++        // General single-transform adapter remains an explicit experiment.
++        if (Enabled("MX_METAL_SINGLE_CONVOLVE") && !Enabled("MX_METAL_NO_CONVOLVE"))
+           schaapcommon::math::SetConvolveC2RHook(&mx_convolve_c2r);
+-        }
+-        // Prediction forward FFT: full GPU transform instead of ducc0's
+-        // band-limited bands, copy-swap per plane with CPU fallback.
++        // Two shared prediction planes, FFT/preparation/degridding overlap.
++        // ducc0 inversion and CPU gridding/degridding math are unchanged.
+         mx_predict_register();
+       }
+ #endif
+       CommandLine::Run(wsclean);
++#ifdef WSCLEAN_MX_METAL
++      if (wsclean.GetSettings().useGpu && Enabled("MX_METAL_DEBUG_TIMING")) {
++        mx_convolve_report();
++        MxPeakStats peaks{};
++        mx_peak_get_stats(&peaks);
++        std::fprintf(stderr, "[mx-metal] peak calls=%llu submissions=%llu successes=%llu declines=%llu planes=%llu\n",
++                     (unsigned long long)peaks.calls, (unsigned long long)peaks.submissions,
++                     (unsigned long long)peaks.successes, (unsigned long long)peaks.declines,
++                     (unsigned long long)peaks.planes);
++      }
++#endif
+     }
+     return 0;
+   } catch (std::exception& e) {
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index f89c7703..79f3b746 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -56,7 +56,8 @@ endif()
+ 
+ # Equivalence test for the GPU peak finder against a CPU reference.
+ add_executable(mx-peak-probe mxpeak_probe.cpp)
+-target_link_libraries(mx-peak-probe PRIVATE mx-metal)
++target_include_directories(mx-peak-probe PRIVATE "${RADLER_SOURCE_DIR}/cpp")
++target_link_libraries(mx-peak-probe PRIVATE mx-metal radler)
+ 
+ 
+ # GPU chain gate for the deconv convolution (expansion + vkFFT c2c).
+@@ -96,3 +97,30 @@ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0
+             "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+ endif()
+ set_source_files_properties(vkfft_batch_probe.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
++
++# Production ducc0 prediction differential and CPU-only/fault-injection gates.
++foreach(mode IN ITEMS gpu mock cpu)
++  add_executable(mx-prediction-${mode}-probe prediction_pipeline_probe.cpp)
++  target_include_directories(mx-prediction-${mode}-probe PRIVATE
++    "${CMAKE_CURRENT_SOURCE_DIR}/.." "${SCHAAPCOMMON_SOURCE_DIR}/external")
++  target_sources(mx-prediction-${mode}-probe PRIVATE
++    "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
++    "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
++    "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc"
++    "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/math/gridding_kernel.cc"
++    "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/math/gl_integrator.cc")
++endforeach()
++target_compile_definitions(mx-prediction-gpu-probe PRIVATE PREDICTION_REAL_GPU)
++target_link_libraries(mx-prediction-gpu-probe PRIVATE mx-metal)
++target_compile_definitions(mx-prediction-cpu-probe PRIVATE PREDICTION_CPU_ONLY)
++
++add_executable(mx-multiscale-batch-probe multiscale_batch_probe.cpp)
++target_include_directories(mx-multiscale-batch-probe PRIVATE "${RADLER_SOURCE_DIR}/cpp")
++target_link_libraries(mx-multiscale-batch-probe PRIVATE radler mx-metal schaapcommon)
++
++add_executable(mx-vkfft-real-probe vkfft_real_probe.cpp)
++target_link_libraries(mx-vkfft-real-probe PRIVATE mx-metal)
++target_sources(mx-vkfft-real-probe PRIVATE
++  "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
++  "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
++  "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
+diff --git a/metal/multiscale_batch_probe.cpp b/metal/multiscale_batch_probe.cpp
+new file mode 100644
+index 00000000..97744dcd
+--- /dev/null
++++ b/metal/multiscale_batch_probe.cpp
+@@ -0,0 +1,44 @@
++// Test real production scale kernels and one-call batch routing against CPU.
++#include "algorithms/multiscale/multiscale_transforms.h"
++#include <schaapcommon/math/convolution.h>
++#include <cmath>
++#include <cstdio>
++#include <complex>
++#include <vector>
++#include <random>
++extern "C" int mx_convolve_many(float* const*,const std::complex<float>*,const std::complex<float>* const*,size_t,size_t,size_t);
++static size_t calls=0;
++static int counted(float* const* dst,const std::complex<float>* image,const std::complex<float>* const* kernels,size_t w,size_t h,size_t b){++calls;return mx_convolve_many(dst,image,kernels,w,h,b);}
++template<class T> int test(size_t w,size_t h,radler::MultiscaleShape shape){
++  if constexpr(!requires(T& t,const std::complex<float>* p,const aocommon::UVector<float>& s,std::vector<aocommon::Image>& images){t.TryTransformScales(p,s,images);}){
++    std::fprintf(stderr,"FAIL: production multiscale batch routing absent\n");return 1;
++  } else {
++    T transforms(w,h,shape);
++    aocommon::Image image(w,h); std::mt19937 rng(119);
++    for(float& v:image)v=float(int(rng()%2001)-1000)/1000;
++    aocommon::UVector<float> scales{0,3,6,12,24,32,40,48};
++    std::vector<std::complex<float>> spec(schaapcommon::math::ConvolutionFftSize(w,h));
++    schaapcommon::math::ConvolutionFft(spec.data(),image.Data(),w,h);
++    const auto saved=spec;
++    T::SetBatchTransformHook(nullptr);
++    std::vector<aocommon::Image> result;
++    if(transforms.TryTransformScales(spec.data(),scales,result))return 2;
++    std::vector<aocommon::Image> reference;
++    for(float scale:scales){reference.emplace_back(w,h);transforms.Transform(spec.data(),reference.back(),scale);}
++    T::SetBatchTransformHook(&counted);const size_t before=calls;
++    if(!transforms.TryTransformScales(spec.data(),scales,result)||calls!=before+1||result.size()!=scales.size())return 3;
++    for(size_t b=0;b<scales.size();++b){double num=0,den=0,mx=0,md=0;
++      for(size_t i=0;i<w*h;++i){double r=reference[b][i],d=result[b][i]-r;num+=d*d;den+=r*r;mx=std::max(mx,std::abs(r));md=std::max(md,std::abs(d));}
++      double rel=std::sqrt(num/den);std::printf("scale=%g shape=%d %zux%zu rel=%.3g max/peak=%.3g\n",scales[b],int(shape),w,h,rel,md/mx);
++      if(!std::isfinite(rel)||rel>5e-6||md/mx>1e-4)return 4;
++    }
++    T::SetBatchTransformHook(nullptr);
++    if(saved!=spec)return 5;
++    return 0;
++  }
++}
++int main(){using T=radler::algorithms::multiscale::MultiScaleTransforms;int result=0;
++ for(auto shape:{radler::MultiscaleShape::kTaperedQuadraticShape,radler::MultiscaleShape::kGaussianShape}){
++ result|=test<T>(128,128,shape);result|=test<T>(128,96,shape);}
++ std::printf("multiscale batch %s calls=%zu\n",result?"FAIL":"PASS",calls);return result;
++}
+diff --git a/metal/mxconvolve.cpp b/metal/mxconvolve.cpp
+index a49ecc29..1067b095 100644
+--- a/metal/mxconvolve.cpp
++++ b/metal/mxconvolve.cpp
+@@ -1,62 +1,78 @@
+-// GPU c2r for the multiscale convolution: Hermitian expansion + vkFFT c2c.
+ #include "metal/mxconvolve.h"
+-
+-#include <complex>
+-#include <cstddef>
++#include "metal/mxvkfft.h"
++#include <atomic>
++#include <chrono>
++#include <cstdio>
+ #include <cstdlib>
++#include <cstring>
+ #include <memory>
++#include <mutex>
++#include <vector>
+ 
+-#include "metal/mxvkfft.h"
+-
+-extern "C" int mx_convolve_c2r(float* image, const std::complex<float>* product,
+-                                std::size_t width, std::size_t height) {
+-  if (std::getenv("MX_METAL_NO_CONVOLVE") != nullptr) return 0;
+-  if (width != height || width == 0 || (width % 2) != 0) return 0;
+-  const std::size_t n = width;
+-  const std::size_t cw = n / 2 + 1;
+-
+-  // One plan per thread; FindMultiScalePeak calls per scale in parallel.
+-  // A run uses a single image size, so one cached plan suffices (re-init
+-  // if the size ever changes).
+-  thread_local std::unique_ptr<mx::vk::Fft> plan;
+-  thread_local std::size_t planned_n = 0;
+-  if (plan == nullptr || planned_n != n) {
+-    plan = std::make_unique<mx::vk::Fft>();
+-    if (!plan->init(n)) {
+-      plan.reset();
+-      planned_n = 0;
+-      return 0;
+-    }
+-    planned_n = n;
++namespace {
++std::atomic<size_t> batches{0}, planes{0}, singles{0}, refused{0};
++// One bounded process-wide plan serializes concurrent GPU consumers, instead
++// of letting every worker retain an unbounded full-scale stack.
++std::mutex batch_mutex;
++std::unique_ptr<mx::vk::Fft> batch_plan;
++using Clock = std::chrono::steady_clock;
++double plan_seconds=0, execute_seconds=0, copy_seconds=0, gpu_seconds=0;
++size_t plan_count=0;
++double seconds(Clock::time_point begin){return std::chrono::duration<double>(Clock::now()-begin).count();}
++int refuse(const char* why) {
++  if(refused.fetch_add(1)==0) std::fprintf(stderr,"[mx-metal] convolution fallback: %s\n",why);
++  return 0;
++}
++bool disabled(){const char* v=std::getenv("MX_METAL_NO_CONVOLVE");return v&&std::strcmp(v,"0")!=0;}
++}
++extern "C" int mx_convolve_many(float* const* images,const std::complex<float>* image,
++                                const std::complex<float>* const* kernels,
++                                size_t w,size_t h,size_t count){
++  if(disabled())return 0;
++  if(!images||!image||!kernels||!w||!h||!count||count>32||w%2||w>16384||h>16384)
++    return refuse("unsupported dimensions or null input");
++  const size_t pitch=2*(w/2+1);
++  if(pitch>((size_t(512)<<20)/sizeof(float))/h/count)return refuse("512 MiB batch FFT budget exceeded");
++  for(size_t i=0;i<count;++i)if(!images[i]||!kernels[i])return refuse("null scale buffer");
++  std::lock_guard lock(batch_mutex);
++  auto stamp=Clock::now();
++  if(!batch_plan||batch_plan->width()!=w||batch_plan->height()!=h||batch_plan->batch()!=count){
++    batch_plan=std::make_unique<mx::vk::Fft>();
++    if(!batch_plan->initReal(w,h,count)){int r=refuse(batch_plan->error());batch_plan.reset();return r;}
++    ++plan_count;
++    if(std::getenv("MX_METAL_DEBUG_TIMING"))std::fprintf(stderr,"[mx-metal] convolve plan batch=%zu init_s=%.6f\n",count,seconds(stamp));
+   }
+-  mx::vk::Fft& fft = *plan;
+-
+-  // Expand half -> full straight into the shared GPU buffer (no extra copy).
+-  // Full[i][j] = half[i][j] for j <= n/2, else conj(half[(n-i)%n][n-j]).
+-  // Validated CPU-only to 8.2e-08 against ducc0 c2r_mut at 32^2, and the
+-  // GPU chain to 3.0e-07 at 1024 / 5.1e-07 at 3072.
+-  float* buf = fft.data();
+-  if (buf == nullptr) return 0;
+-  for (std::size_t i = 0; i < n; ++i) {
+-    const std::complex<float>* hrow = product + i * cw;
+-    float* brow = buf + 2 * i * n;
+-    for (std::size_t j = 0; j <= n / 2; ++j) {
+-      brow[2 * j] = hrow[j].real();
+-      brow[2 * j + 1] = hrow[j].imag();
+-    }
+-    const std::size_t si = (n - i) % n;
+-    const std::complex<float>* srow = product + si * cw;
+-    for (std::size_t j = n / 2 + 1; j < n; ++j) {
+-      const std::complex<float> v = srow[n - j];
+-      brow[2 * j] = v.real();
+-      brow[2 * j + 1] = -v.imag();
+-    }
++  plan_seconds+=seconds(stamp);stamp=Clock::now();
++  std::vector<const float*> kp;kp.reserve(count);
++  for(size_t i=0;i<count;++i)kp.push_back(reinterpret_cast<const float*>(kernels[i]));
++  if(!batch_plan->submitConvolution(reinterpret_cast<const float*>(image),kp.data())||!batch_plan->wait())
++    return refuse(batch_plan->error());
++  execute_seconds+=seconds(stamp);gpu_seconds+=batch_plan->gpuSeconds();stamp=Clock::now();
++  const float* data=batch_plan->data();
++  for(size_t b=0;b<count;++b)for(size_t y=0;y<h;++y)
++    std::memcpy(images[b]+y*w,data+(b*h+y)*pitch,w*sizeof(float));
++  copy_seconds+=seconds(stamp);
++  ++batches;planes+=count;
++  return 1;
++}
++extern "C" int mx_convolve_c2r(float* image,const std::complex<float>* product,size_t w,size_t h){
++  if(disabled())return 0;
++  if(!image||!product||!w||!h||w%2)return refuse("unsupported single C2R input");
++  // Opt-in compatibility adapter; multiscale uses the single shared batch above.
++  thread_local std::unique_ptr<mx::vk::Fft> plan;
++  if(!plan||plan->width()!=w||plan->height()!=h){
++    plan=std::make_unique<mx::vk::Fft>();
++    if(!plan->initReal(w,h)){int r=refuse(plan->error());plan.reset();return r;}
+   }
+-
+-  if (!fft.submit() || !fft.wait()) return 0;
+-
+-  // Extract the real part; imag is ~0 for Hermitian-consistent input.
+-  const float* out = fft.data();
+-  for (std::size_t k = 0; k < n * n; ++k) image[k] = out[2 * k];
++  const size_t pitch=plan->rowFloats();
++  std::memcpy(plan->data(),product,pitch*h*sizeof(float));
++  if(!plan->submit()||!plan->wait())return refuse(plan->error());
++  for(size_t y=0;y<h;++y)std::memcpy(image+y*w,plan->data()+y*pitch,w*sizeof(float));
++  ++singles;
+   return 1;
+ }
++extern "C" void mx_convolve_report(){
++  std::fprintf(stderr,"[mx-metal] convolution batches=%zu planes=%zu singles=%zu refused=%zu\n",
++               batches.load(),planes.load(),singles.load(),refused.load());
++  std::fprintf(stderr,"[mx-metal] convolution plans=%zu init_s=%.6f execute_s=%.6f gpu_s=%.6f readback_s=%.6f\n",plan_count,plan_seconds,execute_seconds,gpu_seconds,copy_seconds);
++}
+diff --git a/metal/mxconvolve.h b/metal/mxconvolve.h
+index 41de50a7..0914c3f8 100644
+--- a/metal/mxconvolve.h
++++ b/metal/mxconvolve.h
+@@ -1,27 +1,17 @@
+-// GPU inverse half-spectrum transform for schaapcommon's convolution.
+-//
+-// schaapcommon::math::ConvolveTransformed does a frequency-domain multiply
+-// then ducc0::c2r_mut (half-spectrum -> real image). This hook replaces the
+-// c2r with: Hermitian expansion half -> full on the CPU (validated to 8e-08
+-// against ducc0) + the proven vkFFT c2c inverse (3.0e-07 at 1024, 5.1e-07
+-// at 3072). Square images only; anything else returns 0 for CPU fallback.
+-//
+-// Thread safety: FindMultiScalePeak calls per scale in parallel, so plans
+-// are thread_local (one vkFFT plan + buffers per thread per size).
++// GPU native real convolution: bounded reusable plans, plain C++ hooks.
+ #ifndef MX_MXCONVOLVE_H
+ #define MX_MXCONVOLVE_H
+-
+ #include <complex>
+ #include <cstddef>
+-
+ extern "C" {
+-
+-// Replaces ducc0::c2r_mut(product -> image). Product is the already-scaled
+-// half-spectrum (fact * kernel folded in), read-only. Returns 1 when the
+-// GPU path ran, 0 to fall back to the CPU.
+-int mx_convolve_c2r(float* image, const std::complex<float>* product, std::size_t width,
+-                     std::size_t height);
+-
+-}  // extern "C"
+-
+-#endif  // MX_MXCONVOLVE_H
++int mx_convolve_c2r(float* image, const std::complex<float>* product,
++                    std::size_t width, std::size_t height);
++// Same image spectrum with independent scale kernels: one multiply + batched
++// C2R submission, no Hermitian expansion. Inputs preserved. Output untouched
++// on refusal/failure, so the caller can rerun its original CPU path.
++int mx_convolve_many(float* const* images, const std::complex<float>* image_fft,
++                     const std::complex<float>* const* kernels,
++                     std::size_t width, std::size_t height, std::size_t count);
++void mx_convolve_report();
++}
++#endif
+diff --git a/metal/mxpeak.h b/metal/mxpeak.h
+index 167dd315..d7579c41 100644
+--- a/metal/mxpeak.h
++++ b/metal/mxpeak.h
+@@ -1,9 +1,4 @@
+-// GPU peak finding for radler's multiscale CLEAN.
+-//
+-// FindSingleScalePeak (78% of deconvolution time at 3k) is a masked, bordered
+-// argmax over one convolved image per scale; the scales are independent, so one
+-// threadgroup per scale scans in parallel. This exposes a C API so radler can
+-// call it without knowing about Metal or Objective-C.
++// Deterministic tiled Metal peak finding for Radler. No Objective-C in this API.
+ #ifndef MX_MXPEAK_H
+ #define MX_MXPEAK_H
+ 
+@@ -12,24 +7,37 @@
+ 
+ extern "C" {
+ 
+-// Returns 1 and fills the result when the GPU path ran, 0 if unavailable.
+-// Semantics match radler's math::peak_finder::FindWithMask:
+-//   - scan rows [y_border, height - y_border), columns [x_border, width - x_border)
+-//   - mask != NULL skips pixels with mask[i] == 0
+-//   - allow_negative compares on the value itself, otherwise only positives win
+-//   - out_value is the winning pixel value; out_x/out_y its coordinates
++// Returns 1 with signed pixel value and coordinates, or 0 (CPU fallback), leaving
++// ALL outputs untouched. Strict score > FLT_MIN, fabs(value) if allow_negative,
++// otherwise value; NaNs ignored, infinities allowed, first row-major tie wins.
++// Border is excluded on each side. Nonzero mask bytes include pixels.
++// Radler OptionalNumber's -FLT_MAX sentinel also declines.
++// Empty interiors, no peak, invalid arguments, oversized work or Metal failures
++// decline. Input/output storage must remain alive throughout this synchronous
++// call; concurrent calls are safe (cached shared scratch is serialized).
+ int mx_peak_find(const float* image, std::size_t width, std::size_t height,
+                  const std::uint8_t* mask, int allow_negative, std::size_t x_border,
+                  std::size_t y_border, float* out_value, std::size_t* out_x,
+                  std::size_t* out_y);
+ 
+-// Batch form: nscales independent images, one dispatch. Results are written per
+-// scale. Returns 1 on success.
+-int mx_peak_find_many(const float* const* images, std::size_t nscales, std::size_t width,
+-                      std::size_t height, const std::uint8_t* const* masks,
+-                      int allow_negative, std::size_t x_border, std::size_t y_border,
++// Batch: masks may be null, and individual mask pointers may be null. An entire
++// batch declines atomically if any plane has no peak. Scratch is capped at 512
++// MiB; images are copied directly into one cached shared Metal allocation.
++int mx_peak_find_many(const float* const* images, std::size_t nscales,
++                      std::size_t width, std::size_t height,
++                      const std::uint8_t* const* masks, int allow_negative,
++                      std::size_t x_border, std::size_t y_border,
+                       float* out_values, std::size_t* out_x, std::size_t* out_y);
+ 
+-}  // extern "C"
++// Monotonic process counters; snapshots during concurrent calls may be partial.
++// GPU work counts include completed submissions that subsequently found no peak.
++// Timing excludes initialization declines; gpu_ns uses Metal command timestamps.
++struct MxPeakStats {
++  std::uint64_t calls, submissions, successes, declines;
++  std::uint64_t planes, pixels, threadgroups, bytes_copied;
++  std::uint64_t wall_ns, gpu_ns;
++};
++void mx_peak_get_stats(MxPeakStats* out);
+ 
++}  // extern "C"
+ #endif  // MX_MXPEAK_H
+diff --git a/metal/mxpeak.mm b/metal/mxpeak.mm
+index 011c7400..add0aaca 100644
+--- a/metal/mxpeak.mm
++++ b/metal/mxpeak.mm
+@@ -3,199 +3,291 @@
+ #import <Foundation/Foundation.h>
+ #import <Metal/Metal.h>
+ 
+-#include <vector>
++#include <atomic>
++#include <chrono>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <limits>
++#include <mutex>
+ 
+ namespace {
+-
+-// One threadgroup per image. Each thread strides over the interior, keeps its
+-// own best, then a threadgroup tree reduction picks the winner. The comparison
+-// is (value, index) lexicographic on value only, first index wins ties, which
+-// matches the CPU scan order in peak_finder.
++constexpr std::size_t kThreads = 256, kTile = 4096;
++constexpr std::size_t kScratchLimit = 512ull * 1024 * 1024;
++// Indexes are per plane (32 bit); offsets between planes use Metal's size_t.
+ const char* kSource = R"(
+ #include <metal_stdlib>
+ using namespace metal;
+-
+-// 16-byte record so the host can read a plain float[4] per scale.
+-struct Peak { float value; uint x; uint y; uint pad; };
+-
+-inline bool better(float a, float b) { return a > b; }
+-
+-kernel void peak_scan(device const float* image      [[buffer(0)]],
+-                      device const uchar* mask       [[buffer(1)]],
+-                      device Peak* out               [[buffer(2)]],
+-                      constant uint& width           [[buffer(3)]],
+-                      constant uint& height          [[buffer(4)]],
+-                      constant uint& x_border        [[buffer(5)]],
+-                      constant uint& y_border        [[buffer(6)]],
+-                      constant int& allow_negative   [[buffer(7)]],
+-                      constant int& has_mask         [[buffer(8)]],
+-                      uint gid   [[threadgroup_position_in_grid]],
+-                      uint tid   [[thread_position_in_threadgroup]],
+-                      uint tcnt  [[threads_per_threadgroup]]) {
+-  const uint plane = gid;
+-  const device float* img = image + (size_t)plane * width * height;
+-  const device uchar* m = has_mask ? (mask + (size_t)plane * width * height) : nullptr;
+-
+-  const uint x0 = x_border, x1 = width - x_border;
+-  const uint y0 = y_border, y1 = height - y_border;
+-
+-  float best = -INFINITY;
+-  uint bx = 0, by = 0;
+-  for (uint y = y0 + tid; y < y1; y += tcnt) {
+-    const device float* row = img + (size_t)y * width;
+-    const device uchar* mrow = m ? (m + (size_t)y * width) : nullptr;
+-    for (uint x = x0; x < x1; ++x) {
+-      if (mrow && mrow[x] == 0) continue;
+-      const float v = row[x];
+-      const float cand = allow_negative ? v : (v > 0.0f ? v : -INFINITY);
+-      if (cand > best) { best = cand; bx = x; by = y; }
+-    }
+-  }
+-
+-  threadgroup float sval[256];
+-  threadgroup uint sx[256];
+-  threadgroup uint sy[256];
+-  sval[tid] = best; sx[tid] = bx; sy[tid] = by;
++struct Peak { float score; float value; uint index; uint pad; };
++struct Params { uint width, height, xb, yb, tiles, negative, has_mask, pad; };
++inline Peak empty_peak() { return {0x1p-126f, 0.0f, 0xffffffffu, 0u}; }
++inline bool better(Peak a, Peak b) {
++  return a.score > b.score || (a.score == b.score && a.index < b.index);
++}
++inline void reduce(threadgroup Peak* local, uint tid) {
+   threadgroup_barrier(mem_flags::mem_threadgroup);
+-  for (uint s = tcnt / 2; s > 0; s >>= 1) {
+-    if (tid < s) {
+-      if (sval[tid + s] > sval[tid]) {
+-        sval[tid] = sval[tid + s];
+-        sx[tid] = sx[tid + s];
+-        sy[tid] = sy[tid + s];
+-      }
+-    }
++  for (uint stride = 128; stride; stride >>= 1) {
++    if (tid < stride && better(local[tid + stride], local[tid]))
++      local[tid] = local[tid + stride];
+     threadgroup_barrier(mem_flags::mem_threadgroup);
+   }
+-  if (tid == 0) {
+-    Peak p;
+-    p.value = sval[0];
+-    p.x = sx[0];
+-    p.y = sy[0];
+-    p.pad = 0u;
+-    out[plane] = p;
++}
++kernel void peak_tiles(device const float* images [[buffer(0)]],
++                       device const uchar* masks [[buffer(1)]],
++                       device Peak* partial [[buffer(2)]],
++                       constant Params& p [[buffer(3)]],
++                       uint2 group [[threadgroup_position_in_grid]],
++                       uint2 local_id [[thread_position_in_threadgroup]]) {
++  const uint tid = local_id.x;
++  const uint iw = p.width - 2 * p.xb, ih = p.height - 2 * p.yb;
++  const uint count = iw * ih;
++  const size_t base = size_t(group.y) * p.width * p.height;
++  Peak best = empty_peak();
++  // Contiguous tiles expose thousands of groups even for a single large plane.
++  const uint begin = group.x * 4096;
++  const uint end = begin + min(4096u, count - begin);
++  for (uint i = begin + tid; i < end; i += 256) {
++    const uint index = (i / iw + p.yb) * p.width + i % iw + p.xb;
++    if (p.has_mask && masks[base + index] == 0) continue;
++    const float value = images[base + index];
++    const float score = p.negative ? fabs(value) : value;
++    // The strict test also excludes NaNs, zero and scores <= FLT_MIN.
++    if (score > 0x1p-126f) {
++      Peak candidate = {score, value, index, 0u};
++      if (better(candidate, best)) best = candidate;
++    }
++  }
++  threadgroup Peak local[256];
++  local[tid] = best;
++  reduce(local, tid);
++  if (!tid) partial[size_t(group.y) * p.tiles + group.x] = local[0];
++}
++kernel void peak_final(device const Peak* partial [[buffer(0)]],
++                       device Peak* output [[buffer(1)]],
++                       constant Params& p [[buffer(2)]],
++                       uint plane [[threadgroup_position_in_grid]],
++                       uint tid [[thread_position_in_threadgroup]]) {
++  Peak best = empty_peak();
++  for (uint i = tid; i < p.tiles; i += 256) {
++    const Peak candidate = partial[size_t(plane) * p.tiles + i];
++    if (better(candidate, best)) best = candidate;
+   }
++  threadgroup Peak local[256];
++  local[tid] = best;
++  reduce(local, tid);
++  if (!tid) output[plane] = local[0];
+ }
+ )";
+-
++struct AtomicStats {
++  std::atomic<std::uint64_t> calls{0}, submissions{0}, successes{0}, declines{0};
++  std::atomic<std::uint64_t> planes{0}, pixels{0}, threadgroups{0}, bytes_copied{0};
++  std::atomic<std::uint64_t> wall_ns{0}, gpu_ns{0};
++} stats;
++bool Debug() {
++  static const bool enabled = [] {
++    const char* env = std::getenv("MX_METAL_DEBUG_TIMING");
++    return env && *env && std::strcmp(env, "0") != 0;
++  }();
++  return enabled;
++}
++enum Reason { kArguments, kDimensions, kBorder, kSize, kDevice, kQueue,
++              kCompile, kPipeline, kAllocation, kEncoder, kCommand, kNoPeak };
++int Decline(Reason reason, const char* message) {
++  static std::atomic<unsigned> reported{0};
++  const unsigned bit = 1u << reason;
++  ++stats.declines;
++  if (!(reported.fetch_or(bit) & bit))
++    std::fprintf(stderr, "mxpeak: CPU fallback: %s (further occurrences suppressed)\n", message);
++  return 0;
++}
+ struct Ctx {
+   id<MTLDevice> device = nil;
+   id<MTLCommandQueue> queue = nil;
+-  id<MTLComputePipelineState> pipe = nil;
++  id<MTLComputePipelineState> scan = nil, final = nil;
++  id<MTLBuffer> scratch = nil;
++  std::mutex mutex;
++  Reason failure = kDevice;
++  const char* why = "no Metal device";
+   bool ok = false;
++  Ctx() {
++    @autoreleasepool {
++      device = MTLCreateSystemDefaultDevice();
++      if (!device) return;
++      queue = [device newCommandQueue];
++      if (!queue) { failure = kQueue; why = "command queue unavailable"; return; }
++      MTLCompileOptions* options = [MTLCompileOptions new];
++      // NaN/inf behavior is part of the Radler contract.
++      if (@available(macOS 15.0, *)) {
++        options.mathMode = MTLMathModeSafe;
++      } else {
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++        options.fastMathEnabled = NO;
++#pragma clang diagnostic pop
++      }
++      NSError* error = nil;
++      id<MTLLibrary> library = [device newLibraryWithSource:
++          [NSString stringWithUTF8String:kSource] options:options error:&error];
++      if (!library) {
++        failure = kCompile; why = "Metal source compilation failed";
++        std::fprintf(stderr, "mxpeak: Metal compiler: %s\n", error.localizedDescription.UTF8String);
++        return;
++      }
++      scan = [device newComputePipelineStateWithFunction:
++          [library newFunctionWithName:@"peak_tiles"] error:&error];
++      final = [device newComputePipelineStateWithFunction:
++          [library newFunctionWithName:@"peak_final"] error:&error];
++      if (!scan || !final || scan.maxTotalThreadsPerThreadgroup < kThreads ||
++          final.maxTotalThreadsPerThreadgroup < kThreads) {
++        failure = kPipeline; why = "256-thread peak pipelines unavailable"; return;
++      }
++      ok = true;
++    }
++  }
+ };
+-
+-Ctx& context() {
++Ctx& Context() {
++  // C++ guarantees exactly-once construction and publishes a fully built context.
+   static Ctx ctx;
+-  static bool tried = false;
+-  if (tried) return ctx;
+-  tried = true;
+-  @autoreleasepool {
+-    ctx.device = MTLCreateSystemDefaultDevice();
+-    if (ctx.device == nil) return ctx;
+-    ctx.queue = [ctx.device newCommandQueue];
+-    NSError* error = nil;
+-    id<MTLLibrary> lib =
+-        [ctx.device newLibraryWithSource:[NSString stringWithUTF8String:kSource]
+-                                 options:nil
+-                                   error:&error];
+-    if (lib == nil) return ctx;
+-    id<MTLFunction> fn = [lib newFunctionWithName:@"peak_scan"];
+-    if (fn == nil) return ctx;
+-    ctx.pipe = [ctx.device newComputePipelineStateWithFunction:fn error:&error];
+-    ctx.ok = (ctx.pipe != nil);
+-  }
+   return ctx;
+ }
+-
++struct Params { std::uint32_t width, height, xb, yb, tiles, negative, has_mask, pad; };
++struct Peak { float score, value; std::uint32_t index, pad; };
++static_assert(sizeof(Params) == 32 && sizeof(Peak) == 16);
++std::size_t Align(std::size_t n) { return (n + 255) & ~std::size_t(255); }
+ }  // namespace
+ 
++extern "C" void mx_peak_get_stats(MxPeakStats* out) {
++  if (!out) return;
++#define MX_LOAD(field) out->field = stats.field.load(std::memory_order_relaxed)
++  MX_LOAD(calls); MX_LOAD(submissions); MX_LOAD(successes); MX_LOAD(declines);
++  MX_LOAD(planes); MX_LOAD(pixels); MX_LOAD(threadgroups); MX_LOAD(bytes_copied);
++  MX_LOAD(wall_ns); MX_LOAD(gpu_ns);
++#undef MX_LOAD
++}
++
+ extern "C" int mx_peak_find_many(const float* const* images, std::size_t nscales,
+                                  std::size_t width, std::size_t height,
+                                  const std::uint8_t* const* masks, int allow_negative,
+                                  std::size_t x_border, std::size_t y_border,
+                                  float* out_values, std::size_t* out_x, std::size_t* out_y) {
+-  if (nscales == 0 || width == 0 || height == 0) return 0;
+-  if (x_border * 2 >= width || y_border * 2 >= height) return 0;
+-  Ctx& ctx = context();
+-  if (!ctx.ok) return 0;
+-
++  ++stats.calls;
++  if (!images || !out_values || !out_x || !out_y || !nscales)
++    return Decline(kArguments, "null arguments or empty batch");
++  // Bound dimensions before multiplication, narrowing, or reading caller arrays.
++  constexpr std::size_t max_uint = std::numeric_limits<std::uint32_t>::max();
++  if (!width || !height || width > max_uint || height > max_uint ||
++      width > (max_uint - kTile) / height)
++    return Decline(kDimensions, "empty or unsupported dimensions");
++  if (x_border > width || y_border > height ||
++      x_border >= width - x_border || y_border >= height - y_border)
++    return Decline(kBorder, "empty or invalid bordered interior");
++  const std::size_t plane = width * height;
++  if (plane > kScratchLimit / sizeof(float) ||
++      nscales > kScratchLimit / (plane * sizeof(float)))
++    return Decline(kSize, "batch exceeds 512 MiB scratch budget");
++  bool has_mask = false;
++  for (std::size_t s = 0; s != nscales; ++s) {
++    if (!images[s]) return Decline(kArguments, "null image plane");
++    has_mask |= masks && masks[s];
++  }
++  const std::size_t interior = (width - 2*x_border) * (height - 2*y_border);
++  const std::size_t tiles = (interior + kTile - 1) / kTile;
++  const std::size_t image_bytes = nscales * plane * sizeof(float);
++  const std::size_t mask_bytes = has_mask ? nscales * plane : 0;
++  const std::size_t mask_offset = Align(image_bytes);
++  const std::size_t partial_offset = Align(mask_offset + mask_bytes);
++  const std::size_t result_offset = Align(partial_offset + nscales * tiles * sizeof(Peak));
++  const std::size_t total = result_offset + nscales * sizeof(Peak);
++  if (total > kScratchLimit)
++    return Decline(kSize, "batch and reduction exceed 512 MiB scratch budget");
++  Ctx& ctx = Context();
++  if (!ctx.ok) return Decline(ctx.failure, ctx.why);
++  const auto start = std::chrono::steady_clock::now();
++  std::lock_guard<std::mutex> lock(ctx.mutex);
+   @autoreleasepool {
+-    const std::size_t plane = width * height;
+-    // One contiguous buffer for the stack keeps it to a single allocation and a
+-    // single copy; the sizes here (8 x 9 M floats = 300 MB) are the reason the
+-    // scan is memory bound on the CPU.
+-    std::vector<float> packed(nscales * plane);
+-    for (std::size_t s = 0; s < nscales; ++s)
+-      std::copy(images[s], images[s] + plane, packed.begin() + s * plane);
+-
+-    bool has_mask = false;
+-    for (std::size_t s = 0; s < nscales; ++s)
+-      if (masks != nullptr && masks[s] != nullptr) has_mask = true;
+-    std::vector<std::uint8_t> mask_packed;
+-    if (has_mask) {
+-      mask_packed.assign(nscales * plane, 1);
+-      for (std::size_t s = 0; s < nscales; ++s)
+-        if (masks != nullptr && masks[s] != nullptr)
+-          std::copy(masks[s], masks[s] + plane, mask_packed.begin() + s * plane);
++    if (total > ctx.device.maxBufferLength)
++      return Decline(kSize, "batch exceeds Metal maxBufferLength");
++    if (!ctx.scratch || ctx.scratch.length < total) {
++      // Release old storage before growth; at most one bounded arena is retained.
++      ctx.scratch = nil;
++      ctx.scratch = [ctx.device newBufferWithLength:total options:MTLResourceStorageModeShared];
+     }
+-
+-    id<MTLBuffer> img = [ctx.device newBufferWithBytes:packed.data()
+-                                                length:packed.size() * sizeof(float)
+-                                               options:MTLResourceStorageModeShared];
+-    id<MTLBuffer> msk = nil;
+-    if (has_mask) {
+-      msk = [ctx.device newBufferWithBytes:mask_packed.data()
+-                                    length:mask_packed.size()
+-                                   options:MTLResourceStorageModeShared];
++    if (!ctx.scratch) return Decline(kAllocation, "shared scratch allocation failed");
++    auto* data = static_cast<std::uint8_t*>(ctx.scratch.contents);
++    for (std::size_t s = 0; s != nscales; ++s) {
++      std::memcpy(data + s * plane * sizeof(float), images[s], plane * sizeof(float));
++      if (has_mask) {
++        if (masks && masks[s]) std::memcpy(data + mask_offset + s*plane, masks[s], plane);
++        else std::memset(data + mask_offset + s*plane, 1, plane);
++      }
+     }
+-    id<MTLBuffer> res = [ctx.device newBufferWithLength:nscales * 16
+-                                                options:MTLResourceStorageModeShared];
+-    uint32_t w = static_cast<uint32_t>(width), h = static_cast<uint32_t>(height);
+-    uint32_t xb = static_cast<uint32_t>(x_border), yb = static_cast<uint32_t>(y_border);
+-    int32_t an = allow_negative ? 1 : 0, hm = has_mask ? 1 : 0;
+-
++    stats.bytes_copied += image_bytes + mask_bytes;
++    const Params p{std::uint32_t(width), std::uint32_t(height), std::uint32_t(x_border),
++                   std::uint32_t(y_border), std::uint32_t(tiles),
++                   allow_negative ? 1u : 0u, has_mask ? 1u : 0u, 0};
+     id<MTLCommandBuffer> cb = [ctx.queue commandBuffer];
+     id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+-    [enc setComputePipelineState:ctx.pipe];
+-    [enc setBuffer:img offset:0 atIndex:0];
+-    [enc setBuffer:(msk ? msk : img) offset:0 atIndex:1];
+-    [enc setBuffer:res offset:0 atIndex:2];
+-    [enc setBytes:&w length:sizeof(w) atIndex:3];
+-    [enc setBytes:&h length:sizeof(h) atIndex:4];
+-    [enc setBytes:&xb length:sizeof(xb) atIndex:5];
+-    [enc setBytes:&yb length:sizeof(yb) atIndex:6];
+-    [enc setBytes:&an length:sizeof(an) atIndex:7];
+-    [enc setBytes:&hm length:sizeof(hm) atIndex:8];
++    if (!cb || !enc) return Decline(kEncoder, "command buffer/encoder unavailable");
++    [enc setComputePipelineState:ctx.scan];
++    [enc setBuffer:ctx.scratch offset:0 atIndex:0];
++    [enc setBuffer:ctx.scratch offset:(has_mask ? mask_offset : 0) atIndex:1];
++    [enc setBuffer:ctx.scratch offset:partial_offset atIndex:2];
++    [enc setBytes:&p length:sizeof(p) atIndex:3];
++    [enc dispatchThreadgroups:MTLSizeMake(tiles, nscales, 1)
++        threadsPerThreadgroup:MTLSizeMake(kThreads, 1, 1)];
++    [enc endEncoding];
++    // Separate encoders establish device-buffer visibility for the final pass.
++    enc = [cb computeCommandEncoder];
++    if (!enc) return Decline(kEncoder, "final reduction encoder unavailable");
++    [enc setComputePipelineState:ctx.final];
++    [enc setBuffer:ctx.scratch offset:partial_offset atIndex:0];
++    [enc setBuffer:ctx.scratch offset:result_offset atIndex:1];
++    [enc setBytes:&p length:sizeof(p) atIndex:2];
+     [enc dispatchThreadgroups:MTLSizeMake(nscales, 1, 1)
+-        threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
++        threadsPerThreadgroup:MTLSizeMake(kThreads, 1, 1)];
+     [enc endEncoding];
+     [cb commit];
+     [cb waitUntilCompleted];
+-    if (cb.status != MTLCommandBufferStatusCompleted) return 0;
+-
+-    // Read through the exact struct: casting the uint fields through a float*
+-    // turns index 194 into the float 2.7e-43 and then truncates it to 0.
+-    struct PeakOut {
+-      float value;
+-      std::uint32_t x, y, pad;
+-    };
+-    const PeakOut* r = static_cast<const PeakOut*>(res.contents);
+-    for (std::size_t s = 0; s < nscales; ++s) {
+-      out_values[s] = r[s].value;
+-      out_x[s] = static_cast<std::size_t>(r[s].x);
+-      out_y[s] = static_cast<std::size_t>(r[s].y);
++    if (cb.status != MTLCommandBufferStatusCompleted) {
++      return Decline(kCommand, "GPU command failed");
+     }
++    ++stats.submissions;
++    stats.planes += nscales;
++    stats.pixels += nscales * interior;
++    stats.threadgroups += nscales * (tiles + 1);
++    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
++        std::chrono::steady_clock::now() - start).count();
++    stats.wall_ns += ns;
++    const double gpu_seconds = cb.GPUEndTime - cb.GPUStartTime;
++    if (gpu_seconds > 0) stats.gpu_ns += std::uint64_t(gpu_seconds * 1e9);
++    const auto* result = reinterpret_cast<const Peak*>(data + result_offset);
++    // Validate the whole batch before publishing any output.
++    for (std::size_t s = 0; s != nscales; ++s)
++      if (result[s].index >= plane || !(result[s].score > std::numeric_limits<float>::min()) ||
++          result[s].value == std::numeric_limits<float>::lowest())
++        return Decline(kNoPeak, "at least one plane has no peak");
++    for (std::size_t s = 0; s != nscales; ++s) {
++      out_values[s] = result[s].value;
++      out_x[s] = result[s].index % width;
++      out_y[s] = result[s].index / width;
++    }
++    const auto count = ++stats.successes;
++    // Exponential sampling keeps long imaging runs quiet even in debug mode.
++    if (Debug() && (count & (count - 1)) == 0)
++      std::fprintf(stderr, "mxpeak: success=%llu planes=%zu pixels=%zu groups=%zu copied=%zu scratch=%zu wall_ms=%.3f gpu_ms=%.3f\n",
++          static_cast<unsigned long long>(count), nscales, nscales*interior,
++          nscales*(tiles+1), image_bytes+mask_bytes, std::size_t(ctx.scratch.length),
++          ns/1e6, gpu_seconds*1e3);
+   }
+   return 1;
+ }
+-
+ extern "C" int mx_peak_find(const float* image, std::size_t width, std::size_t height,
+                             const std::uint8_t* mask, int allow_negative,
+                             std::size_t x_border, std::size_t y_border, float* out_value,
+                             std::size_t* out_x, std::size_t* out_y) {
+-  const float* imgs[1] = {image};
+-  const std::uint8_t* msks[1] = {mask};
+-  return mx_peak_find_many(imgs, 1, width, height, msks, allow_negative, x_border, y_border,
+-                           out_value, out_x, out_y);
++  const float* images[] = {image};
++  const std::uint8_t* masks[] = {mask};
++  return mx_peak_find_many(images, 1, width, height, masks, allow_negative,
++                           x_border, y_border, out_value, out_x, out_y);
+ }
+diff --git a/metal/mxpeak_probe.cpp b/metal/mxpeak_probe.cpp
+index e97a61c4..66582ada 100644
+--- a/metal/mxpeak_probe.cpp
++++ b/metal/mxpeak_probe.cpp
+@@ -1,80 +1,272 @@
+-// Verifies the GPU peak finder against a CPU reference with identical
+-// semantics (mask, borders, negative components, first-wins ties).
++// Standalone behavioral probe. Link the real Radler peak_finder.cc (no copied oracle).
+ #include "metal/mxpeak.h"
++#include "math/peak_finder.h"
+ 
+ #include <algorithm>
++#include <atomic>
++#include <chrono>
+ #include <cmath>
+ #include <cstdio>
++#include <cstring>
++#include <limits>
++#include <memory>
+ #include <random>
++#include <string>
++#include <thread>
+ #include <vector>
+ 
+ namespace {
+-
+-struct Ref {
+-  float value = -INFINITY;
+-  std::size_t x = 0, y = 0;
++using Clock = std::chrono::steady_clock;
++struct Plane {
++  std::vector<float> image;
++  std::vector<std::uint8_t> mask;
+ };
+-
+-Ref cpu_scan(const std::vector<float>& img, std::size_t w, std::size_t h,
+-             const std::vector<std::uint8_t>& mask, bool has_mask, bool allow_negative,
+-             std::size_t xb, std::size_t yb) {
+-  Ref r;
+-  for (std::size_t y = yb; y + yb < h; ++y) {
+-    for (std::size_t x = xb; x + xb < w; ++x) {
+-      const std::size_t i = y * w + x;
+-      if (has_mask && mask[i] == 0) continue;
+-      const float v = img[i];
+-      const float cand = allow_negative ? v : (v > 0.0f ? v : -INFINITY);
+-      if (cand > r.value) {
+-        r.value = cand;
+-        r.x = x;
+-        r.y = y;
+-      }
+-    }
++struct Expected { bool found; float value; std::size_t x, y; };
++Expected Oracle(const Plane& p, std::size_t w, std::size_t h, bool neg,
++                std::size_t xb, std::size_t yb) {
++  // Radler's border subtraction underflows for borders beyond the dimensions.
++  // Such calls must decline before accessing memory; do not invoke that CPU bug.
++  if (!w || !h || xb > w || yb > h || xb >= w - xb || yb >= h - yb)
++    return {false, 0, w, h};
++  std::size_t x = w, y = h;
++  aocommon::OptionalNumber<float> value;
++  if (p.mask.empty()) {
++    value = radler::math::peak_finder::Find(p.image.data(), w, h, x, y, neg,
++                                           0, h, xb, yb);
++  } else {
++    std::unique_ptr<bool[]> mask(new bool[w * h]);
++    for (std::size_t i = 0; i != w * h; ++i) mask[i] = p.mask[i] != 0;
++    value = radler::math::peak_finder::FindWithMask(
++        p.image.data(), w, h, x, y, neg, 0, h, mask.get(), xb, yb);
+   }
+-  return r;
++  return {bool(value), value ? *value : 0, x, y};
+ }
+-
+-bool run_case(std::size_t w, std::size_t h, bool has_mask, bool allow_negative,
+-              std::size_t xb, std::size_t yb, unsigned seed, std::mt19937& rng) {
+-  std::uniform_real_distribution<float> d(-1.0f, 1.0f);
+-  std::vector<float> img(w * h);
+-  for (auto& v : img) v = d(rng);
+-  std::vector<std::uint8_t> mask(w * h, 1);
+-  if (has_mask) {
+-    std::uniform_int_distribution<int> keep(0, 3);
+-    for (auto& m : mask) m = keep(rng) ? 1 : 0;
++bool Check(const char* name, std::size_t w, std::size_t h,
++           const std::vector<Plane>& planes, bool neg = true,
++           std::size_t xb = 0, std::size_t yb = 0, bool quiet = false) {
++  std::vector<const float*> images;
++  std::vector<const std::uint8_t*> masks;
++  std::vector<Expected> expected;
++  bool all_found = !planes.empty();
++  for (const Plane& p : planes) {
++    images.push_back(p.image.data());
++    masks.push_back(p.mask.empty() ? nullptr : p.mask.data());
++    expected.push_back(Oracle(p, w, h, neg, xb, yb));
++    all_found &= expected.back().found;
+   }
+-
+-  const Ref ref = cpu_scan(img, w, h, mask, has_mask, allow_negative, xb, yb);
+-  float got_value = 0.0f;
+-  std::size_t got_x = 0, got_y = 0;
+-  const int ok = mx_peak_find(img.data(), w, h, has_mask ? mask.data() : nullptr,
+-                              allow_negative ? 1 : 0, xb, yb, &got_value, &got_x, &got_y);
+-  if (!ok) {
+-    std::printf("  w=%zu h=%zu mask=%d neg=%d b=(%zu,%zu): GPU UNAVAILABLE\n", w, h,
+-                has_mask ? 1 : 0, allow_negative ? 1 : 0, xb, yb);
+-    return false;
++  std::vector<float> v(planes.size(), -12345.0f);
++  std::vector<std::size_t> x(planes.size(), 98765), y(planes.size(), 56789);
++  const int ok = planes.size() == 1
++      ? mx_peak_find(images[0], w, h, masks[0], neg, xb, yb,
++                     v.data(), x.data(), y.data())
++      : mx_peak_find_many(images.data(), planes.size(), w, h, masks.data(),
++                          neg, xb, yb, v.data(), x.data(), y.data());
++  bool pass = (ok == (all_found ? 1 : 0));
++  for (std::size_t s = 0; s != planes.size(); ++s) {
++    const auto& e = expected[s];
++    const bool match = ok ? e.found && v[s] == e.value && x[s] == e.x && y[s] == e.y
++                         : !all_found && v[s] == -12345.0f && x[s] == 98765 && y[s] == 56789;
++    pass &= match;
++    if (!match && !quiet)
++      std::printf("  plane=%zu status=%d gpu=(%g,%zu,%zu) oracle=(%d,%g,%zu,%zu)\n",
++                  s, ok, v[s], x[s], y[s], e.found, e.value, e.x, e.y);
+   }
+-  const bool match = (got_value == ref.value) && (got_x == ref.x) && (got_y == ref.y);
+-  std::printf("  w=%zu h=%zu mask=%d neg=%d b=(%zu,%zu): %s  gpu=(%.6f,%zu,%zu) cpu=(%.6f,%zu,%zu)\n",
+-              w, h, has_mask ? 1 : 0, allow_negative ? 1 : 0, xb, yb, match ? "MATCH" : "DIFF",
+-              got_value, got_x, got_y, ref.value, ref.x, ref.y);
+-  return match;
++  if (!quiet) std::printf("%s %s\n", pass ? "PASS" : "FAIL", name);
++  return pass;
++}
++bool Guards() {
++  float pixel = 1, value = -12345;
++  const float* images[] = {&pixel};
++  const float* null_plane[] = {nullptr};
++  std::size_t x = 98765, y = 56789;
++  const auto max = std::numeric_limits<std::size_t>::max();
++  bool all = true;
++  auto check = [&](const char* name, int ok) {
++    const bool pass = !ok && value == -12345 && x == 98765 && y == 56789;
++    std::printf("%s guard %s\n", pass ? "PASS" : "FAIL", name);
++    all &= pass;
++  };
++  check("null image array", mx_peak_find_many(nullptr, 1, 1, 1, nullptr, 0, 0, 0, &value, &x, &y));
++  check("null image plane", mx_peak_find_many(null_plane, 1, 1, 1, nullptr, 0, 0, 0, &value, &x, &y));
++  check("null value", mx_peak_find(&pixel, 1, 1, nullptr, 0, 0, 0, nullptr, &x, &y));
++  check("null x", mx_peak_find(&pixel, 1, 1, nullptr, 0, 0, 0, &value, nullptr, &y));
++  check("null y", mx_peak_find(&pixel, 1, 1, nullptr, 0, 0, 0, &value, &x, nullptr));
++  check("narrowing width", mx_peak_find(&pixel, max, 1, nullptr, 0, 0, 0, &value, &x, &y));
++  check("overflowing dimensions", mx_peak_find(&pixel, max, max, nullptr, 0, 0, 0, &value, &x, &y));
++  check("oversized batch", mx_peak_find_many(images, max, 1, 1, nullptr, 0, 0, 0, &value, &x, &y));
++  check("scratch cap", mx_peak_find(&pixel, 32768, 32768, nullptr, 0, 0, 0, &value, &x, &y));
++  check("overflowing border", mx_peak_find(&pixel, 1, 1, nullptr, 0, max, 0, &value, &x, &y));
++  return all;
++}
++void PrintStats() {
++  MxPeakStats stats{};
++  mx_peak_get_stats(&stats);
++  std::printf("COUNTERS calls=%llu submissions=%llu successes=%llu declines=%llu planes=%llu pixels=%llu groups=%llu bytes_copied=%llu wall_ms=%.3f gpu_ms=%.3f\n",
++      (unsigned long long)stats.calls, (unsigned long long)stats.submissions,
++      (unsigned long long)stats.successes, (unsigned long long)stats.declines,
++      (unsigned long long)stats.planes, (unsigned long long)stats.pixels,
++      (unsigned long long)stats.threadgroups, (unsigned long long)stats.bytes_copied,
++      stats.wall_ns/1e6, stats.gpu_ns/1e6);
++}
++bool ConcurrentInitialization() {
++  constexpr int n = 8;
++  std::atomic<int> ready{0}, errors{0};
++  std::atomic<bool> go{false};
++  std::vector<std::thread> threads;
++  for (int t = 0; t != n; ++t) threads.emplace_back([&, t] {
++    Plane p{std::vector<float>(64 * 64, 1), {}};
++    p.image[300 + t] = 10;
++    ++ready;
++    while (!go.load()) std::this_thread::yield();
++    for (int k = 0; k != 3; ++k)
++      if (!Check("concurrent", 64, 64, {p}, false, 0, 0, true)) ++errors;
++  });
++  while (ready.load() != n) std::this_thread::yield();
++  go = true;
++  for (auto& t : threads) t.join();
++  std::printf("%s concurrent first-use (8 callers, 24 calls, errors=%d)\n",
++              errors == 0 ? "PASS" : "FAIL", errors.load());
++  return errors == 0;
++}
++bool Benchmark(bool cpu_only = false) {
++  for (std::size_t w : {256, 1024, 3072}) {
++    const std::size_t n = w == 3072 ? 4 : 3;
++    std::vector<Plane> p(n);
++    std::mt19937 rng(42);
++    for (std::size_t s = 0; s != n; ++s) {
++      p[s].image.resize(w * w);
++      for (float& v : p[s].image) v = float(int(rng() % 20001) - 10000) / 10000;
++      if (s % 2) p[s].mask.assign(w * w, 1);
++    }
++    if (!cpu_only && !Check("benchmark correctness", w, w, p, true, 8, 8)) return false;
++    // CPU timing excludes mask conversion (the production caller owns bool masks).
++    std::vector<std::unique_ptr<bool[]>> masks(n);
++    for (std::size_t s = 0; s != n; ++s) if (!p[s].mask.empty()) {
++      masks[s].reset(new bool[w*w]);
++      std::fill_n(masks[s].get(), w*w, true);
++    }
++    std::vector<const float*> images;
++    std::vector<const std::uint8_t*> pm;
++    for (auto& plane : p) {
++      images.push_back(plane.image.data());
++      pm.push_back(plane.mask.empty() ? nullptr : plane.mask.data());
++    }
++    std::vector<float> values(n);
++    std::vector<std::size_t> x(n), y(n);
++    constexpr int repeats = 7;
++    std::vector<double> cpu, gpu;
++    volatile float sink = 0;
++    for (int r = 0; r != repeats; ++r) {
++      auto start = Clock::now();
++      for (std::size_t s = 0; s != n; ++s) {
++        auto v = masks[s] ? radler::math::peak_finder::FindWithMask(
++            images[s], w, w, x[s], y[s], true, 0, w, masks[s].get(), 8, 8)
++            : radler::math::peak_finder::Find(images[s], w, w, x[s], y[s], true, 0, w, 8, 8);
++        if (v) sink = *v;
++      }
++      cpu.push_back(std::chrono::duration<double, std::milli>(Clock::now()-start).count());
++      if (cpu_only) continue;
++      start = Clock::now();
++      const int ok = mx_peak_find_many(images.data(), n, w, w, pm.data(), true, 8, 8,
++                                       values.data(), x.data(), y.data());
++      gpu.push_back(std::chrono::duration<double, std::milli>(Clock::now()-start).count());
++      if (!ok) { std::printf("BENCH DECLINED\n"); return false; }
++    }
++    std::sort(cpu.begin(), cpu.end()); std::sort(gpu.begin(), gpu.end());
++    if (cpu_only)
++      std::printf("TIMING %zux%zu planes=%zu repeats=%d cpu_serial_median_ms=%.3f gpu=NOT_RUN\n",
++                  w, w, n, repeats, cpu[3]);
++    else
++      std::printf("TIMING %zux%zu planes=%zu repeats=%d cpu_serial_median_ms=%.3f gpu_end_to_end_median_ms=%.3f ratio=%.3f\n",
++                  w, w, n, repeats, cpu[3], gpu[3], cpu[3]/gpu[3]);
++    (void)sink;
++  }
++  return true;
+ }
+-
+ }  // namespace
+-
+-int main() {
++int main(int argc, char** argv) {
++  if (argc > 1 && std::strcmp(argv[1], "--cpu-bench") == 0)
++    return Benchmark(true) ? 0 : 1;
++  const bool baseline = argc > 1 && std::strcmp(argv[1], "--baseline") == 0;
++  if (argc > 1 && std::strcmp(argv[1], "--guards-only") == 0) {
++    const bool pass = Guards();
++    PrintStats();
++    return pass ? 0 : 1;
++  }
++  // This must be the first GPU use, before all serial cases or benchmarks.
++  bool all = ConcurrentInitialization();
++  if (!baseline) all &= Guards();
++  Plane p{std::vector<float>(64 * 64, 0), {}};
++  p.image[23] = -9; p.image[55] = 3;
++  all &= Check("negative magnitude returns signed value", 64, 64, {p});
++  p.image.assign(4096, 0); p.image[63] = -7; p.image[64] = 7;
++  all &= Check("signed tie spanning lanes", 64, 64, {p});
++  p.image.assign(4096, 0); p.image[64] = -7; p.image[64*32] = 7;
++  all &= Check("signed tie spanning reduction branches", 64, 64, {p});
++  p.image[64] = 7;
++  all &= Check("positive tie spanning reduction branches", 64, 64, {p}, false);
++  p.image.assign(4096, -2);
++  all &= Check("all negative allowed", 64, 64, {p});
++  all &= Check("all negative disallowed", 64, 64, {p}, false);
++  p.image.assign(4096, 0);
++  all &= Check("zero has no peak", 64, 64, {p});
++  p.image.assign(4096, std::numeric_limits<float>::min());
++  all &= Check("FLT_MIN has no peak", 64, 64, {p});
++  p.image.assign(4096, std::numeric_limits<float>::denorm_min());
++  all &= Check("subnormals have no peak", 64, 64, {p});
++  p.image.assign(4096, std::numeric_limits<float>::lowest());
++  all &= Check("OptionalNumber negative FLT_MAX sentinel", 64, 64, {p});
++  p.image.assign(4096, -std::numeric_limits<float>::min());
++  all &= Check("negative FLT_MIN has no peak", 64, 64, {p});
++  p.image[301] = std::nextafter(std::numeric_limits<float>::min(), INFINITY);
++  all &= Check("smallest score above threshold", 64, 64, {p});
++  p.image.assign(4096, 1); p.mask.assign(4096, 0);
++  all &= Check("fully masked has no peak", 64, 64, {p});
++  p.mask.clear(); p.image.assign(4096, NAN); p.image[321] = -5;
++  all &= Check("NaNs ignored", 64, 64, {p});
++  p.image.assign(4096, NAN);
++  all &= Check("all NaNs has no peak", 64, 64, {p});
++  p.image[30] = -INFINITY; p.image[300] = INFINITY;
++  all &= Check("signed infinity tie", 64, 64, {p});
++  all &= Check("positive infinity when negatives disallowed", 64, 64, {p}, false);
++  p.image.assign(4096, -INFINITY);
++  all &= Check("negative infinity disallowed", 64, 64, {p}, false);
++  Plane nonfinite{std::vector<float>(4096, NAN), std::vector<std::uint8_t>(4096, 1)};
++  nonfinite.image[3] = INFINITY; nonfinite.image[4] = -INFINITY;
++  nonfinite.mask[3] = nonfinite.mask[4] = 0; nonfinite.image[300] = -8;
++  all &= Check("masked infinities excluded", 64, 64, {nonfinite});
++  all &= Check("empty border", 64, 64, {p}, true, 32, 0);
++  all &= Check("border beyond image", 64, 64, {p}, true, 65, 0);
++  if (!baseline)
++    all &= Check("overflowing border", 64, 64, {p}, true, std::numeric_limits<std::size_t>::max()/2+1, 0);
++  all &= Check("empty image", 0, 0, {Plane{}});
++  all &= Check("empty batch", 64, 64, {});
++  Plane q{std::vector<float>(129 * 67, 1), {}};
++  q.image[2] = -100; q.image[129*20+20] = -8;
++  Plane r = q; r.mask.assign(q.image.size(), 255); r.mask[129*20+20] = 0;
++  r.image[129*30+30] = 6;
++  all &= Check("mixed masks rectangular batch and borders", 129, 67, {q,r,q}, true, 4, 7);
++  r.mask.assign(q.image.size(), 0);
++  all &= Check("batch no-peak is atomic decline", 129, 67, {q,r,q});
++  Plane tiled{std::vector<float>(513*257, 0), {}};
++  tiled.image[4096+31] = -12; tiled.image[3*4096+7] = 12;
++  all &= Check("first signed tie across tiles", 513, 257, {tiled});
++  all &= Check("single pixel", 1, 1, {Plane{{-3}, {}}});
++  all &= Check("single row", 9, 1, {Plane{{0,1,-7,7,0,0,0,0,0}, {}}});
++  all &= Check("single column", 1, 9, {Plane{{0,1,-7,7,0,0,0,0,0}, {}}});
++  all &= Check("one-pixel bordered interior", 3, 3,
++               {Plane{{20,20,20,20,-5,20,20,20,20}, {}}}, true, 1, 1);
+   std::mt19937 rng(7);
+-  bool all = true;
+-  std::printf("peak-finder equivalence (GPU vs CPU reference):\n");
+-  all &= run_case(256, 256, false, true, 0, 0, 1, rng);
+-  all &= run_case(256, 256, true, true, 0, 0, 2, rng);
+-  all &= run_case(256, 256, true, false, 0, 0, 3, rng);
+-  all &= run_case(512, 384, true, true, 17, 9, 4, rng);
+-  all &= run_case(1024, 1024, true, true, 32, 32, 5, rng);
+-  all &= run_case(3072, 3072, true, true, 50, 50, 6, rng);
+-  std::printf("%s\n", all ? "ALL MATCH" : "MISMATCH");
++  for (int i = 0; i != 20; ++i) {
++    const std::size_t w = 33 + rng()%400, h = 33 + rng()%300;
++    Plane a{std::vector<float>(w*h), {}}, b;
++    for (auto& v : a.image) v = float(int(rng()%2001)-1000);
++    b = a; b.mask.resize(w*h);
++    for (auto& m : b.mask) m = rng()%4 ? 255 : 0;
++    all &= Check(("random-"+std::to_string(i)).c_str(), w, h, {a,b}, i%2, 3, 5);
++  }
++  if (all) all &= Benchmark();
++  std::printf("RESULT %s\n", all ? "PASS" : "FAIL");
++  PrintStats();
+   return all ? 0 : 1;
+ }
+diff --git a/metal/mxpredict.cpp b/metal/mxpredict.cpp
+index fef4891d..1ff07fb0 100644
+--- a/metal/mxpredict.cpp
++++ b/metal/mxpredict.cpp
+@@ -1,41 +1,76 @@
+-// GPU prediction FFT: synchronous copy-swap around the proven forward c2c.
++#define DUCC0_MX_PREDICTION_PROVIDER
+ #include "metal/mxpredict.h"
+-
+-#include <complex>
+-#include <cstddef>
++#include "ducc0/wgridder/mx_prediction.h"
++#include "metal/mxvkfft.h"
++#include <atomic>
++#include <chrono>
++#include <cstdio>
+ #include <cstdlib>
+-#include <cstring>
+ #include <memory>
+ 
+-#include "ducc0/wgridder/wgridder_impl.h"
+-
+-#include "metal/mxvkfft.h"
+-
+-extern "C" void mx_predict_register() {
+-  ducc0::detail_gridder::SetPredictFftHook(&mx_predict_fft);
++namespace {
++std::atomic<bool> enabled{false};
++bool debug() noexcept { return std::getenv("MX_METAL_DEBUG_TIMING") != nullptr; }
++void refuse(const char* reason) noexcept {
++  static std::atomic<bool> reported{false};
++  if (!reported.exchange(true) || debug())
++    std::fprintf(stderr,"MX prediction refusal: %s\n",reason);
+ }
+-
+-extern "C" int mx_predict_fft(std::complex<float>* grid, std::size_t n) {
+-  if (std::getenv("MX_METAL_NO_PREDICT") != nullptr) return 0;
+-  if (grid == nullptr || n == 0 || n > 8192) return 0;
+-
+-  thread_local std::unique_ptr<mx::vk::Fft> plan;
+-  thread_local std::size_t planned_n = 0;
+-  if (plan == nullptr || planned_n != n) {
+-    plan = std::make_unique<mx::vk::Fft>();
+-    if (!plan->init(n)) {
+-      plan.reset();
+-      planned_n = 0;
+-      return 0;
+-    }
+-    planned_n = n;
++class Session final : public ducc0::detail_gridder::PredictionSession {
++ public:
++  mx::vk::Fft fft[2];
++  std::size_t submitted=0, completed=0, fallback=0, initialized_planes=0;
++  bool submitted_ok[2]{};
++  double gpu_seconds=0;
++  std::chrono::steady_clock::time_point begin=std::chrono::steady_clock::now();
++  ~Session() override {
++    // Drain before the proof line and before either shared plane releases.
++    for(auto& f:fft) f.wait();
++    if (debug()) std::fprintf(stderr,
++      "MX prediction proof: shared_planes=%zu submitted=%zu completed=%zu cpu_fallback=%zu grid_memcpy_bytes=0 gpu_s=%.6f wall_s=%.6f\n",
++      initialized_planes,submitted,completed,fallback,gpu_seconds,
++      std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count());
++  }
++  std::complex<float>* data(std::size_t slot) noexcept override {
++    return reinterpret_cast<std::complex<float>*>(fft[slot].data());
++  }
++  bool submit(std::size_t slot, std::size_t plane) noexcept override {
++    bool ok=fft[slot].submitForward();
++    submitted_ok[slot]=ok;
++    if(ok) ++submitted;
++    if(std::getenv("MX_METAL_DEBUG_PLANES")) std::fprintf(stderr,"MX prediction submit plane=%zu slot=%zu ok=%d%s%s\n",
++      plane,slot,ok,ok?"":" reason=",ok?"":fft[slot].error());
++    return ok;
+   }
+-  mx::vk::Fft& fft = *plan;
+-  float* buf = fft.data();
+-  if (buf == nullptr) return 0;
+-  const std::size_t bytes = 2 * n * n * sizeof(float);
+-  std::memcpy(buf, grid, bytes);
+-  if (!fft.submitForward() || !fft.wait()) return 0;
+-  std::memcpy(grid, buf, bytes);
+-  return 1;
++  bool wait(std::size_t slot, std::size_t plane) noexcept override {
++    bool drained=fft[slot].wait();
++    bool ok=drained && submitted_ok[slot];
++    if(ok) { ++completed; gpu_seconds+=fft[slot].gpuSeconds(); } else ++fallback;
++    if(std::getenv("MX_METAL_DEBUG_PLANES")) std::fprintf(stderr,"MX prediction wait plane=%zu slot=%zu ok=%d gpu_s=%.9g%s%s\n",
++      plane,slot,ok,fft[slot].gpuSeconds(),ok?"":" reason=",ok?"":fft[slot].error());
++    return ok;
++  }
++};
++}
++extern "C" void mx_predict_register() { enabled.store(true,std::memory_order_release); }
++extern "C" ducc0::detail_gridder::PredictionSession*
++mx_prediction_create(std::size_t nu, std::size_t nv, bool is_float) noexcept {
++  if(!enabled.load(std::memory_order_acquire)) return nullptr;
++  if(std::getenv("MX_METAL_NO_PREDICT")){refuse("MX_METAL_NO_PREDICT");return nullptr;}
++  if(!is_float){refuse("double/unsupported calculation type");return nullptr;}
++  // At most 1 GiB of shared plane storage (two 8192-square complex planes).
++  if(!nu||!nv||nu>8192||nv>8192){refuse("shape outside two-plane memory budget");return nullptr;}
++  try {
++    auto s=std::make_unique<Session>();
++    for(auto& f:s->fft) {
++      if(!f.initShape(nv,nu)){refuse(f.error());return nullptr;}
++      ++s->initialized_planes;
++      if(f.width()!=nv||f.height()!=nu||f.rowFloats()!=2*nv||!f.data()) {
++        refuse("FFT shared plane layout mismatch");return nullptr;
++      }
++    }
++    if(debug()) std::fprintf(stderr,"MX prediction session nu=%zu nv=%zu shared_bytes=%zu\n",
++      nu,nv,2*nu*nv*sizeof(std::complex<float>));
++    return s.release();
++  } catch(...) { refuse("FFT session allocation/planning exception");return nullptr; }
+ }
+diff --git a/metal/mxpredict.h b/metal/mxpredict.h
+index 0e1b667b..862911bd 100644
+--- a/metal/mxpredict.h
++++ b/metal/mxpredict.h
+@@ -1,26 +1,6 @@
+-// GPU forward FFT for prediction (dirty2grid): copy-swap wrapper.
+-//
+-// ducc0's dirty2grid_c_wscreen owns its grid (vmav, not shared), so this
+-// hook copies the n x n complex plane into the shared vkFFT buffer, runs
+-// the proven forward c2c (5.9e-07 at 3072), and copies back. Two copies of
+-// ~75 MB per plane at 3k is the cost this design pays; the pipelined
+-// shared-buffer version (chunked plane loop) is the follow-up if this ties.
+ #ifndef MX_MXPREDICT_H
+ #define MX_MXPREDICT_H
+-
+-#include <complex>
+-#include <cstddef>
+-
+-extern "C" {
+-
+-// In-place forward FFT on the square n x n complex grid. Returns 1 when
+-// the GPU path ran, 0 to fall back to ducc0's band-limited bands.
+-int mx_predict_fft(std::complex<float>* grid, std::size_t n);
+-
+-// Registers mx_predict_fft with ducc0's dirty2grid hook. Called once at
+-// startup when -mgpu is given; keeps ducc0 includes out of main.cpp.
+-void mx_predict_register();
+-
+-}  // extern "C"
+-
+-#endif  // MX_MXPREDICT_H
++// Called only on -mgpu. Registration creates no Metal objects; sessions own
++// exactly two shared planes and drain outstanding work on destruction.
++extern "C" void mx_predict_register();
++#endif
+diff --git a/metal/mxvkfft.cpp b/metal/mxvkfft.cpp
+index 7820e2ca..93364c28 100644
+--- a/metal/mxvkfft.cpp
++++ b/metal/mxvkfft.cpp
+@@ -1,175 +1,190 @@
+-// vkFFT wrapper implementation. Pure C++: metal-cpp + vkFFT live here.
++// vkFFT implementation: stable config storage and deterministic ownership.
+ #define NS_PRIVATE_IMPLEMENTATION
+ #define MTL_PRIVATE_IMPLEMENTATION
+ #define CA_PRIVATE_IMPLEMENTATION
+-#include <iostream>  // vkFFT 1.2.31 uses std::cout in its error path
+-
++#include <iostream>
+ #include "thirdparty/metal-cpp/Foundation/Foundation.hpp"
+ #include "thirdparty/metal-cpp/Metal/Metal.hpp"
+ #include "thirdparty/metal-cpp/QuartzCore/QuartzCore.hpp"
+-
+ #define VKFFT_BACKEND 5
+ #include "thirdparty/vkFFT.h"
+-
+ #include "mxvkfft.h"
+-
+-#include <cstdio>
+ #include <cstring>
++#include <limits>
++#include <mutex>
+ #include <string>
+ 
+ namespace mx::vk {
+-
+-struct Fft::Impl {
+-  std::size_t n = 0;
+-  std::size_t batch = 1;
+-  MTL::Device* device = nullptr;
+-  MTL::CommandQueue* queue = nullptr;
+-  MTL::Buffer* buffer = nullptr;
+-  VkFFTApplication app = {};
+-  bool planned = false;
+-  MTL::CommandBuffer* cb = nullptr;
+-  std::string error;
++namespace {
++// VkFFT planning touches process-global locale; serialize plan create/delete.
++std::mutex& plannerMutex() { static auto* m = new std::mutex; return *m; }
++struct Pool {
++  NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
++  ~Pool() { pool->release(); }
+ };
+-
+-Fft::Fft() : impl_(new Impl) {}
+-
+-Fft::~Fft() {
+-  // vkFFT 1.2.31's deleteVkFFT crashes with this metal-cpp pairing, and the
+-  // process is exiting or the plan is abandoned; skip it deliberately.
+-  if (impl_ != nullptr) {
+-    delete impl_;
+-  }
+ }
+-
+-bool Fft::init(std::size_t n) { return initBatched(n, 1); }
+-
+-bool Fft::initBatched(std::size_t n, std::size_t batch) {
+-  Impl& s = *impl_;
+-  s.n = n;
+-  s.batch = batch;
+-  s.device = MTL::CreateSystemDefaultDevice();
+-  if (s.device == nullptr) {
+-    s.error = "no Metal device";
+-    return false;
+-  }
+-  s.queue = s.device->newCommandQueue();
+-  if (s.queue == nullptr) {
+-    s.error = "no Metal command queue";
+-    return false;
++struct Fft::Impl {
++  std::size_t w=0, h=0, batch=0, pitch=0;
++  uint64_t bytes=0;
++  MTL::Device* device=nullptr;
++  MTL::CommandQueue* queue=nullptr;
++  MTL::Buffer* buffer=nullptr;
++  MTL::Buffer* image_buffer=nullptr;
++  MTL::Buffer* kernel_buffer=nullptr;
++  MTL::ComputePipelineState* product_pipeline=nullptr;
++  bool real=false;
++  VkFFTApplication app={};
++  bool planned=false;
++  MTL::CommandBuffer* cb=nullptr;
++  double gpu_seconds=0;
++  std::string error;
++  ~Impl() {
++    Pool pool;
++    if(cb){cb->waitUntilCompleted();cb->release();}
++    if(planned){std::lock_guard lock(plannerMutex());deleteVkFFT(&app);}
++    if(product_pipeline) product_pipeline->release();
++    if(kernel_buffer) kernel_buffer->release();
++    if(image_buffer) image_buffer->release();
++    if(buffer) buffer->release();
++    if(queue) queue->release();
++    if(device) device->release();
+   }
+-  const std::size_t bytes = 2 * batch * n * n * sizeof(float);
+-  s.buffer = s.device->newBuffer(bytes, MTL::ResourceStorageModeShared);
+-  if (s.buffer == nullptr) {
+-    s.error = "no shared buffer";
+-    return false;
++};
++Fft::Fft():impl_(new Impl) {}
++Fft::~Fft(){delete impl_;}
++bool Fft::init(std::size_t n){return initShape(n,n,1);}
++bool Fft::initBatched(std::size_t n,std::size_t b){return initShape(n,n,b);}
++bool Fft::initShape(std::size_t w,std::size_t h,std::size_t b){return initialize(w,h,b,false);}
++bool Fft::initReal(std::size_t w,std::size_t h,std::size_t b){return initialize(w,h,b,true);}
++bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
++  if(impl_->planned || impl_->buffer){delete impl_;impl_=new Impl;}
++  Impl& s=*impl_;
++  s.error.clear();
++  if(!w||!h||!b||w>16384||h>16384||b>64||(real && w%2)){
++    s.error="unsupported FFT dimensions/batch (real width must be even)";return false;
+   }
+-  std::memset(s.buffer->contents(), 0, bytes);
+-
+-  VkFFTConfiguration config = {};
+-  config.device = s.device;
+-  config.queue = s.queue;
+-  config.FFTdim = 2;
+-  config.size[0] = n;
+-  config.size[1] = n;
+-  config.numberBatches = batch;
+-  uint64_t buffer_size = bytes;
+-  MTL::Buffer* buf = s.buffer;
+-  config.buffer = &buf;
+-  config.bufferSize = &buffer_size;
+-  // Normalisation is applied by the caller's extract (ducc0's c2c is
+-  // unnormalised too), so keep vkFFT's normalize off.
+-  config.normalize = 0;
+-
+-  const VkFFTResult res = initializeVkFFT(&s.app, config);
+-  if (res != VKFFT_SUCCESS) {
+-    s.error = std::string("initializeVkFFT failed: ") + std::to_string(static_cast<int>(res));
+-    return false;
++  s.w=w;s.h=h;s.batch=b;s.real=real;s.pitch=real?2*(w/2+1):2*w;
++  if(s.pitch>std::numeric_limits<size_t>::max()/h/b/sizeof(float)){
++    s.error="FFT buffer size overflow";return false;
+   }
+-  s.planned = true;
++  s.bytes=s.pitch*h*b*sizeof(float);
++  // Bound each plan. Consumers additionally bound the number of live plans.
++  if(s.bytes>(uint64_t(1)<<30)){s.error="FFT shared buffer exceeds 1 GiB budget";return false;}
++  Pool pool;
++  s.device=MTL::CreateSystemDefaultDevice();
++  if(!s.device){s.error="no Metal device";return false;}
++  if(s.bytes>s.device->maxBufferLength()){s.error="FFT exceeds device maxBufferLength";return false;}
++  s.queue=s.device->newCommandQueue();
++  if(!s.queue){s.error="no Metal command queue";return false;}
++  s.buffer=s.device->newBuffer(s.bytes,MTL::ResourceStorageModeShared);
++  if(!s.buffer){s.error="shared FFT allocation failed";return false;}
++  std::memset(s.buffer->contents(),0,s.bytes);
++  VkFFTConfiguration config={};
++  config.device=s.device;config.queue=s.queue;
++  config.FFTdim=2;config.size[0]=w;config.size[1]=h;
++  config.numberBatches=b;config.performR2C=real?1:0;config.normalize=0;
++  // These addresses must outlive the VkFFT plan: never point to stack locals.
++  config.buffer=&s.buffer;config.bufferSize=&s.bytes;
++  std::lock_guard lock(plannerMutex());
++  const VkFFTResult res=initializeVkFFT(&s.app,config);
++  if(res!=VKFFT_SUCCESS){s.error="initializeVkFFT failed: "+std::to_string(int(res));return false;}
++  s.planned=true;
+   return true;
+ }
+-
+-float* Fft::data() { return static_cast<float*>(impl_->buffer->contents()); }
+-
+-std::size_t Fft::n() const { return impl_->n; }
+-
+-std::size_t Fft::batch() const { return impl_->batch; }
+-
+-bool Fft::submit() {
+-  Impl& s = *impl_;
+-  if (!s.planned) return false;
+-  // Metal hands back autoreleased command buffers; retain so the lifetime is
+-  // deterministic (released in wait()) instead of at some later pool drain.
+-  s.cb = s.queue->commandBuffer();
+-  if (s.cb == nullptr) {
+-    s.error = "no command buffer";
+-    return false;
+-  }
+-  s.cb->retain();
+-  MTL::ComputeCommandEncoder* enc = s.cb->computeCommandEncoder();
+-  if (enc == nullptr) {
+-    s.error = "no compute encoder";
+-    return false;
+-  }
+-  enc->retain();
+-  VkFFTLaunchParams launch = {};
+-  launch.commandBuffer = s.cb;
+-  launch.commandEncoder = enc;
+-  MTL::Buffer* buf = s.buffer;
+-  launch.buffer = &buf;
+-  const VkFFTResult res = VkFFTAppend(&s.app, +1, &launch);  // +1 = inverse
+-  enc->endEncoding();
+-  enc->release();
+-  if (res != VKFFT_SUCCESS) {
+-    s.error = std::string("VkFFTAppend failed: ") + std::to_string(static_cast<int>(res));
+-    return false;
+-  }
+-  s.cb->commit();
++float* Fft::data(){return impl_->planned?static_cast<float*>(impl_->buffer->contents()):nullptr;}
++std::size_t Fft::n()const{return impl_->w;}
++std::size_t Fft::width()const{return impl_->w;}
++std::size_t Fft::height()const{return impl_->h;}
++std::size_t Fft::batch()const{return impl_->batch;}
++std::size_t Fft::rowFloats()const{return impl_->pitch;}
++bool Fft::submit(){return submitDirection(+1);}
++bool Fft::submitForward(){return submitDirection(-1);}
++bool Fft::submitDirection(int direction){
++  Impl& s=*impl_;
++  if(!s.planned){s.error="FFT not initialized";return false;}
++  if(s.cb){s.error="FFT already in flight; wait before resubmitting";return false;}
++  Pool pool;
++  auto* cb=s.queue->commandBuffer();
++  if(!cb){s.error="no command buffer";return false;}
++  auto* encoder=cb->computeCommandEncoder();
++  if(!encoder){s.error="no compute encoder";return false;}
++  VkFFTLaunchParams launch={};
++  launch.commandBuffer=cb;launch.commandEncoder=encoder;launch.buffer=&s.buffer;
++  const auto res=VkFFTAppend(&s.app,direction,&launch);
++  encoder->endEncoding();
++  if(res!=VKFFT_SUCCESS){s.error="VkFFTAppend failed: "+std::to_string(int(res));return false;}
++  s.cb=cb->retain();
++  cb->commit();
+   return true;
+ }
+-
+-bool Fft::submitForward() {
+-  Impl& s = *impl_;
+-  if (!s.planned) return false;
+-  s.cb = s.queue->commandBuffer();
+-  if (s.cb == nullptr) {
+-    s.error = "no command buffer";
+-    return false;
+-  }
+-  s.cb->retain();
+-  MTL::ComputeCommandEncoder* enc = s.cb->computeCommandEncoder();
+-  if (enc == nullptr) {
+-    s.error = "no compute encoder";
+-    return false;
++bool Fft::submitConvolution(const float* image,const float* const* kernels){
++  Impl& s=*impl_;
++  if(!s.planned||!s.real||!image||!kernels||s.cb){s.error="invalid real convolution state";return false;}
++  const size_t nc=(s.w/2+1)*s.h;
++  for(size_t b=0;b<s.batch;++b)if(!kernels[b]){s.error="null convolution kernel";return false;}
++  if(s.bytes>(uint64_t(1)<<29)){s.error="convolution exceeds 512 MiB FFT workspace budget";return false;}
++  Pool pool;
++  if(!s.product_pipeline){
++    const char* source=R"MSL(
++      #include <metal_stdlib>
++      using namespace metal;
++      kernel void multiply(device const float2* image [[buffer(0)]],
++                           device const float2* kernels [[buffer(1)]],
++                           device float2* product [[buffer(2)]],
++                           constant uint& nc [[buffer(3)]],
++                           constant uint& count [[buffer(4)]],
++                           constant float& factor [[buffer(5)]],
++                           uint i [[thread_position_in_grid]]) {
++        if(i>=count)return;
++        float2 a=image[i%nc],b=kernels[i]*factor;
++        product[i]=float2(a.x*b.x-a.y*b.y,a.x*b.y+a.y*b.x);
++      }
++    )MSL";
++    auto* opts=MTL::CompileOptions::alloc()->init();opts->setFastMathEnabled(false);
++    NS::Error* error=nullptr;
++    auto* lib=s.device->newLibrary(NS::String::string(source,NS::UTF8StringEncoding),opts,&error);
++    opts->release();
++    if(!lib){s.error="convolution shader compile failed";return false;}
++    auto* fn=lib->newFunction(NS::String::string("multiply",NS::UTF8StringEncoding));
++    if(fn){s.product_pipeline=s.device->newComputePipelineState(fn,&error);fn->release();}
++    lib->release();
++    if(!s.product_pipeline){s.error="convolution pipeline creation failed";return false;}
+   }
+-  enc->retain();
+-  VkFFTLaunchParams launch = {};
+-  launch.commandBuffer = s.cb;
+-  launch.commandEncoder = enc;
+-  MTL::Buffer* buf = s.buffer;
+-  launch.buffer = &buf;
+-  const VkFFTResult res = VkFFTAppend(&s.app, -1, &launch);  // -1 = forward
++  if(!s.image_buffer)s.image_buffer=s.device->newBuffer(nc*2*sizeof(float),MTL::ResourceStorageModeShared);
++  if(!s.kernel_buffer)s.kernel_buffer=s.device->newBuffer(s.bytes,MTL::ResourceStorageModeShared);
++  if(!s.image_buffer||!s.kernel_buffer){s.error="convolution input allocation failed";return false;}
++  std::memcpy(s.image_buffer->contents(),image,nc*2*sizeof(float));
++  for(size_t b=0;b<s.batch;++b)std::memcpy(static_cast<float*>(s.kernel_buffer->contents())+2*b*nc,kernels[b],nc*2*sizeof(float));
++  auto* cb=s.queue->commandBuffer();
++  if(!cb){s.error="no convolution command buffer";return false;}
++  auto* enc=cb->computeCommandEncoder();
++  if(!enc){s.error="no convolution encoder";return false;}
++  enc->setComputePipelineState(s.product_pipeline);
++  enc->setBuffer(s.image_buffer,0,0);enc->setBuffer(s.kernel_buffer,0,1);enc->setBuffer(s.buffer,0,2);
++  const uint32_t ncomplex=nc,count=nc*s.batch;
++  const float factor=1.0/double(s.w*s.h);
++  enc->setBytes(&ncomplex,sizeof(ncomplex),3);enc->setBytes(&count,sizeof(count),4);enc->setBytes(&factor,sizeof(factor),5);
++  enc->dispatchThreads(MTL::Size(count,1,1),MTL::Size(256,1,1));enc->endEncoding();
++  // Separate encoders in one command buffer provide resource dependency ordering.
++  enc=cb->computeCommandEncoder();
++  if(!enc){s.error="no inverse FFT encoder";return false;}
++  VkFFTLaunchParams launch={};launch.commandBuffer=cb;launch.commandEncoder=enc;launch.buffer=&s.buffer;
++  const auto result=VkFFTAppend(&s.app,+1,&launch);
+   enc->endEncoding();
+-  enc->release();
+-  if (res != VKFFT_SUCCESS) {
+-    s.error = std::string("VkFFTAppend failed: ") + std::to_string(static_cast<int>(res));
+-    return false;
+-  }
+-  s.cb->commit();
+-  return true;
++  if(result!=VKFFT_SUCCESS){s.error="convolution VkFFTAppend failed: "+std::to_string(int(result));return false;}
++  s.cb=cb->retain();cb->commit();return true;
+ }
+ 
+-bool Fft::wait() {
+-  Impl& s = *impl_;
+-  if (s.cb == nullptr) return true;
++bool Fft::wait(){
++  Impl& s=*impl_;
++  if(!s.cb)return s.planned;
+   s.cb->waitUntilCompleted();
+-  const bool ok = s.cb->status() == MTL::CommandBufferStatusCompleted;
+-  if (!ok) s.error = "command buffer did not complete";
+-  s.cb->release();  // pairs with the retain in submit()
+-  s.cb = nullptr;
++  const bool ok=s.cb->status()==MTL::CommandBufferStatusCompleted;
++  s.gpu_seconds=ok?s.cb->GPUEndTime()-s.cb->GPUStartTime():0;
++  if(!ok){s.error="Metal command buffer failed";if(s.cb->error())s.error+=std::string(": ")+s.cb->error()->localizedDescription()->utf8String();}
++  s.cb->release();s.cb=nullptr;
+   return ok;
+ }
+-
+-const char* Fft::error() const { return impl_->error.c_str(); }
+-
+-}  // namespace mx::vk
++double Fft::gpuSeconds()const{return impl_->gpu_seconds;}
++const char* Fft::error()const{return impl_->error.c_str();}
++} // namespace mx::vk
+diff --git a/metal/mxvkfft.h b/metal/mxvkfft.h
+index dcfe8b09..004f71d8 100644
+--- a/metal/mxvkfft.h
++++ b/metal/mxvkfft.h
+@@ -1,55 +1,42 @@
+-// vkFFT-backed 2-D complex FFT for the CPU-gridding / GPU-FFT engine.
+-//
+-// Pure C++ (no Objective-C types leak out): metal-cpp and vkFFT stay inside the
+-// .cpp so the rest of the Metal inversion can keep using ARC ObjC++.
+-//
+-// Memory: the grid lives in an MTLBuffer with MTLResourceStorageModeShared, so
+-// the CPU grids straight into the buffer the GPU will read -- no copy.
++// Owned, shared-memory Metal FFT plans; no Objective-C types in the API.
+ #ifndef MX_MXVKFFT_H
+ #define MX_MXVKFFT_H
+-
+ #include <cstddef>
+-
+ namespace mx::vk {
+-
+-// One (n x n) complex64 transform, inverse (exp(+2*pi*i)) and unnormalised,
+-// which is exactly ducc0's c2c(BACKWARD) that bandedFFT used.
+ class Fft {
+  public:
+   Fft();
+   ~Fft();
+   Fft(const Fft&) = delete;
+   Fft& operator=(const Fft&) = delete;
+-
+   bool init(std::size_t n);
+-
+-  // Batched variant: B independent (n x n) transforms in one plan/call.
+-  // Buffer holds B planes back-to-back (plane b at data() + b*2*n*n).
+-  // Used for the 8-scale multiscale batch: one GPU call for all scales.
+   bool initBatched(std::size_t n, std::size_t batch);
+-
+-  // Shared-memory grid: 2*n*n floats, interleaved re/im, layout
+-  // g[cx * n + cy] (same as the Metal kernel's output, so no transpose).
++  // Row-major complex planes [height,width], width contiguous. Unnormalised.
++  bool initShape(std::size_t width, std::size_t height, std::size_t batch = 1);
++  // In-place R2C/C2R: real rows have 2*(width/2+1) floats, including padding;
++  // complex half-spectrum rows have width/2+1 complex values. Even widths.
++  bool initReal(std::size_t width, std::size_t height, std::size_t batch = 1);
+   float* data();
+   std::size_t n() const;
++  std::size_t width() const;
++  std::size_t height() const;
+   std::size_t batch() const;
+-
+-  // Encode + commit without blocking; pair with wait() before reusing data().
+-  // submit() runs the inverse (adjoint, +1); submitForward() the forward (-1).
+-  // The plan is bidirectional, so both share one init().
++  std::size_t rowFloats() const;
++  // submit inverse (+1) or forward (-1), then wait before accessing buffer.
++  // A second submit before wait is rejected. Destructor drains pending work.
+   bool submit();
+   bool submitForward();
+-  // Block until the last submit() finished. Returns false if the GPU reported
+-  // an error (buffer contents are then undefined).
++  // One GPU product kernel + batched C2R in a single command-buffer submission.
++  // Input is one half-spectrum; kernels contains batch() half-spectra.
++  bool submitConvolution(const float* image_fft, const float* const* kernel_ffts);
+   bool wait();
+-
++  double gpuSeconds() const;
+   const char* error() const;
+-
+  private:
++  bool initialize(std::size_t width, std::size_t height, std::size_t batch, bool real);
++  bool submitDirection(int direction);
+   struct Impl;
+   Impl* impl_ = nullptr;
+ };
+-
+ }  // namespace mx::vk
+-
+-#endif  // MX_MXVKFFT_H
++#endif
+diff --git a/metal/prediction_pipeline_probe.cpp b/metal/prediction_pipeline_probe.cpp
+new file mode 100644
+index 00000000..49b5758f
+--- /dev/null
++++ b/metal/prediction_pipeline_probe.cpp
+@@ -0,0 +1,185 @@
++#ifndef PREDICTION_CPU_ONLY
++#define DUCC0_MX_PREDICTION_PROVIDER
++#endif
++// Standalone differential gate; no measurement-set or image files are written.
++// Build normally for a deterministic async CPU mock, -DPREDICTION_REAL_GPU for
++// Metal, or -DPREDICTION_CPU_ONLY to prove linkage without any provider.
++#include "ducc0/fft/fftnd_impl.h"
++#include "ducc0/wgridder/wgridder_impl.h"
++#include "metal/mxpredict.h"
++#include <cstdio>
++#include <future>
++#include <stdexcept>
++using namespace ducc0;
++namespace {
++constexpr double rel_limit=5e-6, peak_limit=1e-4;
++#if !defined(PREDICTION_REAL_GPU) && !defined(PREDICTION_CPU_ONLY)
++int mode=0;
++size_t submits=0, waits=0, failures=0, sessions=0, live=0, maxlive=0;
++bool saw_padded_shape=false;
++size_t outstanding=0, max_outstanding=0;
++class Mock final : public detail_gridder::PredictionSession {
++  size_t nu,nv,next_wait=0;
++  std::vector<std::complex<float>> planes[2];
++  std::future<void> pending[2];
++  bool failed[2]{};
++ public:
++  Mock(size_t u,size_t v):nu(u),nv(v) {
++    for(auto& p:planes) p.resize(nu*nv);
++    saw_padded_shape |= (nv%512==0);
++    ++sessions; ++live; maxlive=std::max(maxlive,live);
++  }
++  ~Mock() override { for(auto& f:pending) if(f.valid()) {f.wait(); --outstanding;} --live; }
++  std::complex<float>* data(size_t s) noexcept override {return planes[s].data();}
++  bool submit(size_t s,size_t pl) noexcept override {
++    ++submits;
++    if(pending[s].valid()) std::abort(); // Never overwrite an in-flight plane.
++    failed[s]=(mode==1 && pl==1);
++    if(failed[s]) {std::fill(planes[s].begin(),planes[s].end(),std::complex<float>(123,-37)); ++failures; return false;}
++    ++outstanding; max_outstanding=std::max(max_outstanding,outstanding);
++    pending[s]=std::async(std::launch::async,[this,s]{
++      vfmav<std::complex<float>> v(planes[s].data(),{nu,nv});
++      c2c(v,v,{0,1},FORWARD,1.f,2);
++    });
++    return true;
++  }
++  bool wait(size_t s,size_t pl) noexcept override {
++    if(pl!=next_wait++) std::abort(); // Increasing consumption is required.
++    ++waits;
++    if(pending[s].valid()) {pending[s].get(); --outstanding;}
++    if(mode==2 && pl==2) {std::fill(planes[s].begin(),planes[s].end(),std::complex<float>(-91,27)); failed[s]=true; ++failures;}
++    return !failed[s];
++  }
++};
++bool active=false;
++#endif
++
++bool stride_gate() {
++  constexpr size_t n=512;
++  auto padded=vmav<std::complex<float>,2>::build_noncritical({n,n});
++  vmav<std::complex<float>,2> expected({n,n});
++  for(size_t i=0;i<n;++i) for(size_t j=0;j<n;++j)
++    padded(i,j)=expected(i,j)={float(std::sin(i*.13+j*.27)),float(std::cos(i*.19-j*.11))};
++  vfmav<std::complex<float>> e(expected);c2c(e,e,{0,1},FORWARD,1.f,2);
++  // A compact external vmav is the replacement contract, independent of the
++  // padded CPU allocator. Populate it directly, without a grid copy.
++  std::vector<std::complex<float>> storage(n*n);
++  vmav<std::complex<float>,2> shared(storage.data(),{n,n});
++  for(size_t i=0;i<n;++i) for(size_t j=0;j<n;++j)
++    shared(i,j)={float(std::sin(i*.13+j*.27)),float(std::cos(i*.19-j*.11))};
++  vfmav<std::complex<float>> g(shared);c2c(g,g,{0,1},FORWARD,1.f,2);
++  double err=0,den=0;
++  for(size_t i=0;i<n;++i) for(size_t j=0;j<n;++j) {err+=std::norm(shared(i,j)-expected(i,j));den+=std::norm(expected(i,j));}
++  double rel=std::sqrt(err/den);
++  std::printf("external-plane stride gate: legacy_stride=%td shared_stride=%td rel_rms=%.9g\n",padded.stride(0),shared.stride(0),rel);
++  return padded.stride(0)!=ptrdiff_t(n) && shared.stride(0)==ptrdiff_t(n) && rel<=rel_limit;
++}
++
++template<typename T> std::vector<std::complex<T>> predict(size_t nx,size_t ny,size_t threads,bool shifted,bool wgrid) {
++  constexpr size_t nr=81;
++  vmav<double,2> uvw({nr,3});
++  vmav<size_t,1> ids({nr}),nf({2});nf(0)=2;nf(1)=3;
++  vmav<double,1> freq({5});
++  for(size_t c=0;c<5;++c)freq(c)=1.1e8+1.7e7*c;
++  size_t nvis=0;
++  for(size_t r=0;r<nr;++r) {
++    ids(r)=r%2;nvis+=nf(ids(r));
++    uvw(r,0)=170*std::sin(.31*r);uvw(r,1)=130*std::cos(.27*r);
++    uvw(r,2)=(r%2?-1:1)*(50.+35.*r); // Both signs, multiple w planes.
++  }
++  vmav<T,2> dirty({nx,ny});
++  mav_apply([](T& x){x=0;},1,dirty);
++  dirty(nx/2,ny/2)=1;dirty(nx/3,ny/4)=T(.27);dirty(3*nx/4,2*ny/3)=T(-.19);
++  for(size_t i=0;i<nx;++i)for(size_t j=0;j<ny;++j)
++    dirty(i,j)+=T(.003*std::sin(i*.17+j*.11)*std::exp(-std::pow((double(i)-nx*.4)/19,2)-std::pow((double(j)-ny*.6)/17,2)));
++  vmav<T,1> weights({nvis});vmav<uint8_t,1> mask({nvis});
++  for(size_t k=0;k<nvis;++k){weights(k)=T(.7+.02*(k%19));mask(k)=k%17?1:0;}
++  std::vector<std::complex<T>> result(nvis,std::complex<T>(71,-13));
++  vmav<std::complex<T>,1> out(result.data(),{nvis});
++  const double pixel_x=.0008*std::min(1.0,252.0/nx), pixel_y=.0011*std::min(1.0,252.0/ny);
++  dirty2ms_bda<T,T,T,T>(uvw,ids,nf,freq,dirty,weights,mask,pixel_x,pixel_y,1e-5,wgrid,threads,out,0,
++    false,false,false,true,2.,2.,shifted?.013:0.,shifted?-.009:0.,true);
++  return result;
++}
++
++#if defined(PREDICTION_REAL_GPU)
++void enable(bool on) {if(on) unsetenv("MX_METAL_NO_PREDICT");else setenv("MX_METAL_NO_PREDICT","1",1);}
++#elif defined(PREDICTION_CPU_ONLY)
++void enable(bool) {}
++#else
++void enable(bool on) {active=on;}
++#endif
++
++template<typename T> bool differential(size_t nx,size_t ny,size_t threads,bool shifted,bool wgrid,int failure_mode) {
++  enable(false);auto ref=predict<T>(nx,ny,threads,shifted,wgrid);
++#if !defined(PREDICTION_REAL_GPU) && !defined(PREDICTION_CPU_ONLY)
++  mode=failure_mode;size_t before=submits, failbefore=failures;
++#endif
++  enable(true);auto got=predict<T>(nx,ny,threads,shifted,wgrid);
++  double err=0,den=0,maxerr=0,peak=0;
++  for(size_t i=0;i<got.size();++i){err+=std::norm(got[i]-ref[i]);den+=std::norm(ref[i]);maxerr=std::max(maxerr,double(std::abs(got[i]-ref[i])));peak=std::max(peak,double(std::abs(ref[i])));}
++  double rel=std::sqrt(err/den), mp=maxerr/peak;
++  bool ok=std::isfinite(rel)&&rel<=rel_limit&&mp<=peak_limit;
++#if !defined(PREDICTION_REAL_GPU) && !defined(PREDICTION_CPU_ONLY)
++  bool supported=std::is_same<T,float>::value&&wgrid&&mode!=3;
++  ok &= supported ? submits>before : submits==before;
++  if(supported&&(mode==1||mode==2)) ok &= failures>failbefore;
++#endif
++  std::printf("%s %zux%zu threads=%zu shift=%d wgrid=%d mode=%d rel_rms=%.9g max/peak=%.9g %s\n",
++    std::is_same<T,float>::value?"float":"double",nx,ny,threads,shifted,wgrid,failure_mode,rel,mp,ok?"PASS":"FAIL");
++  return ok;
++}
++}
++#if !defined(PREDICTION_REAL_GPU) && !defined(PREDICTION_CPU_ONLY)
++extern "C" detail_gridder::PredictionSession* mx_prediction_create(size_t nu,size_t nv,bool is_float) noexcept {
++  if(!active||!is_float||mode==3)return nullptr;
++  return new Mock(nu,nv);
++}
++#endif
++int main(int argc, char** argv) {
++  setvbuf(stdout,nullptr,_IONBF,0);
++  std::printf("Predeclared gates: rel_rms <= %.9g, max/peak <= %.9g\n",rel_limit,peak_limit);
++#if defined(PREDICTION_REAL_GPU)
++  if(mx_prediction_create(64,96,true)) return 2; // Registration is required.
++  mx_predict_register();
++  if(mx_prediction_create(8193,64,true) || mx_prediction_create(64,96,false))return 2;
++  std::unique_ptr<detail_gridder::PredictionSession> preflight(mx_prediction_create(64,96,true));
++  bool gpu_available=bool(preflight);
++  if(!gpu_available)std::fprintf(stderr,"GPU preflight unavailable; running production CPU fallback checks only\n");
++  preflight.reset();
++#endif
++  if(argc>1) {
++    const size_t nx=std::stoul(argv[1]), ny=argc>2?std::stoul(argv[2]):nx;
++    const bool large_ok=differential<float>(nx,ny,8,true,true,0);
++#if defined(PREDICTION_REAL_GPU)
++    if(!gpu_available && large_ok)return 77;
++#endif
++    return large_ok?0:1;
++  }
++  bool ok=stride_gate();
++  for(size_t threads:{size_t(1),size_t(3),size_t(6)})
++    for(bool shifted:{false,true}) {
++      ok &= differential<float>(252,252,threads,shifted,true,0);
++      ok &= differential<float>(192,252,threads,shifted,true,0);
++    }
++  ok &= differential<double>(128,96,3,true,true,0);
++  ok &= differential<float>(128,96,3,true,false,0);
++#if !defined(PREDICTION_REAL_GPU) && !defined(PREDICTION_CPU_ONLY)
++  for(int m:{1,2,3})ok &= differential<float>(192,128,3,true,true,m);
++  std::printf("mock proof sessions=%zu submits=%zu waits=%zu failures=%zu live=%zu max_sessions=%zu\n",sessions,submits,waits,failures,live,maxlive);
++  ok &= live==0 && maxlive==1 && submits==waits && saw_padded_shape && max_outstanding==2 && outstanding==0;
++  // Cancellation/unwinding must safely drain two submitted planes without
++  // consuming either. Mock destructors wait before freeing shared storage.
++  mode=0;
++  { Mock abandoned(64,96); abandoned.submit(0,0); abandoned.submit(1,1); }
++  ok &= live==0 && outstanding==0;
++  std::printf("in-flight cleanup live=%zu outstanding=%zu max_unconsumed=%zu padded_prediction_shape=%d %s\n",live,outstanding,max_outstanding,saw_padded_shape,ok?"PASS":"FAIL");
++#endif
++#if defined(PREDICTION_REAL_GPU)
++  if(!gpu_available && ok) {
++    std::fprintf(stderr,"Production fallback PASS; GPU numerical validation SKIPPED (no device), exit 77\n");
++    return 77;
++  }
++#endif
++  return ok?0:1;
++}
+diff --git a/metal/thirdparty/vkFFT.h b/metal/thirdparty/vkFFT.h
+index 569398f0..c106b3bc 100644
+--- a/metal/thirdparty/vkFFT.h
++++ b/metal/thirdparty/vkFFT.h
+@@ -32044,8 +32044,8 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 			commandEncoder->endEncoding();
+ 			commandBuffer->commit();
+ 			commandBuffer->waitUntilCompleted();
+-			commandEncoder->release();
+-			commandBuffer->release();
++			// mx: computeCommandEncoder() returns autoreleased storage.
++			// mx: commandBuffer() returns autoreleased storage.
+ #endif
+ 		}
+ 		if ((FFTPlan->numAxisUploads[axis_id] > 1) && (!app->configuration.makeForwardPlanOnly)) {
+@@ -32418,8 +32418,8 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 			commandEncoder->endEncoding();
+ 			commandBuffer->commit();
+ 			commandBuffer->waitUntilCompleted();
+-			commandEncoder->release();
+-			commandBuffer->release();
++			// mx: computeCommandEncoder() returns autoreleased storage.
++			// mx: commandBuffer() returns autoreleased storage.
+ 		}
+ 		if ((FFTPlan->numAxisUploads[axis_id] == 1) && (!app->configuration.makeForwardPlanOnly)) {
+ 			MTL::CommandBuffer* commandBuffer = app->configuration.queue->commandBuffer();
+@@ -32439,8 +32439,8 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 			commandEncoder->endEncoding();
+ 			commandBuffer->commit();
+ 			commandBuffer->waitUntilCompleted();
+-			commandEncoder->release();
+-			commandBuffer->release();
++			// mx: computeCommandEncoder() returns autoreleased storage.
++			// mx: commandBuffer() returns autoreleased storage.
+ 		}
+ #endif
+ #if(VKFFT_BACKEND==0)
+@@ -32800,8 +32800,8 @@ static inline VkFFTResult VkFFTGenerateRaderFFTKernel(VkFFTApplication* app, VkF
+ 				commandEncoder->endEncoding();
+ 				commandBuffer->commit();
+ 				commandBuffer->waitUntilCompleted();
+-				commandEncoder->release();
+-				commandBuffer->release();
++				// mx: computeCommandEncoder() returns autoreleased storage.
++				// mx: commandBuffer() returns autoreleased storage.
+ #endif
+ 				resFFT = VkFFT_transferDataToCPU(&kernelPreparationApplication, axis->specializationConstants.raderContainer[i].raderFFTkernel, &bufferRaderFFT, bufferSize);
+ 				if (resFFT != VKFFT_SUCCESS) {
+@@ -35529,10 +35529,12 @@ static inline VkFFTResult VkFFTPlanR2CMultiUploadDecomposition(VkFFTApplication*
+ 		}
+ 		else {
+ 			size_t codelen = strlen(code0);
+-			MTL::CompileOptions* compileOptions = MTL::CompileOptions::alloc();
++			MTL::CompileOptions* compileOptions = MTL::CompileOptions::alloc()->init();
+ 			compileOptions->setFastMathEnabled(true);
+-			NS::String* str = NS::String::string(code0, NS::UTF8StringEncoding);
++			NS::String* str = NS::String::alloc()->init(code0, NS::UTF8StringEncoding);
+ 			axis->library = app->configuration.device->newLibrary(str, compileOptions, &error);
++			compileOptions->release();
++			str->release();
+ 			if (error) {
+ 				printf("%s\n%s\n", error->debugDescription()->cString(NS::ASCIIStringEncoding), error->localizedDescription()->cString(NS::ASCIIStringEncoding));
+ 				free(code0);
+@@ -35540,14 +35542,12 @@ static inline VkFFTResult VkFFTPlanR2CMultiUploadDecomposition(VkFFTApplication*
+ 				deleteVkFFT(app);
+ 				return VKFFT_ERROR_FAILED_TO_COMPILE_PROGRAM;
+ 			}
+-			compileOptions->release();
+ 			if (app->configuration.saveApplicationToString) {
+ 
+ 			}
+-			str->release();
+ 		}
+ 		const char function_name[20] = "VkFFT_main_R2C";
+-		NS::String* str = NS::String::string(function_name, NS::UTF8StringEncoding);
++		NS::String* str = NS::String::alloc()->init(function_name, NS::UTF8StringEncoding);
+ 		MTL::Function* function = axis->library->newFunction(str);
+ 		axis->pipeline = app->configuration.device->newComputePipelineState(function, &error);
+ 		function->release();
+@@ -38745,10 +38745,12 @@ static inline VkFFTResult VkFFTPlanAxis(VkFFTApplication* app, VkFFTPlan* FFTPla
+ 		}
+ 		else {
+ 			size_t codelen = strlen(code0);
+-			MTL::CompileOptions* compileOptions = MTL::CompileOptions::alloc();
++			MTL::CompileOptions* compileOptions = MTL::CompileOptions::alloc()->init();
+ 			compileOptions->setFastMathEnabled(true);
+-			NS::String* str = NS::String::string(code0, NS::UTF8StringEncoding);
++			NS::String* str = NS::String::alloc()->init(code0, NS::UTF8StringEncoding);
+ 			axis->library = app->configuration.device->newLibrary(str, compileOptions, &error);
++			compileOptions->release();
++			str->release();
+ 			if (error) {
+ 				printf("%s\n%s\n", error->debugDescription()->cString(NS::ASCIIStringEncoding), error->localizedDescription()->cString(NS::ASCIIStringEncoding));
+ 				free(code0);
+@@ -38756,14 +38758,12 @@ static inline VkFFTResult VkFFTPlanAxis(VkFFTApplication* app, VkFFTPlan* FFTPla
+ 				deleteVkFFT(app);
+ 				return VKFFT_ERROR_FAILED_TO_COMPILE_PROGRAM;
+ 			}
+-			compileOptions->release();
+ 			if (app->configuration.saveApplicationToString) {
+ 
+ 			}
+-			str->release();
+ 		}
+ 		const char function_name[20] = "VkFFT_main";
+-		NS::String* str = NS::String::string(function_name, NS::UTF8StringEncoding);
++		NS::String* str = NS::String::alloc()->init(function_name, NS::UTF8StringEncoding);
+ 		MTL::Function* function = axis->library->newFunction(str);
+ 		axis->pipeline = app->configuration.device->newComputePipelineState(function, &error);
+ 		function->release();
+@@ -39670,10 +39670,10 @@ static inline VkFFTResult initializeVkFFT(VkFFTApplication* app, VkFFTConfigurat
+ 	const char function_name[20] = "VkFFT_dummy";
+ 
+ 	NS::Error* error;
+-	MTL::CompileOptions* compileOptions = MTL::CompileOptions::alloc();
+-	NS::String* str_code = NS::String::string(dummy_kernel, NS::UTF8StringEncoding);
++	MTL::CompileOptions* compileOptions = MTL::CompileOptions::alloc()->init();
++	NS::String* str_code = NS::String::alloc()->init(dummy_kernel, NS::UTF8StringEncoding);
+ 	MTL::Library* dummy_library = app->configuration.device->newLibrary(str_code, compileOptions, &error);
+-	NS::String* str_name = NS::String::string(function_name, NS::UTF8StringEncoding);
++	NS::String* str_name = NS::String::alloc()->init(function_name, NS::UTF8StringEncoding);
+ 	MTL::Function* function = dummy_library->newFunction(str_name);
+ 	MTL::ComputePipelineState* dummy_state = app->configuration.device->newComputePipelineState(function, &error);
+ 
+diff --git a/metal/vkfft_real_probe.cpp b/metal/vkfft_real_probe.cpp
+new file mode 100644
+index 00000000..e97bedb0
+--- /dev/null
++++ b/metal/vkfft_real_probe.cpp
+@@ -0,0 +1,89 @@
++// Regression for native, padded in-place real FFTs (no Hermitian expansion).
++#include "metal/mxvkfft.h"
++#include "ducc0/fft/fft.h"
++#include "ducc0/fft/fftnd_impl.h"
++#include <algorithm>
++#include <chrono>
++#include <cmath>
++#include <complex>
++#include <cstdio>
++#include <cstring>
++#include <random>
++#include <vector>
++
++template<class F> int test(size_t w, size_t h, size_t batch) {
++  if constexpr (!requires(F f, const float* x, const float* const* k) { f.initReal(w,h,batch); f.submitConvolution(x,k); }) {
++    std::fprintf(stderr,"FAIL: native real FFT API missing\n"); return 1;
++  } else {
++    F fft;
++    if (!fft.initReal(w,h,batch)) { std::fprintf(stderr,"FAIL init: %s\n",fft.error()); return 1; }
++    const size_t cw=w/2+1, pitch=2*cw, np=w*h, nc=h*cw;
++    std::vector<float> image(np*batch);
++    std::vector<std::complex<float>> spectrum(nc*batch);
++    std::mt19937 rng(41);
++    for(auto& v:image) v=float(int(rng()%2001)-1000)/1000;
++    for(size_t b=0;b<batch;++b) {
++      ducc0::cfmav<float> in(image.data()+b*np,{h,w});
++      ducc0::vfmav<std::complex<float>> out(spectrum.data()+b*nc,{h,cw});
++      ducc0::r2c(in,out,{0,1},true,1.f,8);
++      for(size_t y=0;y<h;++y) std::memcpy(fft.data()+(b*h+y)*pitch,image.data()+b*np+y*w,w*sizeof(float));
++    }
++    if(!fft.submitForward() || !fft.wait()) return 2;
++    double den=0,num=0;
++    auto* z=reinterpret_cast<std::complex<float>*>(fft.data());
++    for(size_t i=0;i<spectrum.size();++i){num+=std::norm(z[i]-spectrum[i]);den+=std::norm(spectrum[i]);}
++    double fwd=std::sqrt(num/den);
++    std::vector<double> times;
++    double inv=0;
++    for(int rep=0;rep<4;++rep) {
++      std::memcpy(fft.data(),spectrum.data(),spectrum.size()*sizeof(std::complex<float>));
++      const auto t=std::chrono::steady_clock::now();
++      if(!fft.submit() || !fft.wait()) return 2;
++      times.push_back(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t).count());
++      den=num=0;
++      for(size_t b=0;b<batch;++b) for(size_t y=0;y<h;++y) for(size_t x=0;x<w;++x){
++        const double r=image[b*np+y*w+x], d=fft.data()[(b*h+y)*pitch+x]/double(np)-r;
++        num+=d*d;den+=r*r;
++      }
++      inv=std::sqrt(num/den);
++    }
++    std::sort(times.begin()+1,times.end());
++    // One image spectrum with independent kernels per scale; compare production
++    // multiply+C2R operation, not only an FFT round trip.
++    std::vector<const float*> kernels;
++    std::vector<float> conv_ref(np*batch);
++    for(size_t b=0;b<batch;++b){
++      kernels.push_back(reinterpret_cast<const float*>(spectrum.data()+b*nc));
++      std::vector<std::complex<float>> product(nc);
++      const float factor=1.0/double(np);
++      for(size_t i=0;i<nc;++i) product[i]=spectrum[i]*(factor*spectrum[b*nc+i]);
++      ducc0::vfmav<std::complex<float>> in(product.data(),{h,cw});
++      ducc0::vfmav<float> out(conv_ref.data()+b*np,{h,w});
++      ducc0::c2r_mut(in,out,{0,1},false,1.f,8);
++    }
++    const auto saved=spectrum;
++    const auto begin=std::chrono::steady_clock::now();
++    if(!fft.submitConvolution(reinterpret_cast<const float*>(spectrum.data()),kernels.data())||!fft.wait()){
++      std::fprintf(stderr,"FAIL convolution: %s\n",fft.error());return 3;
++    }
++    double convolution_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
++    den=num=0;double maxref=0,maxdiff=0;
++    for(size_t b=0;b<batch;++b)for(size_t y=0;y<h;++y)for(size_t x=0;x<w;++x){
++      double r=conv_ref[b*np+y*w+x],d=fft.data()[(b*h+y)*pitch+x]-r;
++      num+=d*d;den+=r*r;maxref=std::max(maxref,std::abs(r));maxdiff=std::max(maxdiff,std::abs(d));
++    }
++    const double conv=std::sqrt(num/den);
++    bool ok=std::isfinite(fwd)&&std::isfinite(inv)&&fwd<5e-6&&inv<5e-6&&conv<5e-6&&maxdiff/maxref<1e-4&&saved==spectrum;
++    std::printf("convolution rel=%.3g peak_norm=%.3g cold_wall_ms=%.3f\n",conv,maxdiff/maxref,convolution_ms);
++    std::printf("real w=%zu h=%zu batch=%zu forward_rel=%.3g inverse_rel=%.3g warm_ms=%.3f %s\n",w,h,batch,fwd,inv,times[2],ok?"PASS":"FAIL");
++    return ok?0:1;
++  }
++}
++int main(int argc,char**argv){
++  setvbuf(stdout,nullptr,_IONBF,0);
++  if(argc>1){size_t w=std::stoul(argv[1]),h=argc>2?std::stoul(argv[2]):w,b=argc>3?std::stoul(argv[3]):1;return test<mx::vk::Fft>(w,h,b);}
++  int rc=0;
++  for(size_t b:{1,2,8}) { rc|=test<mx::vk::Fft>(32,24,b); rc|=test<mx::vk::Fft>(64,64,b); }
++  for(int i=0;i<8;++i) rc|=test<mx::vk::Fft>(128,96,1); // create, execute, destroy repeatedly
++  return rc;
++}

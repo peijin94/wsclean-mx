@@ -230,12 +230,21 @@ the broader multiscale scientific-acceptance question.
 
 ## Roadmap
 
-The current patches are CPU-only. Planned next steps, described in
-`notes.md`: a Metal GPU gridding backend and benchmarks on larger
-measurement sets where gridding dominates. First complete the remaining science
-and reproducibility gates in [the development plan](docs/development-plan.md).
-Accelerate's vDSP 2D FFT was
-measured and is slower than ducc0's multithreaded FFT, so it is not used.
+The published `main`/CPU release remains separate from experimental `gpu-dev`.
+On `gpu-dev`, a Metal-enabled build's `-mgpu` flag uses a two-buffer GPU prediction
+FFT pipeline; inversion and gridding/degridding remain on ducc0. GPU multiscale
+convolution (`MX_METAL_CONVOLVE=1`) and peak search (`MX_METAL_PEAK=1`) are explicit
+experiments, not default speedups. All require `-mgpu`; CPU-only builds reject it.
+
+Read [the GPU audit and next-optimization plan](docs/gpu-next-optimization-2026-10-22.md)
+for verified results and open limits. Earlier GPU attribution was invalid because
+main's registration code was compiled out; the audit supersedes those claims.
+Set `MX_METAL_DEBUG_TIMING=1` to obtain actual stage-execution counters.
+This remains experimental: the threaded source-envelope gate still fails 4/10
+candidates, and the archived gridding probe fails. It is not a blanket
+scientific-release approval.
+The broader CPU scientific-validation work remains in
+[the development plan](docs/development-plan.md).
 
 ## License
 

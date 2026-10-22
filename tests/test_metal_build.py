@@ -79,7 +79,8 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('status=', source, 'the probe must print a machine-readable verdict')
         shader = self.read('work/wsclean/metal/mxshaders.h')
         # Centred rounding is the fix for the one-cell placement divergence.
-        self.assertIn('const float fx = u - rounded_u;', shader)
+        self.assertIn('const float fx = frac_x;', shader)
+        self.assertIn('half_support + 1 - (support & 1)', shader)
 
     def test_roundtrip_mode_checks_the_adjoint_identity(self):
         source = self.read('work/wsclean/metal/probe_main.cpp')
@@ -146,14 +147,17 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('wWeight', impl)
         # 2. the whole-image nm1 scan (corners alone give nm1min == nm1max and
         #    a dw 50x too large), and no bogus FFT normalisation factor
-        self.assertIn('Scan the WHOLE image', impl)
+        self.assertIn('double xext[3] = {xmin, xmax, 0.0}', impl)
+        self.assertIn('for (int ix = 0; ix < nxext; ++ix)', impl)
+        self.assertIn('for (int iy = 0; iy < nyext; ++iy)', impl)
         self.assertNotIn('4.0 / (static_cast<double>(grid)', impl)
         # 3. ducc0's w-tap formula, and explicitly not PolynomialKernel::eval
         self.assertIn('z = (z_off - nth)*2 + (W-1)', impl)
         self.assertIn('nth piece of the same polynomial', impl)
-        # the wired path must stay 2-D while the scale is open
+        # Archived inversion is explicit-env-only; plain -mgpu keeps ducc0.
         gridder = self.read('work/wsclean/wgridder/wgridder.h')
-        self.assertIn('input.w_gridding = false;', gridder)
+        self.assertIn('input.w_gridding = true;', gridder)
+        self.assertIn('use_metal_ && allow_metal_inversion', gridder)
 
     def test_gpu_option_is_wired_and_gated(self):
         # -mgpu must exist, reach the w-gridder, and be gated: the backend only
@@ -167,13 +171,40 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('mx::metal::inversion(input, tdirty.data())', gridder)
         self.assertIn('if constexpr (std::is_same<NumT, float>::value', gridder)
         self.assertIn('metal_done ? "used" : "refused, falling back to ducc0"', gridder)
-        self.assertIn('input.w_gridding = false;', gridder)
+        self.assertIn('input.w_gridding = true;', gridder)
+        self.assertIn('use_metal_ && allow_metal_inversion', gridder)
         impl = self.read('work/wsclean/metal/metalinversion.mm')
         for anchor in ('inversionSupported', 'M_PI * w_max * lambda * lm_sq',
                        'w-term too large for a 2-D inversion', 'n_channels'):
             self.assertIn(anchor, impl, f'{anchor} is part of the 2-D gate')
         header = self.read('work/wsclean/metal/metalinversion.h')
         self.assertIn('bool inversion(const InversionInput& input, float* dirty);', header)
+
+    def test_fast_path_keeps_copy_bound_deconvolution_opt_in(self):
+        source = self.read('work/wsclean/main/main.cpp')
+        self.assertIn('Enabled("MX_METAL_PEAK")', source)
+        self.assertIn('Enabled("MX_METAL_CONVOLVE")', source)
+        self.assertIn('!Enabled("MX_METAL_NO_PEAK")', source)
+        self.assertIn('!Enabled("MX_METAL_NO_CONVOLVE")', source)
+        self.assertIn('mx_predict_register()', source)
+
+    def test_main_activation_is_not_an_object_library_accident(self):
+        cmake = self.read('work/wsclean/CMakeLists.txt')
+        self.assertIn('target_compile_definitions(wsclean PRIVATE WSCLEAN_MX_METAL=1)', cmake)
+        cli = self.read('work/wsclean/main/commandline.cpp')
+        self.assertIn('-mgpu requires a build with WSCLEAN_MX_METAL=ON', cli)
+
+    def test_vkfft_releases_compile_inputs_before_error_return(self):
+        source = self.read('work/wsclean/metal/thirdparty/vkFFT.h')
+        marker = 'axis->library = app->configuration.device->newLibrary(str, compileOptions, &error);'
+        blocks = source.split(marker)[1:]
+        # Two axis planners use these locals; the device-query dummy kernel
+        # uses separately named strings and is not one of these error paths.
+        self.assertEqual(len(blocks), 2)
+        for block in blocks:
+            before_error = block.split('if (error)', 1)[0]
+            self.assertIn('compileOptions->release();', before_error)
+            self.assertIn('str->release();', before_error)
 
     def test_image_check_keeps_its_chain(self):
         # The image-level harness is the only place the Metal gridding meets

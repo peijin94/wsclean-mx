@@ -1,0 +1,135 @@
+{
+  "host": {
+    "machdep.cpu.brand_string": "Apple M2",
+    "hw.memsize": "17179869184",
+    "hw.ncpu": "8"
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "source_commits": {
+    "wsclean": "0dbb1b06ee130ead915fa6efa5a10645e07047b1",
+    "schaapcommon": "8bb0759fca8592857dc3cb7647dd6e93793796c5",
+    "radler": "39d58d12b5bc6f1b65bff176394ed710ff89964a",
+    "aocommon": "dd2b059a885433c33f2e00f7ab3d01f8331f4697"
+  },
+  "binaries": {
+    "measured": {
+      "path": "bench/bin/gpu-audit-final/wsclean",
+      "sha256": "c15be766f2f260e3eed9470251910e3956ded7cc040d29761441ec72e1cf49e6",
+      "version": "\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-49-g52104625\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+      "dependencies": "/Users/peijinz/dev/wsclean-mx/bench/bin/gpu-audit-final/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 382.5.3)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.69)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1223.2.2)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n"
+    },
+    "delivery": {
+      "path": "build-mx-metal/wsclean",
+      "sha256": "7f40171bc4a9c1c204e3628b8513d8ebf3e697130a88db6a515d6d845cc13076",
+      "version": "\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-50-g0dbb1b06\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+      "dependencies": "/Users/peijinz/dev/wsclean-mx/build-mx-metal/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 382.5.3)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.69)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1223.2.2)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n"
+    },
+    "delivery_snapshot": {
+      "path": "bench/bin/gpu-audit-delivered/wsclean",
+      "sha256": "29caa35b5be179b758edd78bbf82c8f5255206b3fe216607133607b184dc6cec",
+      "version": "\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-50-g0dbb1b06\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+      "dependencies": "/Users/peijinz/dev/wsclean-mx/bench/bin/gpu-audit-delivered/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 382.5.3)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.69)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1223.2.2)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n"
+    }
+  },
+  "input_verification": {
+    "benchmark": {
+      "files_verified": 108,
+      "changed": 0
+    },
+    "original_15slot": {
+      "files_verified": 108,
+      "changed": 0
+    }
+  },
+  "input_manifest_sha256": "5de278b296f8d4bd0b22becf58b430b91e40c0e8e5f5a418fb3ea11761be9d06",
+  "patch_replay": {
+    "wsclean": {
+      "commit": "0dbb1b06ee130ead915fa6efa5a10645e07047b1",
+      "patch": "patches/mx/wsclean/0050-Repair-Metal-activation-and-add-validated-prediction.patch",
+      "replay": {
+        "patches": 50,
+        "tree": "57d3391baa39eabf004c5d6c8271c18c31a1a0a3",
+        "matches_head": true
+      }
+    },
+    "schaapcommon": {
+      "commit": "8bb0759fca8592857dc3cb7647dd6e93793796c5",
+      "patch": "patches/mx/schaapcommon/0007-Pipeline-prediction-in-two-shared-planes-with-ordere.patch",
+      "replay": {
+        "patches": 7,
+        "tree": "f83229c472a7ea15c8c5380967f8f59cef09e8f0",
+        "matches_head": true
+      }
+    },
+    "radler": {
+      "commit": "39d58d12b5bc6f1b65bff176394ed710ff89964a",
+      "patch": "patches/mx/radler/0007-Add-optional-batched-scale-transforms-and-validate-G.patch",
+      "replay": {
+        "patches": 7,
+        "tree": "43383d372b02b6804d1484d051eaa1739ae1ffef",
+        "matches_head": true
+      }
+    },
+    "aocommon": {
+      "replay": {
+        "patches": 2,
+        "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+        "matches_head": true
+      }
+    }
+  },
+  "independent_review": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [
+      "work/wsclean/metal/prediction_pipeline_probe.cpp:146: Consider asserting successful GPU submissions during supported differential cases; preflight alone allows those cases to pass entirely through CPU fallback."
+    ],
+    "summary": "Read-only review completed across all requested tracked and untracked code. Both axis planners release owned compilation inputs before error handling. No concrete additional defects found in prediction ordering/stride/lifetime/fallback, factory routing, convolution normalization/guards, peak semantics, FFT ownership/budgets, or option wiring. Plain -mgpu enables prediction; convolution and peak remain opt-in; CPU-only builds reject -mgpu. The suite preserves nonzero failure for the archived gridding probe while collecting subsequent gates. Builds and tests were not run."
+  },
+  "validation_exits": [
+    {
+      "name": "proof-red",
+      "command": [
+        ".venv/bin/python",
+        "tests/prediction_gpu_check.py",
+        "build-mx-metal/metal/mx-prediction-cpu-probe"
+      ],
+      "exit": 1,
+      "expected": 1
+    },
+    {
+      "name": "proof-green",
+      "command": [
+        ".venv/bin/python",
+        "tests/prediction_gpu_check.py",
+        "build-mx-metal/metal/mx-prediction-gpu-probe"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "final-cpu-suite",
+      "command": [
+        "bash",
+        "scripts/test.sh",
+        "build-mx"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "final-metal-suite",
+      "command": [
+        "bash",
+        "scripts/test.sh",
+        "build-mx-metal"
+      ],
+      "exit": 1,
+      "expected": 1
+    }
+  ],
+  "dependency_limit": "Only executable and schaapthreading are frozen; other non-system libraries remain shared.",
+  "delivery_smoke": "1024x1024, 8.1amin, j1, niter200: all 6 T2 products pass, 89 completed GPU planes, no fallback/copy bytes",
+  "no_release_acceptance": "threaded source gate 6/10 pass; archived GPU gridding probe fails"
+}

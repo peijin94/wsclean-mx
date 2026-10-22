@@ -1,0 +1,117 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 09:00:35 -0700
+Subject: [PATCH] Add optional batched scale transforms and validate GPU peak
+ results
+
+
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.cc b/cpp/algorithms/multiscale/multiscale_transforms.cc
+index 5b6b6bc..329ec5c 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.cc
++++ b/cpp/algorithms/multiscale/multiscale_transforms.cc
+@@ -7,6 +7,35 @@
+ using aocommon::Image;
+ 
+ namespace radler::algorithms::multiscale {
++namespace { MultiScaleTransforms::BatchTransformHook batch_hook = nullptr; }
++void MultiScaleTransforms::SetBatchTransformHook(BatchTransformHook hook) { batch_hook = hook; }
++
++bool MultiScaleTransforms::TryTransformScales(
++    const std::complex<float>* image_fft, const aocommon::UVector<float>& scales,
++    std::vector<Image>& images) {
++  if (!batch_hook || !image_fft || scales.empty() || _width == 0 || _height == 0)
++    return false;
++  // Bound stack allocations before multiplying dimensions. FFT backend has
++  // its own workspace budget; oversized calls keep the per-scale CPU route.
++  constexpr size_t max_pixels = (size_t(512) << 20) / sizeof(float);
++  if (_width > max_pixels / _height / scales.size()) return false;
++  std::vector<Image> output;
++  std::vector<std::shared_ptr<const KernelFftCache::Fft>> owners;
++  std::vector<const std::complex<float>*> kernels;
++  std::vector<float*> pointers;
++  output.reserve(scales.size()); owners.reserve(scales.size());
++  for (float scale : scales) {
++    owners.push_back(kernelFft(scale));
++    kernels.push_back(owners.back()->data());
++    output.emplace_back(_width, _height);
++    pointers.push_back(output.back().Data());
++  }
++  if (!batch_hook(pointers.data(), image_fft, kernels.data(), _width, _height, scales.size()))
++    return false;
++  images = std::move(output);
++  return true;
++}
++
+ 
+ std::shared_ptr<const KernelFftCache::Fft> KernelFftCache::Get(
+     size_t width, size_t height, MultiscaleShape shape, float scale,
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.h b/cpp/algorithms/multiscale/multiscale_transforms.h
+index 86ff569..d416d5e 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.h
++++ b/cpp/algorithms/multiscale/multiscale_transforms.h
+@@ -77,6 +77,15 @@ class MultiScaleTransforms {
+   void Transform(const std::complex<float>* image_fft, aocommon::Image& dest,
+                  float scale);
+ 
++  // Optional batched backend. Registered before parallel work starts; outputs
++  // are committed only after success. The normal CPU path allocates no stack.
++  using BatchTransformHook = int (*)(float* const*, const std::complex<float>*,
++                                     const std::complex<float>* const*, size_t, size_t, size_t);
++  static void SetBatchTransformHook(BatchTransformHook hook);
++  bool TryTransformScales(const std::complex<float>* image_fft,
++                          const aocommon::UVector<float>& scales,
++                          std::vector<aocommon::Image>& images);
++
+   size_t Width() const { return _width; }
+   size_t Height() const { return _height; }
+ 
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.cc b/cpp/algorithms/threaded_deconvolution_tools.cc
+index ed8b613..2cebf8e 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.cc
++++ b/cpp/algorithms/threaded_deconvolution_tools.cc
+@@ -44,13 +44,25 @@ bool TryGpuPeak(const aocommon::Image& image, const bool* mask,
+                 bool allow_negative, size_t x_border, size_t y_border,
+                 ThreadedDeconvolutionTools::PeakData& result) {
+   if (g_peak_scan_hook == nullptr) return false;
++  const size_t width = image.Width(), height = image.Height();
++  if (x_border > width || y_border > height ||
++      x_border >= width - x_border || y_border >= height - y_border)
++    return false;
+   float value = 0.0f;
+   size_t x = 0, y = 0;
+   const int ok = g_peak_scan_hook(
+       image.Data(), image.Width(), image.Height(),
+       reinterpret_cast<const unsigned char*>(mask), allow_negative ? 1 : 0,
+       x_border, y_border, &value, &x, &y);
+-  if (!ok || !std::isfinite(value)) return false;
++  // Keep the finite-only adapter policy: CPU fallback preserves Radler's signed
++  // infinity semantics. Check hook coordinates before they can index RMS data.
++  if (!ok || !std::isfinite(value) || x < x_border || y < y_border ||
++      x >= width - x_border || y >= height - y_border)
++    return false;
++  const size_t index = y * width + x;
++  if ((mask && !mask[index]) || image[index] != value ||
++      !((allow_negative ? std::fabs(value) : value) > 0x1p-126f))
++    return false;
+   result.unnormalized_value = value;
+   result.x = x;
+   result.y = y;
+@@ -82,11 +94,14 @@ void ThreadedDeconvolutionTools::FindMultiScalePeak(
+   schaapcommon::math::ConvolutionFft(image_fft.data(), image.Data(),
+                                      image.Width(), image.Height());
+ 
++  std::vector<Image> batch_images;
++  const bool batched = ms_transforms->TryTransformScales(image_fft.data(), scales, batch_images);
+   schaapcommon::DynamicFor<size_t> loop;
+   loop.Run(0, n_scales, [&](size_t scale_index) {
+-    Image transformed(image.Width(), image.Height());
+-    ms_transforms->Transform(image_fft.data(), transformed,
+-                             scales[scale_index]);
++    Image transformed = batched ? std::move(batch_images[scale_index])
++                                : Image(image.Width(), image.Height());
++    if (!batched)
++      ms_transforms->Transform(image_fft.data(), transformed, scales[scale_index]);
+     const bool* selected_mask =
+         scale_masks.empty() ? mask : scale_masks[scale_index].data();
+     results[scale_index] =

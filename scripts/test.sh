@@ -69,8 +69,27 @@ COMMON=(-std=c++20 -O2 -I"$DEPS_PREFIX/include" -I"$BREW/include"
 # The Metal probe exists only in a build configured with WSCLEAN_MX_METAL=ON;
 # scripts/metal_build.sh produces one in build-mx-metal/. Its differential
 # assertions (GPU gridding vs float64 CPU twin) run whenever it is present.
+FAILED_PROBES=0
 if [ -x "$BUILD/metal/mx-metal-probe" ]; then
-  "$BUILD/metal/mx-metal-probe" --quiet
+  "$PYTHON" tests/gpu_activation_check.py "$BUILD"
+  "$CMAKE" --build "$BUILD" --target mx-metal-probe mx-peak-probe mx-vkfft-real-probe \
+    mx-multiscale-batch-probe mx-prediction-gpu-probe mx-prediction-mock-probe \
+    mx-prediction-cpu-probe -j "${JOBS:-2}"
+  if ! "$BUILD/metal/mx-metal-probe" --quiet; then
+    printf 'FAILED: archived GPU gridding probe (continuing to collect other gates).\n' >&2
+    FAILED_PROBES=1
+  fi
+  for probe in mx-peak-probe mx-vkfft-real-probe mx-multiscale-batch-probe \
+      mx-prediction-gpu-probe mx-prediction-mock-probe mx-prediction-cpu-probe; do
+    command=("$BUILD/metal/$probe")
+    if [ "$probe" = mx-prediction-gpu-probe ]; then
+      command=("$PYTHON" tests/prediction_gpu_check.py "$BUILD/metal/$probe")
+    fi
+    if ! "${command[@]}"; then
+      printf 'FAILED: %s\n' "$probe" >&2
+      FAILED_PROBES=1
+    fi
+  done
 else
   printf 'Metal probe absent in %s (WSCLEAN_MX_METAL=OFF): use scripts/metal_build.sh.\n' \
     "$BUILD"
@@ -86,4 +105,8 @@ fi
 "$CXX" "${COMMON[@]}" bench/micro/peak_simple.cpp \
   "$ROOT/work/radler/cpp/math/peak_finder.cc" -o "$OUT/peak_simple"
 "$OUT/peak_simple"
+if [ "$FAILED_PROBES" -ne 0 ]; then
+  printf 'Regression suite FAILED: see named probe failures above.\n' >&2
+  exit 1
+fi
 printf 'Regression suite passed. Upstream fixture-dependent integration tests are separate.\n'

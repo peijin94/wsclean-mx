@@ -1,5 +1,10 @@
 # Next development steps for wsclean-mx
 
+> This records the CPU-focused initial plan. The current `gpu-dev` audit,
+> implementation and unresolved gates are in
+> [the 2026-10-22 GPU plan](gpu-next-optimization-2026-10-22.md), which supersedes
+> the older Metal roadmap below.
+
 **Initial audit:** 2026-10-17 (EDT), starting at `333cea8` on `main`; published as `43c6cae`.
 **Continuation:** [CPU correctness repairs and verification](continuation-2026-10-17.md).
 **Tracking read during the initial audit:** Linear **PZ-19**, “wsclean-mx: Apple Silicon optimized WSClean build,” including all five comments then present; GitHub issue **#1**, including all nine comments then present. Both were open/in progress. This continuation does not change remote issue state.

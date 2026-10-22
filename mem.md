@@ -5,12 +5,24 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
-- GPU deconv/prediction record: `dev-note.md` (2026-10-22). Inversion is
-  locked to ducc0 (`MX_METAL_ENGINE` gates the experimental path);
-  `-mgpu` = peak-scan + prediction hooks only, convolve hook opt-in
-  (`MX_METAL_CONVOLVE=1`). 15-slot 3k deep: CPU 23.27 s vs `-mgpu` ~23.5 s;
-  all products T2 PASS at 1-2e-06. Batched vkFFT and direct R2C measured
-  worse than CPU (pinned in `mx-vkfft-batch-probe`, do not retry).
+- GPU audit: `docs/gpu-next-optimization-2026-10-22.md` and `dev-note.md`.
+  Older 23.27 s/~23.5 s and “all hooks PASS” claims are withdrawn: main's
+  Metal registration was compiled out. Activation now requires compile/symbol
+  checks AND nonzero production execution counters. Inversion stays ducc0.
+- New prediction uses two compact shared grids, preserves plane order, and
+  has per-plane CPU recovery (no grid memcpy). Native padded R2C/C2R works;
+  the former “Metal R2C gap” and “vmav cannot wrap shared memory” claims were
+  wrong. Batch convolution and corrected tiled peak search pass their own gates
+  but lost in production ablations, so they remain explicit opt-ins.
+- `-mgpu` defaults to prediction only; `MX_METAL_CONVOLVE=1` enables batched
+  multiscale convolution and `MX_METAL_PEAK=1` enables peak scans. All still
+  require `-mgpu`. `MX_METAL_DEBUG_TIMING=1` prints execution evidence.
+  Four paired 15-slot 3k runs: prediction median 3.275→2.599 s, wall
+  21.890→21.055 s (20.6% / 3.8% reductions). Fixed-model real-MS prediction
+  passes at 5.90e-7 relative RMS; deterministic deep imaging passes all T2
+  products. Threaded source-envelope acceptance remains open (6/10 pass);
+  the archived gridding probe still fails. Do not call the whole Metal suite
+  green. Patch replay: wsclean 50, schaapcommon 7, radler 7, aocommon 2.
 - Current plan: `docs/development-plan.md`; evidence and limits:
   `docs/audit-2026-10-17.md` and `docs/continuation-2026-10-17.md`.
   Read the continuation before the historical measurements below.

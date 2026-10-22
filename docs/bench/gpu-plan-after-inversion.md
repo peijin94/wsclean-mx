@@ -1,4 +1,13 @@
-# GPU plan after dropping GPU inversion
+# Historical GPU plan after dropping GPU inversion — superseded
+
+> **Audit correction, 2026-10-22:** the executable's `main.cpp` did not receive
+> `WSCLEAN_MX_METAL`, so its prediction/deconvolution registration was compiled
+> out. End-to-end GPU attribution and “all hooks” correctness claims below are
+> withdrawn. The peak probe also used an incorrect copied oracle. Native Metal
+> real FFTs work with the correct padded layout; `vmav` can wrap shared memory.
+> The current implementation, actual runtime evidence, limitations and next
+> steps are in `docs/gpu-next-optimization-2026-10-22.md` and `dev-note.md`.
+> Earlier numbers remain below solely as historical records, not acceptance data.
 
 Decision: **inversion goes back to ducc0.** Our cpu-vkfft engine stays behind
 `MX_METAL_ENGINE=cpu-vkfft` as an experiment; `-mgpu` is redefined to mean

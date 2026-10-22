@@ -1,80 +1,81 @@
-# dev-note.md — GPU deconvolution + prediction (2026-10-22)
+# Development note — audited GPU prediction and deconvolution
 
-Inversion is settled on ducc0. This round built the `-mgpu` path as
-"GPU for prediction and deconvolution only" on `gpu-dev`, measured it
-against pure CPU on the 15-slot LWA cutout, and kept what wins.
+Updated 2026-10-22. Full evidence and plan:
+`docs/gpu-next-optimization-2026-10-22.md`.
 
-## Scope lock
+## Current state
 
-- `work/wsclean/wgridder/wgridder.h`: Metal inversion runs only when
-  `MX_METAL_ENGINE=metal|cpu-vkfft` is set explicitly. Plain `-mgpu`
-  never touches inversion; the ducc0 call below runs untouched.
-- `main/main.cpp`: the peak/convolution/prediction hooks register only
-  when `settings.useGpu` is true. Same binary without `-mgpu` is pure CPU.
+- Root `gpu-dev`; published CPU release / `main` unchanged.
+- **Plain `-mgpu` now means GPU prediction only.** Inversion and
+  gridding/degridding stay on ducc0. No hooks run without `-mgpu`.
+- Prediction uses two compact shared planes, ordered consumption and per-plane
+  CPU recovery. No grid-copy round trips; runtime counters verify actual work.
+- Native padded R2C/C2R and batched multiscale convolution work numerically.
+  Corrected tiled peak search uses real radler as its oracle.
+- Deconvolution offloads are slower in current production measurements, so
+  `MX_METAL_CONVOLVE=1` and `MX_METAL_PEAK=1` remain explicit experiments.
+- CPU-only builds reject `-mgpu`. `MX_METAL_DEBUG_TIMING=1` prints proof counters.
+- Do not use the retired `MX_METAL_ENGINE` inversion experiments: their archived
+  GPU-gridding probe still fails.
 
-## Built (all behind `-mgpu`, all with CPU fallback)
+## Measured result
 
-| piece | hook | GPU core | gate |
-|---|---|---|---|
-| peak scan | radler `SetPeakScanHook` → `mx_peak_find` | Metal argmax, masked/bordered | `mx-peak-probe` ALL MATCH |
-| convolution c2r | schaapcommon `SetConvolveC2RHook` → `mx_convolve_c2r` | Hermitian expansion (8e-08 CPU) + vkFFT c2c inverse | `expand-gpu-test` 3.0e-07 @1024, 5.1e-07 @3072 |
-| prediction FFT | ducc0 `SetPredictFftHook` → `mx_predict_fft` | forward c2c, copy-swap per plane, thread-local plans | `mx-vkfft-fwd-probe` 3.3e-07 @1024, 5.9e-07 @3072 |
+Apple M2; 15-slot standalone MS; 3072² / 2.7amin; 20,000 multiscale iterations;
+8 threads. Same frozen executable, two excluded warmups, four AB/BA pairs.
 
-Probes: `mx-vkfft-probe` (c2c 3.2e-07), `mx-vkfft-batch-probe` (see below).
+| Median | CPU | GPU prediction |
+|---|---:|---:|
+| Inversion | 11.388 s | 11.340 s |
+| Prediction | 3.275 s | 2.599 s |
+| Deconvolution | 5.135 s | 5.135 s |
+| Wall | 21.890 s | 21.055 s |
 
-## Measured (15-slot flat, 931,920 rows, 3k/2.7amin exo template, `-j 8`)
+**20.6% less prediction time, 3.8% less total time.** GPU won every pair.
+This is not a claim that GPU deconvolution is faster.
 
-| | CPU | `-mgpu` (peak+predict; convolve off) |
-|---|---|---|
-| inversion | 11.84 s | 12.12 s (ducc0 both) |
-| prediction | 3.35 s | 3.41 s (tie) |
-| deconvolution | 4.82 s | 5.17–5.39 s (hook overhead, in noise) |
-| wall | 23.27 s | ~23.5 s |
+## Validation and limits
 
-Numerical gate with all hooks on: dirty, psf, image, model, residual
-**all T2 PASS at 1–2e-06** (deep run converged to one basin this time;
-earlier chaos splits were CLEAN basins, not hook errors — 1024/niter-200
-passes all products bitwise-close).
+- Identical-model CLI prediction into two disposable MS clones: all 178,928,640
+  complex MODEL_DATA cells compared; relative RMS 5.90e-7, max/peak 7.01e-7.
+- Deterministic deep CPU repeat is bitwise identical. All CPU/GPU deep products
+  pass T2 at `-j 1`; image 7.18e-7 and residual 9.45e-7 relative RMS.
+- Real-device prediction differential: 12 supported cases, 681 completed planes,
+  zero fallback/copy bytes; production-size 3960² grid also passes.
+- CPU build: 136 Python tests and linked native regressions pass.
+- Metal: new active-path gates pass, but the aggregate suite intentionally fails
+  on the archived gridding probe. Do not report blanket green.
+- **Threaded scientific acceptance remains open:** initial 0/4 source-envelope
+  passes; balanced follow-up gives 6/10 against 10 CPU references, with the same
+  conservative limits. Saved model differences arise before GPU prediction in
+  this workload, but failed gates remain recorded rather than waived.
+- All 108 files in both the benchmark input and original 15-slot source retained
+  their hashes. Science inputs were not predicted into.
 
-## Negative results (pinned, do not retry blindly)
+## Corrections that must not be forgotten
 
-- Direct vkFFT R2C on Metal: 4 config variants, 100% mismatch incl.
-  sign-flip character. Metal-backend R2C gap, not a stride fix.
-  Probe removed; expansion + c2c supersedes it.
-- Batched vkFFT (`numberBatches`) at 3072²: B=2: 13.0, B=4: 13.6,
-  B=8: 23.7 ms/plane vs 12.5 serialized vs 7.1 CPU. Batching never beats
-  serialized singles, which never beat the CPU (memory-bound; ducc0 does
-  half the work, 4.7M-point c2r vs 9.4M c2c). `mx-vkfft-batch-probe`
-  pins this.
-- Consequence: convolve hook is **opt-in** (`MX_METAL_CONVOLVE=1`).
-  Default `-mgpu` = peak + predict only.
-
-## Scoped but deferred
-
-Prediction shared-buffer pipeline (grids born in shared memory, chunked
-FFT(N+1)/degrid(N) overlap): needs ducc0 `dirty2x` restructure
-(`vmav` cannot wrap shared memory; signatures change). ROI cap ~0.5 s
-(FFT itself ties), so deferred until deconv has a proven win to pair
-with. Kill-switches `MX_METAL_NO_CONVOLVE` / `MX_METAL_NO_PREDICT`
-stay for A/B.
-
-## State
-
-- Branches: `gpu-dev` (this work), `main` stays CPU.
-- Patches (all verify vs `mx-base`): wsclean 0001–0049, schaapcommon
-  0001–0006, radler 0001–0006.
-- Harness: 125/128 (3 failures are pre-existing assertions in
-  `metalinversion.mm`/`mxshaders.h`, untouched by this work).
-- Datasets (`/tmp`): parent `ovrolwa-64mhz.ms` (17G), flat
-  `lwa-15slot-flat.ms` (4.1G, rebuild: `mx-mscutout … "TIME < 5268786770"`,
-  ~7 s), NRAO `srdp-3c286` (31G, never delete). Open: `ovrolwa-chunks`
-  (16G staging, unattributed).
-- Full write-up: `docs/bench/gpu-plan-after-inversion.md`.
+Earlier end-to-end GPU claims were invalid: main's feature macro was missing,
+so registration was compiled out. The old peak oracle also shared a sign bug.
+The former claims that Metal R2C was broken and `vmav` could not wrap shared
+storage were wrong. Historical numbers remain in the superseded
+`docs/bench/gpu-plan-after-inversion.md`, not as acceptance evidence.
 
 ## Next
 
-1. True batched C2R needs working Metal R2C (blocked above) or an MLX
-   `irfft2` probe (unmeasured; MLX drags runtime deps).
-2. Prediction pipeline if a deconv win ever justifies ducc0 surgery.
-3. The peak hook is the only shipped win; everything else is validated
-   infrastructure waiting on (1).
+1. Resolve scientific boundary checks with a larger predeclared balanced family
+   and a known-small CPU perturbation control; do not relax tolerances.
+2. Quarantine/repair the failing retired inversion probe and selectable engines.
+3. Remove deconvolution plan churn and copies; retain scale kernels/workspaces
+   with an aggregate-byte budget and fuse weighting/peak extraction where valid.
+4. Reuse prediction plans safely; broaden observing-mode/portability validation.
+
+## Reproducible state
+
+- Measured executable: `bench/bin/gpu-audit-final/wsclean`.
+- Final rebuilt `build-mx-metal/wsclean` reports `mx-base-50-g0dbb1b06`; its
+  1024² CLI recheck passes all six products with 89 actual GPU planes.
+  Delivery snapshot: `bench/bin/gpu-audit-delivered/wsclean`.
+- Evidence: `bench/out/gpu-audit-20261022-0715/`.
+- Figures and raw summaries: `docs/bench/gpu-audit-20261022/`.
+- WSClean `0dbb1b06`; schaapcommon `8bb0759`; radler `39d58d1`.
+- Patch series: WSClean 50, schaapcommon 7, radler 7, aocommon 2; all replayed
+  exactly from `mx-base` in isolated indices. No push or main merge.

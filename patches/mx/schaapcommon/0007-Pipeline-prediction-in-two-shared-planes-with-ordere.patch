@@ -1,0 +1,135 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 09:00:35 -0700
+Subject: [PATCH] Pipeline prediction in two shared planes with ordered CPU
+ fallback
+
+
+diff --git a/external/ducc0/wgridder/mx_prediction.h b/external/ducc0/wgridder/mx_prediction.h
+new file mode 100644
+index 0000000..88853d2
+--- /dev/null
++++ b/external/ducc0/wgridder/mx_prediction.h
+@@ -0,0 +1,30 @@
++// Optional prediction-only FFT session. No Metal dependency in CPU builds.
++#ifndef DUCC0_MX_PREDICTION_H
++#define DUCC0_MX_PREDICTION_H
++#include <complex>
++#include <cstddef>
++namespace ducc0 { namespace detail_gridder {
++class PredictionSession {
++ public:
++  virtual ~PredictionSession() = default; // Must drain all outstanding work.
++  // Exactly two compact [nu,nv] planes. Storage lives until session destruction.
++  virtual std::complex<float>* data(std::size_t slot) noexcept = 0;
++  virtual bool submit(std::size_t slot, std::size_t plane) noexcept = 0;
++  // Must drain slot even after submit failure, before returning false.
++  virtual bool wait(std::size_t slot, std::size_t plane) noexcept = 0;
++};
++}}
++// The provider owns registration state in one production TU. The default
++// resolver is a coalesced weak definition, so CPU-only executables need no
++// undefined-symbol linker flags (Darwin weak_import alone does not suffice).
++// Keep the default call out of line so a strong provider can override it even
++// across static archives and hidden-visibility ducc0 instantiations.
++extern "C" __attribute__((visibility("default")))
++ducc0::detail_gridder::PredictionSession*
++mx_prediction_create(std::size_t nu, std::size_t nv, bool is_float) noexcept;
++#ifndef DUCC0_MX_PREDICTION_PROVIDER
++extern "C" __attribute__((weak,noinline,visibility("default")))
++ducc0::detail_gridder::PredictionSession*
++mx_prediction_create(std::size_t, std::size_t, bool) noexcept { return nullptr; }
++#endif
++#endif
+diff --git a/external/ducc0/wgridder/wgridder_impl.h b/external/ducc0/wgridder/wgridder_impl.h
+index 25c0ccc..82891ff 100644
+--- a/external/ducc0/wgridder/wgridder_impl.h
++++ b/external/ducc0/wgridder/wgridder_impl.h
+@@ -53,23 +53,12 @@
+ #include "ducc0/math/gridding_kernel.h"
+ #include "ducc0/math/rangeset.h"
+ #include "ducc0/wgridder/wgridder.h"
++#include "ducc0/wgridder/mx_prediction.h"
+ 
+ namespace ducc0 {
+ 
+ namespace detail_gridder {
+ 
+-// Optional GPU hook for the prediction (dirty2grid) forward FFT. When set,
+-// it replaces the band-limited c2c block in dirty2grid_c_wscreen with a
+-// single in-place forward transform on the square n x n complex grid.
+-// Returns 1 on success, 0 to fall back to ducc0. Only float is attempted.
+-using PredictFftHook = int (*)(std::complex<float>*, size_t);
+-inline PredictFftHook& predictFftHookRef() {
+-  static PredictFftHook h = nullptr;
+-  return h;
+-}
+-inline void SetPredictFftHook(PredictFftHook h) { predictFftHookRef() = h; }
+-inline PredictFftHook GetPredictFftHook() { return predictFftHookRef(); }
+-
+ using namespace std;
+ 
+ template<typename T> constexpr inline int mysimdlen
+@@ -704,19 +693,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tm
+       {
+       dirty2grid_pre2(dirty, grid, w);
+       timers.push("FFT");
+-      // GPU prediction FFT (registered by wsclean -mgpu): one full forward
+-      // transform instead of the band-limited bands. Falls back to ducc0
+-      // when unset, non-square, non-float, or on any GPU failure.
+-      if constexpr (std::is_same<Tcalc, float>::value) {
+-        if (nu == nv && GetPredictFftHook() != nullptr) {
+-          vfmav<complex<Tcalc>> inout_full(grid);
+-          if (GetPredictFftHook()(reinterpret_cast<std::complex<float>*>(inout_full.data()),
+-                                  nu) != 0) {
+-            timers.pop();
+-            return;
+-          }
+-        }
+-      }
+       vfmav<complex<Tcalc>> inout(grid);
+ 
+       const auto &rsu(uranges[iplane]);
+@@ -1570,6 +1546,41 @@ timers.pop();
+         timers.pop();
+         // correct for w gridding etc.
+         apply_global_corrections(tdirty);
++        // Shared planes are prepared on the CPU, transformed asynchronously,
++        // and consumed once, strictly in plane order. Never restart prediction
++        // after visibility updates: a failed plane is re-rendered locally.
++        std::unique_ptr<PredictionSession> session;
++        session.reset(mx_prediction_create(nu, nv, std::is_same<Tcalc,float>::value));
++        if constexpr (std::is_same<Tcalc,float>::value)
++          if (session)
++            {
++            std::array<vmav<complex<float>,2>,2> planes{
++              vmav<complex<float>,2>(session->data(0), {nu,nv}),
++              vmav<complex<float>,2>(session->data(1), {nu,nv})};
++            std::array<bool,2> submitted{};
++            auto prepare = [&](size_t pl)
++              {
++              auto slot = pl%2;
++              dirty2grid_pre2(tdirty, planes[slot], wmin+pl*dw);
++              submitted[slot] = session->submit(slot, pl);
++              };
++            if (nplanes) prepare(0);
++            for (size_t pl=0; pl<nplanes; ++pl)
++              {
++              auto slot = pl%2;
++              // Prep next while this FFT is in flight; next FFT can overlap
++              // this plane's CPU degridding. Reuse only consumed slots.
++              if (pl+1<nplanes) prepare(pl+1);
++              bool completed = session->wait(slot, pl);
++              double w = wmin+pl*dw;
++              if (!submitted[slot] || !completed)
++                dirty2grid_c_wscreen(tdirty, planes[slot], w, pl);
++              timers.push("degridding proper");
++              grid2x_c<true>(planes[slot], pl, w);
++              timers.pop();
++              }
++            return;
++            }
+         timers.push("allocating grid");
+         auto grid = vmav<complex<Tcalc>,2>::build_noncritical({nu,nv}, PAGE_IN(nthreads));
+         timers.pop();
