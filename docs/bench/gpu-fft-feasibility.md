@@ -1,0 +1,77 @@
+# GPU FFT feasibility (the "CPU gridding + GPU FFT" proposal)
+
+Question: the Metal grid kernel is 7.5x slower than ducc0's gridding (see
+`phase-costs.md`), so should we drop GPU gridding, grid on the CPU, and put the
+FFT on the GPU, using unified memory to avoid the copy? And could the two
+overlap?
+
+Measured with `bench/metal/mps_fft_bench.mm` (MPSGraph `fastFourierTransform`,
+complex64, 2-D transform, 5 reps after warm-up, verified against the exact DC
+term = sum of inputs).
+
+## MPSGraph FFT vs ducc0 CPU FFT (full transform, one plane)
+
+| grid | factorisation | MPSGraph GPU | ducc0 CPU (8 thr) | GPU speedup |
+|---|---|---|---|---|
+| 2048 | 2^11 | 4.5 ms | 5.6 ms | 1.24x |
+| 3072 | 2^10*3 | 17.3 ms | 16.6 ms | 0.96x |
+| 3840 | 2^8*15 | 20.6 ms | 23.9 ms | 1.16x |
+| 4096 | 2^12 | 20.1 ms | 28.4 ms | 1.41x |
+| **3968** | **2^7*31** | **102.6 ms** | **34.6 ms** | **0.34x** |
+
+The real grid for 4096px/2amin is 3968 = 2^7*31 (nu rounded up to a multiple of
+32 for tile alignment). That is the worst case for MPSGraph: 3x slower than the
+CPU. Power-of-two sizes are the only ones where the GPU wins, and then only
+1.2-1.4x.
+
+## Why that is not enough
+
+Our production path does not run a full FFT — it band-limits to the occupied
+lines and the dirty rows, which already costs only **18.6 ms/plane** (1.34 s for
+72 planes). That is faster than the best MPSGraph full transform (20.1 ms at
+4096) and nearly 6x faster than MPSGraph at the real grid size.
+
+So "CPU gridding + GPU FFT" would be:
+
+    0.44 s gridding + 1.44 s GPU FFT (72 x 20.1 ms) + 0.27 s wscreen = 2.15 s
+
+against ducc0's 1.75 s for the whole inversion. Slower, even ignoring the wscreen
+and extract that also have to run.
+
+For the GPU to win here it would have to run the FFT at < 6.1 ms/plane (the CPU
+gridding cost) to hide behind gridding, or < 12.6 ms/plane to beat the
+band-limited CPU FFT. MPSGraph is at 20.1 ms in its best case.
+
+## What would change the answer
+
+1. **Band-limit on the GPU too.** MPSGraph can transform a sliced tensor, so the
+   occupied-column / dirty-row structure could in principle be kept. That is the
+   only route to single-digit ms per plane. Untested.
+2. **Batch the planes into one call** (`(nplanes, N, N)` transform over axes 1,2)
+   to amortise per-call overhead. My batched bench crashed on a rank-4 read-back
+   at 8x4096^2 (2.1 GB buffers, unresolved); the single-plane numbers above are
+   the reliable ones.
+3. **vkFFT** vendors a Metal backend that handles non-smooth sizes via Bluestein
+   more carefully than MPSGraph, and could plausibly beat 20 ms at 3968. Still
+   has to reach < 12.6 ms/plane to matter, a 8x improvement over MPSGraph.
+4. **MLX** (`mlx.core.fft`) dispatches to MPSGraph/MLX primitives for FFT, so it
+   inherits the same size sensitivity; it is also a C++/Python framework that
+   would have to be linked into wsclean.
+
+## The overlap idea, bounded
+
+ducc0's inversion is 1.75 s: gridding 0.44, FFT 0.91, wscreen 0.27. A perfect
+producer/consumer overlap of gridding with FFT can hide at most the smaller of
+the two, i.e. ~0.44 s, giving ~1.3 s — a 25% win over ducc0, and only if the GPU
+FFT is not slower than the CPU one, which at 3968 it is by 3x.
+
+Against the current -mgpu path (9.2 s) the interesting number is different: the
+Metal path is 5x slower than ducc0 overall, and the FFT is only 14% of it. Moving
+the FFT to the GPU cannot fix a path whose losses are in gridding (7.5x), extract
+(9x) and visibility prep (78x).
+
+## Grid size side-note
+
+Padding the grid to 4096 (power of two, ~3% more samples) measured
+FFT 1.34 -> 1.28 s and inversion 9.32 -> 9.18 s (-1.5%). Reverted: not worth a
+layout change, because band-limiting already dilutes the size penalty.
