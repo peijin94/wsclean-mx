@@ -1,0 +1,63 @@
+$ SELECT TIME, GCOUNT() AS rows FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms GROUPBY TIME
+    select result of 15 rows
+2 selected columns:  TIME rows
+Unit: s
+02-Nov-2025/07:50:25.260	62128
+02-Nov-2025/07:50:35.291	62128
+02-Nov-2025/07:50:45.322	62128
+02-Nov-2025/07:50:55.353	62128
+02-Nov-2025/07:51:05.384	62128
+02-Nov-2025/07:51:15.415	62128
+02-Nov-2025/07:51:25.446	62128
+02-Nov-2025/07:51:35.477	62128
+02-Nov-2025/07:51:45.508	62128
+02-Nov-2025/07:51:55.539	62128
+02-Nov-2025/07:52:05.570	62128
+02-Nov-2025/07:52:15.601	62128
+02-Nov-2025/07:52:25.632	62128
+02-Nov-2025/07:52:35.663	62128
+02-Nov-2025/07:52:45.694	62128
+
+
+$ SELECT GCOUNT() AS stored_rows FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms
+    select result of 1 rows
+1 selected columns:  stored_rows
+931920
+
+
+$ SELECT GCOUNT() AS autocorrelation_rows FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms WHERE ANTENNA1==ANTENNA2
+    select result of 1 rows
+1 selected columns:  autocorrelation_rows
+5280
+
+
+$ SELECT GCOUNT() AS cross_correlation_rows FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms WHERE ANTENNA1!=ANTENNA2
+    select result of 1 rows
+1 selected columns:  cross_correlation_rows
+926640
+
+
+$ SELECT NUM_CHAN, CHAN_FREQ FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms/SPECTRAL_WINDOW
+    select result of 1 rows
+2 selected columns:  NUM_CHAN CHAN_FREQ
+Unit: 	Hz
+48	[6.39656e+07, 6.40613e+07, 6.4157e+07, 6.42527e+07, 6.43484e+07, 6.44441e+07, 6.45398e+07, 6.46355e+07, 6.47312e+07, 6.48269e+07, 6.49226e+07, 6.50183e+07, 6.5114e+07, 6.52097e+07, 6.53054e+07, 6.54011e+07, 6.54968e+07, 6.55925e+07, 6.56882e+07, 6.57839e+07, 6.58796e+07, 6.59753e+07, 6.6071e+07, 6.61667e+07, 6.62625e+07, 6.63582e+07, 6.64539e+07, 6.65496e+07, 6.66453e+07, 6.6741e+07, 6.68367e+07, 6.69324e+07, 6.70281e+07, 6.71238e+07, 6.72195e+07, 6.73152e+07, 6.74109e+07, 6.75066e+07, 6.76023e+07, 6.7698e+07, 6.77937e+07, 6.78894e+07, 6.79851e+07, 6.80808e+07, 6.81765e+07, 6.82722e+07, 6.83679e+07, 6.84636e+07]
+
+
+$ SELECT NUM_CORR, CORR_TYPE FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms/POLARIZATION
+    select result of 1 rows
+2 selected columns:  NUM_CORR CORR_TYPE
+4	[9, 10, 11, 12]
+
+
+$ SELECT DISTINCT INTERVAL, EXPOSURE FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms
+    select result of 1 rows
+2 selected columns:  INTERVAL EXPOSURE
+Unit: s	s
+10.031	10.031
+
+
+$ SELECT GCOUNT() AS antennas FROM /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms/ANTENNA
+    select result of 1 rows
+1 selected columns:  antennas
+352

@@ -1,0 +1,25 @@
+MX prediction session nu=3960 nv=3960 shared_bytes=250905600
+MX prediction proof: shared_planes=2 submitted=82 completed=82 cpu_fallback=0 grid_memcpy_bytes=0 gpu_s=1.421841 wall_s=2.328066
+[mx-metal] convolution batches=0 planes=0 singles=0 refused=0
+[mx-metal] convolution plans=0 init_s=0.000000 execute_s=0.000000 gpu_s=0.000000 readback_s=0.000000
+[mx-metal] peak calls=0 submissions=0 successes=0 declines=0 planes=0
+real 20.71
+user 98.63
+sys 5.81
+          2745532416  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             1769070  page reclaims
+               21805  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                1526  voluntary context switches
+               79040  involuntary context switches
+        798129102741  instructions retired
+        292829216172  cycles elapsed
+          2715617824  peak memory footprint

@@ -1,0 +1,7 @@
+{
+  "env": {
+    "MX_METAL_DEBUG_TIMING": "1"
+  },
+  "policy": "All inherited MX_METAL_* and MX_WGRIDDER_* variables cleared before these explicit settings.",
+  "cwd": "/Users/peijinz/dev/wsclean-mx"
+}

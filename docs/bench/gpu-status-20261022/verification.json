@@ -1,0 +1,100 @@
+{
+  "benchmarked_root_commit": "25725da84c01de0c97272f29604889a5ecae4613",
+  "benchmarked_developer_wsclean_commit": "c782c93c9402b8b198626320ce55f8565b671abf",
+  "binary_sha256": "744bc73a6d1f7a68f33708e0cde598f7cfffbcb383be201a9d499969bb9f17c1",
+  "source_math_changed": false,
+  "campaign": {
+    "plan": 9,
+    "receipts": 9,
+    "results": 9,
+    "all_exits_zero": true,
+    "excluded_warmups": 2,
+    "measured_cpu_gpu_pairs": 3,
+    "separate_trace_runs": 1
+  },
+  "python_suite": {
+    "passed": true,
+    "tests": 181,
+    "seconds": 31.571,
+    "command": ".venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
+  },
+  "reproduction": [
+    {
+      "file": "benchmark-timing.png",
+      "sha256": "11f02273bfe285ba75db7c223e184ba5dc45760807329395661474fc28a2c6a7",
+      "bytes": 70850,
+      "exact_reproduction": true
+    },
+    {
+      "file": "prediction-profile.png",
+      "sha256": "70235326ed91b9b8aa319b6ae5338ce736d1733e2281501ac68007aa58c7aa3d",
+      "bytes": 310842,
+      "exact_reproduction": true
+    },
+    {
+      "file": "restored-full-field.png",
+      "sha256": "7c2b7863e3f3d98a88ce7097ac7874d456c5ef75567ce8b97129326a4e8e27ca",
+      "bytes": 1634450,
+      "exact_reproduction": true
+    },
+    {
+      "file": "restored-extended-zoom.png",
+      "sha256": "2e361d14313530e2ce4598109c113e0188e1d960da0e61ef3642a68de9376438",
+      "bytes": 2145240,
+      "exact_reproduction": true
+    },
+    {
+      "file": "results.json",
+      "sha256": "cb3b3ee3df4b3abbdd6781c7ef8836e952c278f1dad72353b7aeabdfccc87abe",
+      "bytes": 129554,
+      "exact_reproduction": true
+    }
+  ],
+  "input_integrity": {
+    "benchmark": {
+      "files": 108,
+      "unchanged": true
+    },
+    "original": {
+      "files": 108,
+      "unchanged": true
+    }
+  },
+  "T2_pair_exits": [
+    1,
+    0,
+    1
+  ],
+  "T2_failures_preserved": true,
+  "display_pair_predeclared": true,
+  "display_vmax_percentile": 99.0,
+  "crop": {
+    "requested_center_fraction_xy": [
+      0.25,
+      0.6
+    ],
+    "center_xy": [
+      768,
+      1843
+    ],
+    "requested_center_xy_float": [
+      768.0,
+      1843.1999999999998
+    ],
+    "bounds_xyxy": [
+      384,
+      1459,
+      1152,
+      2227
+    ],
+    "shape_yx": [
+      768,
+      768
+    ]
+  },
+  "secret_pattern_matches": [],
+  "source_file_hashes": {
+    "bench/plot_gpu_status.py": "8142e8d3fa1497b340e977adcf249dcd65cb12df09b78e4676a47c08d539b1c7",
+    "tests/test_gpu_status_figures.py": "2d8761051afcd16b6ef1b765ddfc55533317603b8e154c94fe01e9112aa7eb93"
+  }
+}

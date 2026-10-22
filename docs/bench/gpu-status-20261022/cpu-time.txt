@@ -1,0 +1,20 @@
+real 21.04
+user 103.32
+sys 5.95
+          2796453888  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             1760784  page reclaims
+               21794  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                1378  voluntary context switches
+               78828  involuntary context switches
+        834365149341  instructions retired
+        308368393872  cycles elapsed
+          2766309944  peak memory footprint

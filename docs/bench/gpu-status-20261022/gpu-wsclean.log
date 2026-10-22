@@ -1,0 +1,108 @@
+
+WSClean version 3.7 (2026-02-16)
+This software package is released under the GPL version 3.
+Author: André Offringa (offringa@gmail.com).
+
+First measurement set has corrected data: tasks will be applied on the corrected data column.
+=== IMAGING TABLE ===
+       # Pol Ch JG ²G FG FI In Freq(MHz)
+| Independent group:
++-+-J- 0  I   0  0  0  0  0  0  64-69 (48)
+WARNING: This measurement set has no or an invalid WEIGHT_SPECTRUM column; will use less informative WEIGHT column.
+Reordering /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms into 1 x 1 parts.
+Reordering: 0%....10%....20%....30%....40%....50%....60%....70%....80%....90%....100%
+Initializing model visibilities: 0%....10%....20%....30%....40%....50%....60%....70%....80%....90%....100%
+Precalculating weights for Briggs'(0) weighting...
+Opening reordered part 0 for /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms
+ == Constructing PSF ==
+Detected 16 GB of system memory, usage limited to 6.4 GB (frac=40%, no abs limit)
+Opening reordered part 0 for /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms
+Determining min and max w & theoretical beam size... DONE (w=[5.45156e-07:20.7835] lambdas, maxuvw=540.285 lambda)
+Theoretic beam = 6.36'
+Minimal inversion size: 3130 x 3130, using optimal: 3136 x 3136
+Loading data in memory...
+Gridding 926640 rows...
+Gridded visibility count: 34067207
+Fitting beam... major=10.43', minor=7.79', PA=43.26 deg, theoretical=6.36'.
+Writing psf image... DONE
+ == Constructing image ==
+Opening reordered part 0 for /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms
+Loading data in memory...
+Gridding 926640 rows...
+Gridded visibility count: 34067207
+Writing dirty image...
+Saving horizon mask...
+ == Deconvolving (1) ==
+Estimated standard deviation of background noise: 1.25 Jy
+Lowest RMS in image: 367.82 mJy
+Scale info:
+- Scale 0, bias factor=1, psfpeak=1, gain=0.1, kernel peak=0.0803352
+- Scale 9, bias factor=1.3, psfpeak=0.298411, gain=0.335108, kernel peak=0.0328279
+- Scale 19, bias factor=1.6, psfpeak=0.109635, gain=0.91212, kernel peak=0.00960813
+- Scale 38, bias factor=2, psfpeak=0.0437631, gain=2.28503, kernel peak=0.00286372
+- Scale 75, bias factor=2.4, psfpeak=0.0136548, gain=7.32344, kernel peak=0.00075052
+- Scale 151, bias factor=3.1, psfpeak=0.00333461, gain=29.9885, kernel peak=0.00019221
+- Scale 302, bias factor=3.8, psfpeak=0.000780206, gain=128.171, kernel peak=4.92441e-05
+- Scale 603, bias factor=4.8, psfpeak=0.000197247, gain=506.979, kernel peak=1.23883e-05
+- Scale 1207, bias factor=6, psfpeak=3.05647e-05, gain=3271.75, kernel peak=3.10863e-06
+RMS per scale: {0: 1.7 Jy, 9: 1.31 Jy, 19: 1.2 Jy, 38: 1.14 Jy, 75: 1.08 Jy, 151: 1.03 Jy, 302: 939.68 mJy, 603: 728.2 mJy, 1207: 384.59 mJy}
+Starting multi-scale cleaning. Start peak=8.32 Jy, major iteration threshold=1.1 Jy (final)
+Iteration 50, scale 0 px : 6.64 Jy at 853,2176
+Iteration 220, scale 0 px : 5.34 Jy at 2059,1361
+Iteration 548, scale 0 px : 4.3 Jy at 1559,1308
+Iteration 1124, scale 0 px : 3.45 Jy at 1875,1070
+Iteration 2050, scale 0 px : 2.79 Jy at 2412,820
+Iteration 3489, scale 0 px : 2.28 Jy at 1334,568
+Iteration 5567, scale 9 px : 2 Jy at 552,1538
+Iteration 5574, scale 603 px : 1.99 Jy at 2224,2135
+Iteration 5585, scale 0 px : 1.9 Jy at 1557,2697
+Iteration 8574, scale 0 px : -1.54 Jy at 1369,976
+Iteration 14330, scale 1207 px : -1.71 Jy at 2408,711
+Iteration 14342, scale 302 px : 1.8 Jy at 2574,2048
+Iteration 14347, scale 603 px : -1.62 Jy at 1510,2743
+Iteration 14383, scale 19 px : 1.47 Jy at 552,1535
+Iteration 14394, scale 302 px : 1.34 Jy at 2387,2359
+Subminor loop is near minor loop threshold. Initiating countdown.
+(12) Iteration 14428, scale 1207 px : -1.39 Jy at 2410,709
+Iteration 14442, scale 0 px : 1.52 Jy at 2354,718
+Iteration 15558, scale 603 px : -1.38 Jy at 1926,370
+Iteration 15597, scale 38 px : 1.25 Jy at 1566,2079
+(11) Iteration 15603, scale 0 px : 1.32 Jy at 1879,397
+(10) Iteration 19942, scale 9 px : 1.14 Jy at 2055,2159
+(9) Iteration 19944, scale 302 px : 1.35 Jy at 2344,752
+(8) Iteration 19950, scale 151 px : -1.15 Jy at 2220,2063
+(7) Iteration 19951, scale 1207 px : -1.15 Jy at 2411,707
+(6) Iteration 19953, scale 302 px : 1.22 Jy at 2346,754
+(5) Iteration 19957, scale 0 px : 1.13 Jy at 2184,903
+(4) Iteration 20000, scale 19 px : 1.12 Jy at 552,1535
+Cleaning finished because maximum number of iterations was reached.
+Auto-masking threshold reached; continuing next major iteration with deeper threshold and mask.
+Maximum number of minor deconvolution iterations was reached: not continuing deconvolution.
+Assigning from 1 to 1 channels...
+Writing model image...
+ == Converting model image to visibilities ==
+Opening reordered part 0 for /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms
+Loading metadata...
+Predicting 926640 rows...
+Writing...
+ == Constructing image ==
+Opening reordered part 0 for /Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms
+Loading data in memory...
+Gridding 926640 rows...
+Gridded visibility count: 34067207
+1 major iterations were performed.
+Rendering sources to restored image (beam=7.79'-10.43', PA=43.26 deg)... DONE
+Writing restored image... DONE
+Multi-scale cleaning summary:
+- Scale 0 px, nr of components cleaned: 19810 (3.31 KJy)
+- Scale 9 px, nr of components cleaned: 9 (3.93 Jy)
+- Scale 19 px, nr of components cleaned: 11 (8.36 Jy)
+- Scale 38 px, nr of components cleaned: 6 (8.29 Jy)
+- Scale 75 px, nr of components cleaned: 0 (0 Jy)
+- Scale 151 px, nr of components cleaned: 1 (-11.29 Jy)
+- Scale 302 px, nr of components cleaned: 49 (1.72 KJy)
+- Scale 603 px, nr of components cleaned: 86 (1.86 KJy)
+- Scale 1207 px, nr of components cleaned: 28 (-9.33 KJy)
+Total: 20000 components (-2.44 KJy)
+Inversion: 00:00:11.292230, prediction: 00:00:02.702134, deconvolution: 00:00:04.835684
+Cleaning up temporary files...

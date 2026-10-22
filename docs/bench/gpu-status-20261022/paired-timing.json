@@ -1,0 +1,20 @@
+[
+  {
+    "cpu_tag": "gpu-status-20261022-142851-02-cpu",
+    "gpu_tag": "gpu-status-20261022-142851-03-prediction",
+    "wall_reduction_percent": 1.5684410646387703,
+    "prediction_reduction_percent": 15.69170403202682
+  },
+  {
+    "cpu_tag": "gpu-status-20261022-142851-05-cpu",
+    "gpu_tag": "gpu-status-20261022-142851-04-prediction",
+    "wall_reduction_percent": 5.321100917431199,
+    "prediction_reduction_percent": 23.899095721282936
+  },
+  {
+    "cpu_tag": "gpu-status-20261022-142851-06-cpu",
+    "gpu_tag": "gpu-status-20261022-142851-07-prediction",
+    "wall_reduction_percent": 1.1732851985559622,
+    "prediction_reduction_percent": 18.64229624667888
+  }
+]

@@ -1,0 +1,12 @@
+ref:  bench/out/gpu-status-20261022-142851-02-cpu/gpu-profile-delivered
+test: bench/out/gpu-status-20261022-142851-03-prediction/gpu-profile-delivered
+tier: T2
+
+product                      bitwise    n_diff     max_ulp     max_abs    rel_rms   rel_peak  peak_ratio  result
+----------------------------------------------------------------------------------------------------------------
+img-dirty.fits                 False   9143658  1825931272   9.155e-05   1.77e-06   1.62e-07  1.00000011  PASS
+img-horizon-mask.fits           True         0           0   0.000e+00   0.00e+00   0.00e+00  1.00000000  PASS
+img-image.fits                 False   9436412  2028292484   1.075e-01   6.28e-04   1.93e-04  1.00000066  FAIL
+img-model.fits                 False   9398553  2079327178   1.922e+00   6.19e-03   6.19e-03  1.00000079  FAIL
+img-psf.fits                   False   9280064  1676127244   2.980e-07   1.84e-06   2.98e-07  1.00000000  PASS
+img-residual.fits              False   9436474  2075405080   6.367e-01   1.42e-03   8.61e-03  0.99999866  FAIL
