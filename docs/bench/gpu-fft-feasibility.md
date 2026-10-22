@@ -137,3 +137,59 @@ whole investigation where the GPU has a defensible role.
   (`MX_VKFFT_CLEANUP=1` to force it).
 - Build the TU with `-O3` is fine, but a `-O2` build of the same source
   intermittently segfaulted during init; if that reappears use `-O1`.
+
+
+## MLX — custom Metal kernels, and the size dependence is the whole story
+
+Checked `ml-explore/mlx` `mlx/backend/metal/fft.cpp` (877 lines) and
+`mlx/backend/cpu/fft.cpp`. **MLX does not use MPSGraph for FFT**: it generates its
+own Metal kernels from a Stockham mixed-radix core (radices 13,11,8,7,6,5,4,3,2)
+executed in threadgroup memory, with pocketfft only on the CPU stream and for
+twiddles.
+
+Plan selection (`plan_fft`):
+
+| condition | algorithm |
+|---|---|
+| n <= 4096, all factors in the radix set | Stockham mixed-radix, one threadgroup |
+| n <= 2048 with one unsupported prime p, p-1 radix-decomposable | Rader |
+| otherwise (n > 2048 with an unsupported prime, or p-1 not decomposable) | Bluestein, padded to `next_fast_n(2n-1)` |
+| n > 4096, power of two | four-step, no transpose (n2 = 1024 if n > 65536 else 64) |
+| n > 4096, not power of two | multi-upload Bluestein (four-step) |
+
+Hard limits: `MAX_STOCKHAM_FFT_SIZE` 4096, `MAX_RADER_FFT_SIZE` 2048,
+`MAX_BLUESTEIN_FFT_SIZE` 2048; largest transform 4096^2.
+
+Measured, MLX 0.32.4 (`/tmp/mlxvenv`, `mx.fft.fft2`, complex64, GPU, 5 reps):
+
+| grid | MLX | vkFFT | ducc0 CPU 8thr |
+|---|---|---|---|
+| 1024 | 1.6 ms | — | — |
+| 2048 | 3.8 ms | 3.7 ms | 6.6 ms |
+| **3968 = 2^7*31** | **107.5 ms** | **14.2 ms** | 37.8 ms |
+| **4096 = 2^12** | **10.4 ms** | 14.6 ms | 29.8 ms |
+
+3968 has the prime 31, which is not a supported radix, and 3968 > 2048 so Rader
+is out, so MLX falls to **Bluestein with a padded ~8000-point transform** (three
+transforms of double size). That is why it lands at 107 ms — essentially the same
+as MPSGraph's 102 ms. The penalty was never about the vendor, it is the prime
+factor.
+
+At 4096 MLX is the fastest thing measured: 10.4 ms, 2.9x ducc0 and 1.4x faster
+than vkFFT.
+
+Batching: 4 planes = 9.09 ms/plane, 8 planes = 10.98 ms/plane (memory pressure),
+3968 with batch 4 fails outright with `[METAL] Command buffer execution failed:
+Insufficient Memory` because each Bluestein plane needs the ~8000^2 padded buffer.
+
+### Consequence: choose the grid size first
+
+| grid choice | best GPU FFT | per plane | 72 planes |
+|---|---|---|---|
+| 3968 (current, = nu rounded to 32) | vkFFT | 14.2 ms | 1.02 s |
+| 4096 (next power of two) | MLX | 10.4 ms | 0.75 s |
+
+Rounding the grid up to 4096 costs ~3% more samples and is the only case where
+MLX beats vkFFT. vkFFT is the robust choice (any size, header-only); MLX is
+faster but only at power-of-two sizes and brings a much heavier dependency
+(mlx + mlx-metal dylibs and its kernel library).
