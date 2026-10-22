@@ -193,3 +193,51 @@ Rounding the grid up to 4096 costs ~3% more samples and is the only case where
 MLX beats vkFFT. vkFFT is the robust choice (any size, header-only); MLX is
 faster but only at power-of-two sizes and brings a much heavier dependency
 (mlx + mlx-metal dylibs and its kernel library).
+
+
+## Why MPSGraph is slow: the prime-factor cliff (measured)
+
+MPSGraph is Apple's own stack, so it should be the best-tuned option. It is —
+right up to the point where the size contains a prime factor it has no radix
+kernel for. Same-size / different-factorisation 2-D sweep
+(`bench/metal/mps_fft_2d_sizes.mm`, complex64, 3 reps):
+
+| size | factorisation | time | ns/point |
+|---|---|---|---|
+| 4032 | 2^6*3^2*7 | 24.2 ms | 1.49 |
+| 4096 | 2^12 | 22.9 ms | 1.37 |
+| 3960 | 2^3*3^2*5*11 | 30.8 ms | 1.97 |
+| 3969 | 3^4*7^2 | 31.6 ms | 2.01 |
+| **3968** | **2^7*31** | **102.8 ms** | **6.53** |
+| 3001 | prime | 51.1 ms | 5.67 |
+
+3960, 3969 and 4032 are all within 1% of 3968 in size and run at 1.5-2.0
+ns/point. 3968 runs at 6.53 ns/point — **3.3-4.4x slower, and the only
+difference is the prime 31**.
+
+So MPSGraph has no radix-31 kernel, and a size containing an unsupported prime
+falls back to Bluestein: pad to a smooth/power-of-two length >= 2n-1, then pay
+~3 transforms of the padded length plus pointwise multiplies. That is where the
+4x goes. A prime size (3001) shows the same penalty, slightly milder because its
+padded length is smaller.
+
+1-D transforms at the same sizes hide this because the measurement is dominated
+by ~0.5 ms of fixed call overhead: 4096 = 0.52 ms, 3968 = 0.89 ms, 4096^... so a
+1-D microbenchmark would wrongly conclude the penalty is only 1.7x.
+
+For contrast, vkFFT reports `useBluesteinFFT=[0,0]` at n=3968 — it generates a
+dedicated radix-31 kernel and transforms the size directly, no padding, hence
+14.2 ms. MLX has radices only up to 13, so it takes the same Bluestein path as
+MPSGraph and lands at 107.5 ms.
+
+### Ranking, for the record
+
+| grid | MLX | vkFFT | MPSGraph | ducc0 CPU 8thr |
+|---|---|---|---|---|
+| 4096 (2^12) | **10.4 ms** | 14.6 ms | 22.9 ms | 29.8 ms |
+| 3000-ish smooth | — | — | ~19-31 ms | — |
+| 3968 (2^7*31) | 107.5 ms | **14.2 ms** | 102.8 ms | 37.8 ms |
+
+MPSGraph is not bad at FFT — it is 1.6x behind vkFFT and 2.2x behind MLX at
+power-of-two sizes. Its failure is categorical, not gradual: one unsupported
+prime factor and it drops to a padded Bluestein.

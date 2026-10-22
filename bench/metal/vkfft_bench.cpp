@@ -73,6 +73,9 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  fprintf(stderr, "[vkfft] useBluesteinFFT=[%llu,%llu]\n",
+          (unsigned long long)app.useBluesteinFFT[0], (unsigned long long)app.useBluesteinFFT[1]);
+
   VkFFTLaunchParams launch = {};
 
   auto run_once = [&]() {
