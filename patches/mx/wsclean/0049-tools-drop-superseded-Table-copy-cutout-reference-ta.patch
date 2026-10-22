@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 07:06:13 -0700
+Subject: [PATCH 50/50] tools: drop superseded Table::copy cutout
+ (reference-table version)
+
+mx-mscutout (tools/mscutout_rows.cpp, copyRows) is the shipped tool;
+the copy() variant produced reference tables that re-read the parent.
+
+diff --git a/tools/mscutout.cpp b/tools/mscutout.cpp
+deleted file mode 100644
+index c4c17b57..00000000
+--- a/tools/mscutout.cpp
++++ /dev/null
+@@ -1,39 +0,0 @@
+-// Materialise a time-range cutout of a Measurement Set.
+-//
+-// taql can only make *reference* tables for this MS (its storage manager
+-// supports neither DELETE nor INSERT), and a reference table re-reads the
+-// parent on every pass - a 108 s imaging run became 17 minutes. Table::copy()
+-// on a selection is the supported way to get a standalone copy, and it is what
+-// python-casacore's table.copy() uses underneath.
+-//
+-// usage: mscutout <in.ms> <out.ms> "<taql where clause>"
+-#include <casacore/casa/Arrays/Vector.h>
+-#include <casacore/casa/Exceptions/Error.h>
+-#include <casacore/tables/Tables/Table.h>
+-#include <casacore/tables/TaQL/TableParse.h>
+-
+-#include <cstdio>
+-#include <cstdlib>
+-#include <string>
+-
+-int main(int argc, char** argv) {
+-  if (argc < 4) {
+-    std::fprintf(stderr, "usage: %s <in.ms> <out.ms> \"<where clause>\"\n", argv[0]);
+-    return 2;
+-  }
+-  try {
+-    const std::string cmd = "select from " + std::string(argv[1]) + " where " + argv[3];
+-    std::fprintf(stderr, "[mscutout] %s\n", cmd.c_str());
+-    casacore::Table selected = casacore::tableCommand(casacore::String(cmd)).table();
+-    std::fprintf(stderr, "[mscutout] selected %lld rows; copying...\n",
+-                 static_cast<long long>(selected.nrow()));
+-    selected.copy(casacore::String(argv[2]), casacore::Table::New);
+-    casacore::Table out(casacore::String(argv[2]), casacore::Table::Old);
+-    std::fprintf(stderr, "[mscutout] wrote %lld rows to %s\n",
+-                 static_cast<long long>(out.nrow()), argv[2]);
+-    return 0;
+-  } catch (const casacore::AipsError& e) {
+-    std::fprintf(stderr, "[mscutout] casacore error: %s\n", e.getMesg().c_str());
+-    return 1;
+-  }
+-}
