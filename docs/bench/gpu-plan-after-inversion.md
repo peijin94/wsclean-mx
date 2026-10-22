@@ -78,3 +78,41 @@ Projection: 1.85 -> ~0.8 s at 4k; 3.8 -> ~1.7 s at 3k.
 Gate for every step: same dirty image from both runs (already proven identical
 to 5.3e-06), so any change in image/model/residual is attributable to the new
 code alone.
+
+## Correction and the real deconvolution target (measured twice)
+
+`FindMultiScalePeak` at 78% was **inclusive** time, not exclusive. The correct
+split from the same `sample` run:
+
+| function | samples | share |
+|---|---|---|
+| `FindMultiScalePeak` (contains the parallel loop and its waits) | 591 | 63% |
+| `MultiScaleTransforms::Transform` (Gaussian convolution) | 240-458 | 26-49% |
+| `FindSingleScalePeak` (the actual scan) | 78 | 8% |
+| `FindWithMask` | 23 | 2% |
+
+The peak scan is ~8-11%, which is why accelerating it 8.3x in isolation produced
+6% end to end (measured 6.70 -> 6.31 s). The hook is correct and stays.
+
+## The convolution is r2c -> multiply -> c2r, not c2c
+
+`schaapcommon/src/math/convolution.cc`:
+
+- `ConvolveTransformed` allocates a `ConvolutionFftSize(w,h)` product buffer per
+  scale (a fresh allocation each call),
+- `MultiplyAndInverse` does one pass `product[i] *= fact * kernel_fft[i]` over
+  `height * (width/2 + 1)` complex values,
+- then `ducc0::c2r_mut` inverts the half-spectrum back to a real image.
+
+So the expensive half is a **c2r** of `height x (width/2+1)`, ~4.7 M complex
+points at 3072². Our `mx::vk::Fft` wrapper is c2c only, so the GPU version needs
+a vkFFT r2c/c2r plan (`performR2C` + `makeInversePlanOnly`), not a straight reuse.
+
+Expected: c2r is ~80% of `Transform`, and `Transform` is 26-49% of
+deconvolution, so vkFFT r2c/c2r is worth roughly 1.5-2.5 s of the 6.31 s.
+
+## Prediction
+
+Same r2c/c2r situation for the image->grid direction; the FFT is 1.05 s of the
+1.85 s prediction cost at 4k. Both work items now share one dependency: an
+r2c/c2r vkFFT plan.
