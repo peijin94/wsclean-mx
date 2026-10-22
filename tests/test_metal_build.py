@@ -5,7 +5,9 @@ reachable stay wired up, so a later edit cannot silently drop the CMake option,
 the probe hook in the regression suite, or the wrapper script's flag.
 """
 
+import os
 import re
+import tempfile
 import subprocess
 import unittest
 from pathlib import Path
@@ -27,7 +29,9 @@ class MetalIntegrationTest(unittest.TestCase):
     def test_wrapper_configures_with_the_metal_flag(self):
         text = self.read('scripts/metal_build.sh')
         self.assertIn('-DWSCLEAN_MX_METAL=ON', text)
-        self.assertIn('--target mx-metal-probe', text)
+        self.assertIn('--target wsclean', text)
+        self.assertNotIn('mx-metal-probe', text)
+        self.assertIn('-DWSCLEAN_MX_METAL_ARCHIVE=OFF', text)
         self.assertIn('for dep in aocommon schaapcommon radler', text)
         self.assertIn('FETCHCONTENT_SOURCE_DIR_${upper}=$ROOT/work/$dep', text,
                       'every patched dependency must keep pointing at the work tree')
@@ -40,11 +44,74 @@ class MetalIntegrationTest(unittest.TestCase):
                              'WSCLEAN_MX_METAL must exist and default to OFF')
         self.assertIn('add_subdirectory(metal)', text)
 
-    def test_regression_suite_runs_or_skips_the_probe(self):
+    def test_active_suite_uses_cache_and_excludes_archive(self):
         text = self.read('scripts/test.sh')
-        self.assertIn('$BUILD/metal/mx-metal-probe', text)
-        self.assertIn('Metal probe absent', text,
-                      'a build without the flag must say so rather than pass silently')
+        self.assertIn('WSCLEAN_MX_METAL:BOOL=', text)
+        self.assertNotIn('$BUILD/metal/mx-metal-probe', text)
+        self.assertIn('Archived GPU gridding probe not run', text)
+        self.assertIn('scripts/test_archived_metal.sh', text)
+        self.assertIn('tests/gpu_quarantine_check.py', text)
+        for probe in ('mx-peak-probe', 'mx-vkfft-real-probe',
+                      'mx-prediction-gpu-probe', 'mx-prediction-mock-probe',
+                      'mx-prediction-cpu-probe', 'mx-multiscale-batch-probe'):
+            self.assertIn(probe, text)
+
+    def test_legacy_objects_are_only_in_guarded_archive(self):
+        text = self.read('work/wsclean/metal/CMakeLists.txt')
+        self.assertRegex(text, r'option\(WSCLEAN_MX_METAL_ARCHIVE\s+"[^"]*"\s+OFF\)')
+        active = re.search(r'add_library\(mx-metal STATIC(.*?)\)', text, re.S).group(1)
+        for source in ('metaldevice.mm', 'metalinversion.mm', 'mxcpugrid.cpp'):
+            self.assertNotIn(source, active)
+        archive = re.search(r'if\(WSCLEAN_MX_METAL_ARCHIVE\)(.*?)endif\(\)', text, re.S).group(1)
+        self.assertIn('add_library(mx-metal-archive STATIC', archive)
+        for source in ('metaldevice.mm', 'metalinversion.mm', 'mxcpugrid.cpp'):
+            self.assertIn(source, archive)
+        self.assertIn('add_executable(mx-metal-probe probe_main.cpp)', archive)
+        self.assertIn('target_link_libraries(mx-metal-probe PRIVATE mx-metal-archive)', archive)
+        self.assertNotRegex(text, r'target_link_libraries\(mx-metal\s[^)]*mx-metal-archive')
+
+    def test_archive_script_is_explicit_and_preserves_failure(self):
+        script = ROOT / 'scripts/test_archived_metal.sh'
+        self.assertTrue(script.stat().st_mode & 0o111)
+        self.assertEqual(subprocess.run(['bash', '-n', str(script)]).returncode, 0)
+        text = script.read_text()
+        self.assertIn('WSCLEAN_MX_METAL_ARCHIVE', text)
+        self.assertIn('${option}:BOOL=', text)
+        self.assertIn('--target mx-metal-probe', text)
+        self.assertIn('exec "$BUILD/metal/mx-metal-probe"', text)
+        self.assertNotIn('|| true', text)
+
+    def test_archive_runner_refuses_disabled_cache_and_preserves_exit(self):
+        # These are tiny shell stubs: no configure, build, or GPU work occurs.
+        with tempfile.TemporaryDirectory(prefix='quarantine-shell-') as tmp:
+            root = Path(tmp)
+            (root / 'bin').mkdir()
+            build = root / 'build'
+            (build / 'metal').mkdir(parents=True)
+            marker = root / 'build-invoked'
+            for path, body in (
+                (root / 'bin/brew', f'#!/bin/sh\nprintf "%s\\n" "{root}"\n'),
+                (root / 'bin/cmake', f'#!/bin/sh\ntouch "{marker}"\nexit "${{FAKE_BUILD_STATUS:-0}}"\n'),
+                (build / 'metal/mx-metal-probe', '#!/bin/sh\nexit 7\n'),
+            ):
+                path.write_text(body)
+                path.chmod(0o755)
+            env = dict(os.environ, PATH=str(root / 'bin') + ':' + os.environ['PATH'])
+            script = ROOT / 'scripts/test_archived_metal.sh'
+            for metal, archive in (('OFF', 'ON'), ('ON', 'OFF'), ('ON', '')):
+                (build / 'CMakeCache.txt').write_text(
+                    f'WSCLEAN_MX_METAL:BOOL={metal}\nWSCLEAN_MX_METAL_ARCHIVE:BOOL={archive}\n')
+                result = subprocess.run([str(script), str(build)], env=env, capture_output=True)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertFalse(marker.exists(), 'disabled archive must not build a stale probe')
+            (build / 'CMakeCache.txt').write_text(
+                'WSCLEAN_MX_METAL:BOOL=ON\nWSCLEAN_MX_METAL_ARCHIVE:BOOL=ON\n')
+            result = subprocess.run([str(script), str(build)], env=env, capture_output=True)
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertTrue(marker.exists())
+            env['FAKE_BUILD_STATUS'] = '9'
+            result = subprocess.run([str(script), str(build)], env=env, capture_output=True)
+            self.assertEqual(result.returncode, 9, result.stderr)
 
     def test_kernel_extraction_script_stays_wired(self):
         script = ROOT / 'scripts/metal_kernel_coeffs.sh'
@@ -154,31 +221,22 @@ class MetalIntegrationTest(unittest.TestCase):
         # 3. ducc0's w-tap formula, and explicitly not PolynomialKernel::eval
         self.assertIn('z = (z_off - nth)*2 + (W-1)', impl)
         self.assertIn('nth piece of the same polynomial', impl)
-        # Archived inversion is explicit-env-only; plain -mgpu keeps ducc0.
-        gridder = self.read('work/wsclean/wgridder/wgridder.h')
-        self.assertIn('input.w_gridding = true;', gridder)
-        self.assertIn('use_metal_ && allow_metal_inversion', gridder)
-
-    def test_gpu_option_is_wired_and_gated(self):
-        # -mgpu must exist, reach the w-gridder, and be gated: the backend only
-        # runs when it does exactly the same maths as the ducc0 call it replaces.
-        settings = self.read('work/wsclean/main/settings.h')
-        self.assertIn('bool useGpu = false;', settings)
+    def test_gpu_option_cannot_select_inversion(self):
         cli = self.read('work/wsclean/main/commandline.cpp')
         self.assertIn('param == "mgpu"', cli)
         self.assertIn('settings.useGpu = true;', cli)
+        self.assertIn('MX_METAL_ENGINE is retired', cli)
+        self.assertIn('std::getenv("MX_METAL_ENGINE")', cli)
         gridder = self.read('work/wsclean/wgridder/wgridder.h')
-        self.assertIn('mx::metal::inversion(input, tdirty.data())', gridder)
-        self.assertIn('if constexpr (std::is_same<NumT, float>::value', gridder)
-        self.assertIn('metal_done ? "used" : "refused, falling back to ducc0"', gridder)
-        self.assertIn('input.w_gridding = true;', gridder)
-        self.assertIn('use_metal_ && allow_metal_inversion', gridder)
-        impl = self.read('work/wsclean/metal/metalinversion.mm')
-        for anchor in ('inversionSupported', 'M_PI * w_max * lambda * lm_sq',
-                       'w-term too large for a 2-D inversion', 'n_channels'):
-            self.assertIn(anchor, impl, f'{anchor} is part of the 2-D gate')
-        header = self.read('work/wsclean/metal/metalinversion.h')
-        self.assertIn('bool inversion(const InversionInput& input, float* dirty);', header)
+        for forbidden in ('metal/metalinversion.h', 'mx::metal::inversion',
+                          'MX_METAL_ENGINE', 'metal_done', 'InversionInput'):
+            self.assertNotIn(forbidden, gridder)
+        # Preserve the exact original ducc0 call, including shifts and flags.
+        self.assertIn("""ducc0::ms2dirty_bda<NumT, NumT>(
+        uvw2, freqlist_id, freqlist_nfreqs, freq, ms, twgt, tmask, pixel_size_x_, pixel_size_y_,
+        epsilon_, kDoWgridding, n_threads_, tdirty, verbosity_, kFlipU, kFlipV, kFlipW, kDivideByN,
+        sigma_min, sigma_max, -l_shift_, -m_shift_, kAllowNShift);""", gridder)
+        self.assertIn('bool useGpu = false;', self.read('work/wsclean/main/settings.h'))
 
     def test_fast_path_keeps_copy_bound_deconvolution_opt_in(self):
         source = self.read('work/wsclean/main/main.cpp')

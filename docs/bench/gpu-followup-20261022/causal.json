@@ -1,0 +1,1160 @@
+{
+  "plan": {
+    "hypotheses": [
+      "Common dirty/PSF removes pre-prediction CPU-gridding variability; active GPU and CPU then pass unchanged T2 with identical models.",
+      "A one-ULP CPU-only input perturbation can reproduce amplified CLEAN-model differences.",
+      "The GPU-requested but disabled control must execute zero GPU planes and agree with common CPU controls."
+    ],
+    "input_fixture": {
+      "common": {
+        "relative_rms_perturbation": 0.0,
+        "sha256": {
+          "img-dirty.fits": "6bb003a6760e249ebb87fb660d962c28e2bf0e374b9f646c511a8f2b03d23285",
+          "img-psf.fits": "5f546358f6b800cb2dd9ae9b7ddb58a8b6b33a704fd1c9aac9414a2afebc192a"
+        }
+      },
+      "ulp-plus": {
+        "relative_rms_perturbation": 8.716585306642219e-08,
+        "sha256": {
+          "img-dirty.fits": "cb10fd664d81ff53741d5cf0b410d70e76f8f19d8947c098183d45bb2b48e12d",
+          "img-psf.fits": "5f546358f6b800cb2dd9ae9b7ddb58a8b6b33a704fd1c9aac9414a2afebc192a"
+        }
+      },
+      "ulp-minus": {
+        "relative_rms_perturbation": 8.716586188483743e-08,
+        "sha256": {
+          "img-dirty.fits": "dc23c0fe249c5a837486bc3e7663f6a7fd379910ac752f0e1335bb3f35bd5931",
+          "img-psf.fits": "5f546358f6b800cb2dd9ae9b7ddb58a8b6b33a704fd1c9aac9414a2afebc192a"
+        }
+      }
+    },
+    "plan": [
+      [
+        "cpu1",
+        false,
+        "common",
+        {}
+      ],
+      [
+        "gpu1",
+        true,
+        "common",
+        {}
+      ],
+      [
+        "gpu2",
+        true,
+        "common",
+        {}
+      ],
+      [
+        "cpu2",
+        false,
+        "common",
+        {}
+      ],
+      [
+        "cpu3",
+        false,
+        "common",
+        {}
+      ],
+      [
+        "gpu3",
+        true,
+        "common",
+        {}
+      ],
+      [
+        "null",
+        true,
+        "common",
+        {
+          "MX_METAL_NO_PREDICT": "1"
+        }
+      ],
+      [
+        "ulp-plus",
+        false,
+        "ulp-plus",
+        {}
+      ],
+      [
+        "ulp-minus",
+        false,
+        "ulp-minus",
+        {}
+      ]
+    ],
+    "gates": {
+      "rel_rms": 0.0001,
+      "rel_peak": 0.001,
+      "model_common": "bitwise"
+    },
+    "timing_policy": "causal correctness study, not a speed benchmark"
+  },
+  "results": {
+    "cpu1": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "gpu1": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.00030517578125,
+          "rel_rms": 1.8563170275935462e-06,
+          "rel_peak": 5.483205271246489e-07,
+          "peak_ratio": 1.0000004386564216,
+          "n_diff": 9078027,
+          "max_ulp": 1863490198,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.00029754638671875,
+          "rel_rms": 2.4431969690762576e-06,
+          "rel_peak": 4.023065990970383e-06,
+          "peak_ratio": 1.000003094666147,
+          "n_diff": 9142652,
+          "max_ulp": 1863516160,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [
+        [
+          2,
+          82,
+          82,
+          0,
+          0
+        ]
+      ],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "gpu2": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.00030517578125,
+          "rel_rms": 1.6194926451863115e-06,
+          "rel_peak": 5.483205271246489e-07,
+          "peak_ratio": 1.0000004386564216,
+          "n_diff": 9104260,
+          "max_ulp": 1852301312,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.0002899169921875,
+          "rel_rms": 2.1306743058056283e-06,
+          "rel_peak": 3.9199104527403735e-06,
+          "peak_ratio": 1.000003094666147,
+          "n_diff": 9161455,
+          "max_ulp": 1852301312,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [
+        [
+          2,
+          82,
+          82,
+          0,
+          0
+        ]
+      ],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "cpu2": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 6.586313247680664e-05,
+          "rel_rms": 1.6749348385514009e-06,
+          "rel_peak": 1.1833870751420643e-07,
+          "peak_ratio": 1.0,
+          "n_diff": 9061783,
+          "max_ulp": 1859474432,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 6.586313247680664e-05,
+          "rel_rms": 2.20481605282205e-06,
+          "rel_peak": 8.905224198762566e-07,
+          "peak_ratio": 1.0000001031555383,
+          "n_diff": 9131080,
+          "max_ulp": 1859513856,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "cpu3": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 9.652972221374512e-05,
+          "rel_rms": 2.1872066747057185e-06,
+          "rel_peak": 1.734384948590564e-07,
+          "peak_ratio": 1.0,
+          "n_diff": 9110153,
+          "max_ulp": 1858029056,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 9.652972221374512e-05,
+          "rel_rms": 2.8792161682957264e-06,
+          "rel_peak": 1.3051593294023508e-06,
+          "peak_ratio": 1.0,
+          "n_diff": 9172603,
+          "max_ulp": 1858068480,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "gpu3": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.00030517578125,
+          "rel_rms": 2.1392693782607473e-06,
+          "rel_peak": 5.483205271246489e-07,
+          "peak_ratio": 1.0000004386564216,
+          "n_diff": 9111185,
+          "max_ulp": 1863778048,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.00028228759765625,
+          "rel_rms": 2.8154537041048044e-06,
+          "rel_peak": 3.816754914510364e-06,
+          "peak_ratio": 1.000003094666147,
+          "n_diff": 9166536,
+          "max_ulp": 1863778048,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [
+        [
+          2,
+          82,
+          82,
+          0,
+          0
+        ]
+      ],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "null": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 9.384751319885254e-05,
+          "rel_rms": 2.031688089021754e-06,
+          "rel_peak": 1.686192714761249e-07,
+          "peak_ratio": 1.0,
+          "n_diff": 9102711,
+          "max_ulp": 1861730966,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 9.384751319885254e-05,
+          "rel_rms": 2.6744793023476275e-06,
+          "rel_peak": 1.2688937104933631e-06,
+          "peak_ratio": 1.0,
+          "n_diff": 9165301,
+          "max_ulp": 1861756928,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "ulp-plus": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.03154110908508301,
+          "rel_rms": 0.0002446885689857254,
+          "rel_peak": 5.667106835539154e-05,
+          "peak_ratio": 0.9999996710076837,
+          "n_diff": 9434861,
+          "max_ulp": 2027015462,
+          "pass": false
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 6.103515625e-05,
+          "rel_rms": 8.716585306642218e-08,
+          "rel_peak": 1.0812973405491909e-07,
+          "peak_ratio": 1.000000108129734,
+          "n_diff": 9437184,
+          "max_ulp": 1,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.3592989444732666,
+          "rel_rms": 0.0005425062777846284,
+          "rel_peak": 0.0048580101410146525,
+          "peak_ratio": 0.9999966990227767,
+          "n_diff": 9434901,
+          "max_ulp": 2048189773,
+          "pass": false
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.3590428631287068,
+          "rel_rms": 0.0016791691053141531,
+          "rel_peak": 0.0011568802066101174,
+          "peak_ratio": 1.0000001966627705,
+          "n_diff": 9087104,
+          "max_ulp": 2082393625,
+          "pass": false
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": false,
+      "gpu_proof": [],
+      "theoretical_beam_rad": 0.0018508740727208
+    },
+    "ulp-minus": {
+      "products": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 8.246302604675293e-05,
+          "rel_rms": 1.6671597953567623e-06,
+          "rel_peak": 1.4816434556190462e-07,
+          "peak_ratio": 1.0,
+          "n_diff": 9160098,
+          "max_ulp": 1844262400,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 6.103515625e-05,
+          "rel_rms": 8.716586188483743e-08,
+          "rel_peak": 1.0812973405491909e-07,
+          "peak_ratio": 0.999999891870266,
+          "n_diff": 9437184,
+          "max_ulp": 1,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.0005083084106445312,
+          "rel_rms": 2.301125700212573e-06,
+          "rel_peak": 6.8727377345744045e-06,
+          "peak_ratio": 0.9999998968444618,
+          "n_diff": 9173176,
+          "max_ulp": 1844452352,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.000499725341796875,
+          "rel_rms": 1.5216822970883153e-06,
+          "rel_peak": 1.6101764330545671e-06,
+          "peak_ratio": 1.0,
+          "n_diff": 9001637,
+          "max_ulp": 1708617177,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "all_T2": true,
+      "gpu_proof": [],
+      "theoretical_beam_rad": 0.0018508740727208
+    }
+  },
+  "common_input_pass": true,
+  "common_input_runs": 7,
+  "scope": "correctness controls, not a timing benchmark"
+}

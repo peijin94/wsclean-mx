@@ -5,6 +5,18 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- Latest: `docs/gpu-followup-2026-10-22.md`. Production inversion is quarantined
+  out of Metal linkage/routing; active CPU/Metal suites pass, separate archive
+  gridding still fails. PSF reuse preserves WSCTBEAM in radians (including MFS
+  and malformed-key handling), avoiding silent automatic-scale changes.
+  Beam-matched threaded controls: three GPU runs and null pass pixel/source
+  gates, all seven common-input models bitwise identical. One-ULP CPU input
+  perturbation can amplify to 0.168% model RMS. The symmetric comparator fixes
+  reference self-membership but original 10-run GPU family remains 6/10.
+  Preserve those failures; no blanket scientific release claim. Final counts,
+  commits and patch replay are in docs/bench/gpu-followup-20261022/delivery.json.
+  Earlier audit entries below are historical where superseded.
+
 - GPU audit: `docs/gpu-next-optimization-2026-10-22.md` and `dev-note.md`.
   Older 23.27 s/~23.5 s and “all hooks PASS” claims are withdrawn: main's
   Metal registration was compiled out. Activation now requires compile/symbol

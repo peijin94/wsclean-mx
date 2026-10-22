@@ -66,19 +66,20 @@ COMMON=(-std=c++20 -O2 -I"$DEPS_PREFIX/include" -I"$BREW/include"
 "$OUT/multiarray_regression"
 "$CXX" "${COMMON[@]}" tests/median_edge_regression.cpp -o "$OUT/median_edge_regression"
 "$OUT/median_edge_regression"
-# The Metal probe exists only in a build configured with WSCLEAN_MX_METAL=ON;
-# scripts/metal_build.sh produces one in build-mx-metal/. Its differential
-# assertions (GPU gridding vs float64 CPU twin) run whenever it is present.
+# CMakeCache is authoritative: stale probe binaries do not enable Metal.
+printf 'Archived GPU gridding probe not run; use scripts/test_archived_metal.sh separately.\n'
 FAILED_PROBES=0
-if [ -x "$BUILD/metal/mx-metal-probe" ]; then
+METAL_ENABLED="$(sed -n 's/^WSCLEAN_MX_METAL:BOOL=//p' "$BUILD/CMakeCache.txt")"
+case "$METAL_ENABLED" in
+  ON|TRUE|YES|1|Y) METAL_ENABLED=1 ;;
+  *) METAL_ENABLED=0 ;;
+esac
+if [ "$METAL_ENABLED" = 1 ]; then
+  "$PYTHON" tests/gpu_quarantine_check.py "$BUILD"
   "$PYTHON" tests/gpu_activation_check.py "$BUILD"
-  "$CMAKE" --build "$BUILD" --target mx-metal-probe mx-peak-probe mx-vkfft-real-probe \
+  "$CMAKE" --build "$BUILD" --target mx-peak-probe mx-vkfft-real-probe \
     mx-multiscale-batch-probe mx-prediction-gpu-probe mx-prediction-mock-probe \
     mx-prediction-cpu-probe -j "${JOBS:-2}"
-  if ! "$BUILD/metal/mx-metal-probe" --quiet; then
-    printf 'FAILED: archived GPU gridding probe (continuing to collect other gates).\n' >&2
-    FAILED_PROBES=1
-  fi
   for probe in mx-peak-probe mx-vkfft-real-probe mx-multiscale-batch-probe \
       mx-prediction-gpu-probe mx-prediction-mock-probe mx-prediction-cpu-probe; do
     command=("$BUILD/metal/$probe")
@@ -91,8 +92,8 @@ if [ -x "$BUILD/metal/mx-metal-probe" ]; then
     fi
   done
 else
-  printf 'Metal probe absent in %s (WSCLEAN_MX_METAL=OFF): use scripts/metal_build.sh.\n' \
-    "$BUILD"
+  "$PYTHON" tests/gpu_quarantine_check.py "$BUILD" --cpu-only
+  printf 'Active Metal suite disabled in %s (WSCLEAN_MX_METAL=OFF).\n' "$BUILD"
 fi
 "$CXX" "${COMMON[@]}" -I"$ROOT/work/wsclean" tests/inmemory_time_regression.cpp \
   "$BUILD/libwsclean.a" -L"$DEPS_PREFIX/lib" -lcasa_ms -lcasa_tables -lcasa_casa \

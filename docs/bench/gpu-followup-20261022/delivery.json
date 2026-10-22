@@ -1,0 +1,758 @@
+{
+  "created_at": "2026-10-22T11:40:14.223563-07:00",
+  "branch": "gpu-dev",
+  "main_head_untouched": "dfd19061f09502af9a1d1d419c771db27ff4671a",
+  "patch_replay": {
+    "wsclean": {
+      "patches": 52,
+      "head": "7a56f5549dab4caefb70b8bd733c26b2d8f48919",
+      "tree": "7a2e9e5c23498d136f9c15c778a0c204337e394d",
+      "exact_replay": true
+    },
+    "aocommon": {
+      "patches": 2,
+      "head": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+      "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+      "exact_replay": true
+    },
+    "schaapcommon": {
+      "patches": 7,
+      "head": "8bb0759fca8592857dc3cb7647dd6e93793796c5",
+      "tree": "f83229c472a7ea15c8c5380967f8f59cef09e8f0",
+      "exact_replay": true
+    },
+    "radler": {
+      "patches": 7,
+      "head": "39d58d12b5bc6f1b65bff176394ed710ff89964a",
+      "tree": "43383d372b02b6804d1484d051eaa1739ae1ffef",
+      "exact_replay": true
+    }
+  },
+  "suites": {
+    "active_metal": {
+      "python_tests": 153,
+      "passed": true,
+      "log": "bench/out/gpu-followup-20261022-0945/delivery-active-suite.log"
+    },
+    "cpu": {
+      "python_tests": 153,
+      "passed": true,
+      "log": "bench/out/gpu-followup-20261022-0945/delivery-cpu-suite.log"
+    }
+  },
+  "review": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [],
+    "summary": "The remaining analyzer completeness issue is fixed. Validation rejects duplicate, missing, unplanned, or reordered roles, env/fixture/GPU mismatches, and failed exits before FITS inspection or output creation. Reviewed the updated regression tests. Prior resolved findings remain outside this scoped review. Read-only inspection only; no edits, tests, or builds performed."
+  },
+  "archive_matrix": [
+    {
+      "name": "archive-disabled",
+      "command": [
+        "bash",
+        "scripts/test_archived_metal.sh",
+        "build-mx-metal",
+        "--quiet"
+      ],
+      "exit": 2,
+      "expected": 2
+    },
+    {
+      "name": "archive-on-configure",
+      "command": [
+        "/opt/homebrew/bin/cmake",
+        "-S",
+        "work/wsclean",
+        "-B",
+        "build-mx-metal",
+        "-DWSCLEAN_MX_METAL_ARCHIVE=ON"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "archive-on-build",
+      "command": [
+        "/opt/homebrew/bin/cmake",
+        "--build",
+        "build-mx-metal",
+        "--target",
+        "wsclean",
+        "mx-metal-probe",
+        "-j",
+        "2"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "archive-on-quarantine",
+      "command": [
+        "python3",
+        "tests/gpu_quarantine_check.py",
+        "build-mx-metal"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "archived-diagnostic",
+      "command": [
+        "bash",
+        "scripts/test_archived_metal.sh",
+        "build-mx-metal",
+        "--quiet"
+      ],
+      "exit": 1,
+      "expected": null
+    },
+    {
+      "name": "archive-off-restore",
+      "command": [
+        "/opt/homebrew/bin/cmake",
+        "-S",
+        "work/wsclean",
+        "-B",
+        "build-mx-metal",
+        "-DWSCLEAN_MX_METAL_ARCHIVE=OFF"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "active-final-suite",
+      "command": [
+        "bash",
+        "scripts/test.sh",
+        "build-mx-metal"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "cpu-configure",
+      "command": [
+        "/opt/homebrew/bin/cmake",
+        "-S",
+        "work/wsclean",
+        "-B",
+        "build-mx",
+        "-DWSCLEAN_MX_METAL=OFF"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "name": "cpu-final-suite",
+      "command": [
+        "bash",
+        "scripts/test.sh",
+        "build-mx"
+      ],
+      "exit": 0,
+      "expected": 0
+    }
+  ],
+  "real_cli_beam_regressions": [
+    {
+      "case": "invalid-string",
+      "pass": true,
+      "exit": 1,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "gpu-followup-final",
+        "beam-review-green-invalid-string",
+        "-j",
+        "1",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-niter",
+        "1",
+        "-reuse-psf",
+        "bench/out/gpu-followup-20261022-0945/beam-review-green/invalid-string/img",
+        "-reuse-dirty",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-beam-reference/gpu-followup-beam/img",
+        "-reorder",
+        "bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ]
+    },
+    {
+      "case": "undefined",
+      "pass": true,
+      "exit": 1,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "gpu-followup-final",
+        "beam-review-green-undefined",
+        "-j",
+        "1",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-niter",
+        "1",
+        "-reuse-psf",
+        "bench/out/gpu-followup-20261022-0945/beam-review-green/undefined/img",
+        "-reuse-dirty",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-beam-reference/gpu-followup-beam/img",
+        "-reorder",
+        "bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ]
+    },
+    {
+      "case": "negative",
+      "pass": true,
+      "exit": 1,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "gpu-followup-final",
+        "beam-review-green-negative",
+        "-j",
+        "1",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-niter",
+        "1",
+        "-reuse-psf",
+        "bench/out/gpu-followup-20261022-0945/beam-review-green/negative/img",
+        "-reuse-dirty",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-beam-reference/gpu-followup-beam/img",
+        "-reorder",
+        "bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ]
+    },
+    {
+      "case": "mfs",
+      "pass": true,
+      "exit": 0,
+      "channels": [
+        0.00191512426653067,
+        0.0018508740727208
+      ],
+      "mfs": 0.0018508740727208,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "gpu-followup-final",
+        "beam-review-green-mfs",
+        "-j",
+        "4",
+        "-size",
+        "512",
+        "512",
+        "-scale",
+        "2.7amin",
+        "-channels-out",
+        "2",
+        "-niter",
+        "1",
+        "-reorder",
+        "bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ]
+    }
+  ],
+  "final_cli_gates": {
+    "comparisons": {
+      "before-after": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "cpu-gpu": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.0001220703125,
+          "rel_rms": 2.5191060803040236e-07,
+          "rel_peak": 2.359729423985328e-07,
+          "peak_ratio": 1.0,
+          "n_diff": 904248,
+          "max_ulp": 1389649,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": false,
+          "nan_mismatch": 0,
+          "max_abs": 0.0001068115234375,
+          "rel_rms": 2.671913438009363e-07,
+          "rel_peak": 4.202199263006287e-07,
+          "peak_ratio": 0.9999999399685819,
+          "n_diff": 904262,
+          "max_ulp": 1389649,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            1024,
+            1024
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ],
+      "taper-reuse": [
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            512,
+            512
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            512,
+            512
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            512,
+            512
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            512,
+            512
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            512,
+            512
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "pass": true
+        }
+      ]
+    },
+    "gpu_proof": [
+      [
+        "2",
+        "89",
+        "89",
+        "0",
+        "0"
+      ]
+    ]
+  },
+  "committed_gpu_cli": {
+    "rows": [
+      {
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.0001220703125,
+        "rel_rms": 2.5191060803040236e-07,
+        "rel_peak": 2.359729423985328e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 904248,
+        "max_ulp": 1389649,
+        "pass": true
+      },
+      {
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "pass": true
+      },
+      {
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.0001068115234375,
+        "rel_rms": 2.671913438009363e-07,
+        "rel_peak": 4.202199263006287e-07,
+        "peak_ratio": 0.9999999399685819,
+        "n_diff": 904262,
+        "max_ulp": 1389649,
+        "pass": true
+      },
+      {
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "pass": true
+      },
+      {
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "pass": true
+      },
+      {
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "pass": true
+      }
+    ],
+    "proof": [
+      [
+        "2",
+        "89",
+        "89",
+        "0",
+        "0"
+      ]
+    ]
+  },
+  "input_integrity": {
+    "benchmark_copy": {
+      "files": 108,
+      "unchanged": true
+    },
+    "source_15slot": {
+      "files": 108,
+      "unchanged": true
+    }
+  },
+  "executable": "bench/bin/gpu-followup-delivered/wsclean",
+  "binary_and_direct_dependency_sha256": {
+    "/Users/peijinz/dev/wsclean-mx/bench/bin/gpu-followup-delivered/wsclean": "42388c3bb9a3161a35a1cc4b9579da38221a1fcd18da4fe436579a56c3e02e78",
+    "/Users/peijinz/dev/wsclean-mx/bench/bin/gpu-followup-delivered/libschaapthreading.dylib": "8ef3f61dce77761381a696a8d8cbf9f248361610796cc0f6d5aee87850122b04",
+    "/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib": "28bef6e1ecbe0fad628207792248476b6774f174a4e59d41e3b03ef70be99458",
+    "/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib": "b96f5a824802e985198fb58fc336da80fc6a4990249f4038656b433231c7da51",
+    "/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python": "4c20b911500d08d262ecb628e37a59bac81dc1e61366e0f9bc32cddff8f2879c",
+    "/opt/homebrew/opt/gsl/lib/libgsl.28.dylib": "1f1ae3ebec4bf3e708f978d3e83c2dd196d970ec0d8ecc2718b2dab297e797a2",
+    "/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib": "905d984da13941d37bf4da3b6a462e05d048e1bd271f60a29109008c0a54b12b",
+    "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib": "7523ee5f3eb0e0bd8907682f4bec8bb4e3fbd3945f8eed7e0aa215cea3ad8c42",
+    "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib": "78b3bf69d7648c33e45988f74ca6f5a05746ea7a681927d8e44b2f26d2faff39",
+    "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib": "71936b1d8c9526d3786e97e609fed6852bfb110fd2d695addd0b04439c58fc57",
+    "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib": "c468ef4e46f3de1bd8f2da9c8252eddf80c93590e0b97d6fb1cd7f829fe0e3c9",
+    "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib": "ec49169b5143fb5607604c04023b252713f0b7511427f0741938f8d3829a3715",
+    "/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib": "903d7b6b749085a41cf5577f6042a73f38eb5ca902f081f233b957a66c45efaf",
+    "/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib": "7df53ceeefdee72f6e8038ae73e98c5f0d5da93dc88e3c7b6c0670d83a10c42f",
+    "/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib": "fccc70ad53b3d1fd89a8cc11997024b4798dbfa4480acd5d3532df973fbf447c",
+    "/opt/homebrew/opt/boost/lib/libboost_atomic.dylib": "cbb0ca3f0906999bfef951f408149bf581d1e3b0e184caf2f4f45696e5b2b6b0",
+    "/opt/homebrew/opt/boost/lib/libboost_program_options.dylib": "05431f6d7c770f2811fb859815b2227702b47fdb980999290842c54345ca3db0",
+    "/opt/homebrew/opt/boost/lib/libboost_container.dylib": "8c83fa51d3d1cf9a173c021afe70910b9023cecdb5a8a5ead06a129a81e0ceab",
+    "/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib": "2c69ca314d2f7b0834a5dfb988dd932b157f5a8e992da7c241f1f7d600376064",
+    "/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib": "a2c61a3988ca1606fc21b8ba232531926d157211fbe34e28c3b28f800df5fd0d",
+    "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib": "0c1136b66ee4a94adaeca285315f2ccf640c317b47ff541839bfc4ab71848b18",
+    "/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib": "7b8bcb1a401d87e10b71271d5ee99a867cb3090bb74b67d01c7698f440249f1b",
+    "/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib": "2256ff621579680330d177513c4dd18ee516eadc54e801e08e54dcc7454153ab"
+  },
+  "otool_L": "/Users/peijinz/dev/wsclean-mx/bench/bin/gpu-followup-delivered/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 382.5.3)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.69)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1223.2.2)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n",
+  "dependency_limit": "WSClean and schaapthreading frozen; other installed dependencies shared. Direct load list is not a fully vendored transitive closure.",
+  "upstream_clean": true,
+  "strict_full_pipeline_source_gate": {
+    "passes": 6,
+    "total": 10,
+    "thresholds_relaxed": false
+  },
+  "publication": "Local gpu-dev only; no push, main merge, release or issue publication."
+}

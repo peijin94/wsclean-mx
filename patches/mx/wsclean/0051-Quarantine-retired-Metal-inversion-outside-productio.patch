@@ -1,0 +1,211 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 11:31:34 -0700
+Subject: [PATCH 51/52] Quarantine retired Metal inversion outside production
+
+
+diff --git a/main/commandline.cpp b/main/commandline.cpp
+index 47d183c2..4858ed93 100644
+--- a/main/commandline.cpp
++++ b/main/commandline.cpp
+@@ -18,6 +18,7 @@
+ #include <boost/algorithm/string.hpp>
+ 
+ #include <algorithm>
++#include <cstdlib>
+ #include <iostream>
+ #include <optional>
+ #include <string>
+@@ -301,6 +302,7 @@ Options can be:
+    Enable the experimental Apple Metal prediction FFT pipeline (mx/macOS build).
+    Inversion and gridding/degridding stay on ducc0; unsupported cases use CPU.
+    Optional deconvolution experiments: MX_METAL_CONVOLVE=1 and MX_METAL_PEAK=1.
++   MX_METAL_ENGINE is retired; unset it when using -mgpu.
+    Runtime evidence: MX_METAL_DEBUG_TIMING=1. CPU-only builds reject this flag.
+ 
+ -wstack-nwlayers <nwlayers>
+@@ -763,6 +765,13 @@ bool CommandLine::ParseWithoutValidation(WSClean& wsclean, int argc, const char*
+ #ifndef WSCLEAN_MX_METAL
+       throw std::runtime_error("-mgpu requires a build with WSCLEAN_MX_METAL=ON");
+ #endif
++      const char* engine = std::getenv("MX_METAL_ENGINE");
++      if (engine != nullptr && engine[0] != '\0') {
++        throw std::runtime_error(
++            "MX_METAL_ENGINE is retired: unset it when using -mgpu; "
++            "production inversion always uses ducc0. "
++            "Archived experiments use scripts/test_archived_metal.sh.");
++      }
+       settings.useGpu = true;
+     }
+     else if (param == "nwlayers" || param == "wstack-nwlayers") {
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 79f3b746..497722a4 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -6,19 +6,19 @@
+ # The kernels are compiled from source at runtime, so no metallib toolchain is
+ # required; only the Metal and Foundation frameworks are linked.
+ 
+-add_library(mx-metal STATIC metaldevice.mm metalinversion.mm mxvkfft.cpp mxcpugrid.cpp
+-                            mxpeak.mm mxconvolve.cpp mxpredict.cpp)
++# Production prediction FFT, peak finding and convolution only.
++add_library(mx-metal STATIC mxvkfft.cpp mxpeak.mm mxconvolve.cpp mxpredict.cpp)
++option(WSCLEAN_MX_METAL_ARCHIVE "Build retired GPU inversion/gridding experiments" OFF)
+ target_include_directories(mx-metal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+ # metal-cpp's headers are rooted at its own directory ("Foundation/...").
+ target_include_directories(mx-metal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
+-# ducc0 is vendored inside schaapcommon; the inversion chain needs its headers
+-# (complex2hartley, hartley2_2D, PolynomialKernel).
++# ducc0 headers supply FFT references and the optional archive's kernels.
+ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0")
+   # ducc0's headers are rooted at external/ (as "ducc0/fft/...", not
+   # "fft/..."), matching the include the wgridder target uses.
+   target_include_directories(mx-metal PUBLIC "${SCHAAPCOMMON_SOURCE_DIR}/external")
+ endif()
+-set_source_files_properties(metaldevice.mm metalinversion.mm mxpeak.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++set_source_files_properties(mxpeak.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+ # vkFFT + Apple's metal-cpp are plain C++ and use manual retain/release, so this
+ # translation unit must NOT be compiled with ARC.
+ set_source_files_properties(mxvkfft.cpp mxconvolve.cpp mxpredict.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+@@ -32,12 +32,18 @@ target_link_libraries(
+   PUBLIC ${MX_METAL_FRAMEWORK} ${MX_FOUNDATION_FRAMEWORK}
+          ${MX_ACCELERATE_FRAMEWORK} ${MX_QUARTZCORE_FRAMEWORK})
+ 
+-# Differential self-test: the Metal gridding accumulator against a float64 CPU
+-# twin of the same arithmetic. Run it from the build directory:
+-#   ./mx-metal-probe            full size (1024² grid, 200k visibilities)
+-#   ./mx-metal-probe --quiet    one machine-readable summary line
+-add_executable(mx-metal-probe probe_main.cpp)
+-target_link_libraries(mx-metal-probe PRIVATE mx-metal)
++# Retired, scientifically failing experiments. The archive depends on the
++# active FFT library; production targets never depend on the archive.
++if(WSCLEAN_MX_METAL_ARCHIVE)
++  add_library(mx-metal-archive STATIC metaldevice.mm metalinversion.mm mxcpugrid.cpp)
++  target_include_directories(mx-metal-archive PRIVATE
++    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
++  target_link_libraries(mx-metal-archive PUBLIC mx-metal)
++  set_source_files_properties(metaldevice.mm metalinversion.mm
++    PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++  add_executable(mx-metal-probe probe_main.cpp)
++  target_link_libraries(mx-metal-probe PRIVATE mx-metal-archive)
++endif()
+ 
+ # Differential self-test for the vkFFT wrapper: CPU gridding + GPU FFT against a
+ # float64 CPU reference, so the GPU FFT is gated the same way the gridding is.
+diff --git a/wgridder/wgridder.h b/wgridder/wgridder.h
+index 575766b5..07b13718 100644
+--- a/wgridder/wgridder.h
++++ b/wgridder/wgridder.h
+@@ -2,12 +2,6 @@
+ #define WSCLEAN_WGRIDDER_H_
+ 
+ #include "wgridderbase.h"
+-#ifdef WSCLEAN_MX_METAL
+-#include "metal/metalinversion.h"
+-#include <cstdio>
+-#include <cstdlib>
+-#include <string>
+-#endif
+ 
+ namespace wsclean {
+ /**
+@@ -338,98 +332,6 @@ class WGridder final : public WGridderBase {
+     constexpr bool kFlipW = false;
+     constexpr bool kDivideByN = false;
+     constexpr bool kAllowNShift = true;
+-#ifdef WSCLEAN_MX_METAL
+-    // Inversion stays on ducc0. The Metal/cpu-vkfft inversion experiment lives
+-    // behind MX_METAL_ENGINE explicitly (see metal/metalinversion.mm); plain
+-    // -mgpu means "GPU for prediction and deconvolution only" and never takes
+-    // this path, so the ducc0 call below runs untouched.
+-    // if constexpr so the float-only body is not instantiated for double or for
+-    // the callback/proxy visibility buffers.
+-    if constexpr (std::is_same<NumT, float>::value &&
+-                  std::is_same<Tms, ducc0::cmav<std::complex<float>, 1>>::value) {
+-      const char* engine = std::getenv("MX_METAL_ENGINE");
+-      const bool allow_metal_inversion =
+-          (engine != nullptr) && (std::string(engine) == "metal" || std::string(engine) == "cpu-vkfft");
+-      if (use_metal_ && allow_metal_inversion) {
+-        mx::metal::InversionInput input;
+-        input.n_rows = n_rows;
+-        input.uvws = uvw;
+-        input.frequencies = freq.data();
+-        input.n_channels = freq.shape(0);
+-        input.ms = reinterpret_cast<const std::complex<float> *>(ms.data());
+-        input.pixel_size_x = pixel_size_x_;
+-        input.pixel_size_y = pixel_size_y_;
+-        input.epsilon = epsilon_;
+-        input.n_threads = n_threads_;
+-        input.flip_v = kFlipV;
+-        input.l_shift = l_shift_;
+-        input.m_shift = m_shift_;
+-        input.image_width = trimmed_width_;
+-        input.image_height = trimmed_height_;
+-        // The Metal w-layer path is verified against ducc0 (wlayer gate:
+-        // rel_rms ~1e-05 across w = 0..200, adjoint dot-product 2.9e-07), so
+-        // the hook requests w-gridding and lets inversion() refuse wherever
+-        // the data need maths the GPU does not perform exactly (shifts,
+-        // callback/proxy buffers, no device). A refusal falls back to the
+-        // ducc0 call below untouched.
+-        input.w_gridding = true;
+-        if (const char* dump_path = std::getenv("MX_METAL_DEBUG_DUMP_INPUTS")) {
+-          // Dump the exact live inputs so the probe can replay this inversion
+-          // bit-identically: n_rows, n_channels, uvws, frequencies, ms.
+-          FILE* dump = std::fopen(dump_path, "wb");
+-          if (dump != nullptr) {
+-            const std::uint64_t header[2] = {n_rows, freq.shape(0)};
+-            const double geom[7] = {pixel_size_x_,      pixel_size_y_, epsilon_,
+-                                   static_cast<double>(trimmed_width_),
+-                                   static_cast<double>(trimmed_height_), l_shift_, m_shift_};
+-            std::fwrite(header, sizeof(header), 1, dump);
+-            std::fwrite(geom, sizeof(geom), 1, dump);
+-            std::fwrite(uvw, sizeof(double) * 3 * n_rows, 1, dump);
+-            std::fwrite(freq.data(), sizeof(double) * freq.shape(0), 1, dump);
+-            std::fwrite(ms.data(), sizeof(std::complex<float>) * n_rows * freq.shape(0), 1,
+-                        dump);
+-            std::fclose(dump);
+-          }
+-        }
+-        const bool metal_done = mx::metal::inversion(input, tdirty.data());
+-        // Env-gated A/B: run ducc0 as well and compare on the exact live
+-        // inputs, so real-data discrepancies can be attributed to maths
+-        // (both ran) rather than plumbing (only one ran).
+-        if (metal_done && std::getenv("MX_METAL_DEBUG_AB") != nullptr) {
+-          ducc0::vmav<NumT, 2> tdirty_ref({trimmed_width_, trimmed_height_});
+-          auto freqlist_id_ab = ducc0::cmav<size_t, 1>::build_uniform({n_rows}, 0);
+-          auto freqlist_nfreqs_ab = ducc0::cmav<size_t, 1>::build_uniform({1}, freq.shape(0));
+-          ducc0::ms2dirty_bda<NumT, NumT>(
+-              uvw2, freqlist_id_ab, freqlist_nfreqs_ab, freq, ms, twgt, tmask,
+-              pixel_size_x_, pixel_size_y_, epsilon_, kDoWgridding, n_threads_,
+-              tdirty_ref, verbosity_, kFlipU, kFlipV, kFlipW, kDivideByN,
+-              sigma_min, sigma_max, -l_shift_, -m_shift_, kAllowNShift);
+-          double max_ref = 0.0, max_diff = 0.0, sum_sq = 0.0;
+-          const std::size_t n = trimmed_width_ * trimmed_height_;
+-          for (std::size_t k = 0; k < n; ++k) {
+-            const double r = static_cast<double>(tdirty_ref.raw(k));
+-            const double d = static_cast<double>(tdirty.raw(k)) - r;
+-            max_ref = std::max(max_ref, std::fabs(r));
+-            max_diff = std::max(max_diff, std::fabs(d));
+-            sum_sq += d * d;
+-          }
+-          const double rms = std::sqrt(sum_sq / static_cast<double>(n));
+-          std::fprintf(stderr,
+-                       "[mx-metal] A/B: max_ref=%.6g max_diff=%.6g rel_rms=%.4g "
+-                       "rel_max=%.4g n=%zu\n",
+-                       max_ref, max_diff, rms / max_ref, max_diff / max_ref, n);
+-        }
+-        if (!metal_done || std::getenv("MX_METAL_DEBUG_TIMING") != nullptr)
+-          std::fprintf(stderr, "[mx-metal] inversion %s (%zu rows, %zu x %zu)\n",
+-                       metal_done ? "used" : "refused, falling back to ducc0", n_rows,
+-                       trimmed_width_, trimmed_height_);
+-        if (metal_done) {
+-          for (size_t k = 0; k < trimmed_width_ * trimmed_height_; ++k) image_[k] += tdirty.raw(k);
+-          return;
+-        }
+-      }
+-    }
+-#endif
+     auto freqlist_id = ducc0::cmav<size_t, 1>::build_uniform({n_rows}, 0);
+     auto freqlist_nfreqs = ducc0::cmav<size_t, 1>::build_uniform({1}, freq.shape(0));
+     ducc0::ms2dirty_bda<NumT, NumT>(

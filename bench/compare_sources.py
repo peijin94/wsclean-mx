@@ -141,6 +141,11 @@ def metrics(data):
     return result
 
 
+def load_metrics(path):
+    """Read one product; batch callers may cache this boundary for frozen files."""
+    return metrics(read_image(path))
+
+
 def compare_sources(reference, candidate):
     """Flux ratios and position offsets for sources matched between two images.
 
@@ -178,6 +183,24 @@ def compare_sources(reference, candidate):
         'position_offset_median_px': float(np.median(offsets)),
         'position_offset_max_px': float(np.max(offsets)),
     }
+
+
+def source_distance(first, second):
+    """Use the same bidirectional worst-case statistic for every pair.
+
+    Flux ratios and nearest-neighbour associations are directional. A one-way
+    reference envelope can reject one of its own members when candidate/ref
+    ordering reverses. Keep the directional median as a diagnostic, but use
+    both directions for the flux/position bounds used by the gate.
+    """
+    forward = compare_sources(first, second)
+    reverse = compare_sources(second, first)
+    result = dict(forward)
+    result['matched'] = min(forward['matched'], reverse['matched'])
+    if result['matched']:
+        for key in ('flux_ratio_spread', 'position_offset_max_px'):
+            result[key] = max(forward[key], reverse[key])
+    return result
 
 
 def product_files(directory):
@@ -250,8 +273,8 @@ def main():
     print('-' * len(header))
 
     for name in sorted(names):
-        reference_metrics = [metrics(read_image(product_files(r)[name])) for r in args.references]
-        candidate_metrics = metrics(read_image(product_files(args.candidate)[name]))
+        reference_metrics = [load_metrics(product_files(r)[name]) for r in args.references]
+        candidate_metrics = load_metrics(product_files(args.candidate)[name])
         entry = {'references': reference_metrics, 'candidate': candidate_metrics, 'checks': {}}
         for key in PRODUCT_METRICS:
             values = [m[key] for m in reference_metrics]
@@ -290,10 +313,10 @@ def main():
         # Matched sources. The envelope comes from reference-versus-reference
         # pairs, never from the candidate itself, and the candidate is compared
         # against every reference rerun (worst case wins).
-        candidate_checks = [compare_sources(m['_sources'], candidate_metrics['_sources'])
+        candidate_checks = [source_distance(m['_sources'], candidate_metrics['_sources'])
                             for m in reference_metrics]
         paired = [c for c in candidate_checks if c['matched']]
-        pair_checks = [compare_sources(first['_sources'], second['_sources'])
+        pair_checks = [source_distance(first['_sources'], second['_sources'])
                        for index, first in enumerate(reference_metrics)
                        for second in reference_metrics[index + 1:]]
         reference_pairs = [c for c in pair_checks if c['matched']]
@@ -303,7 +326,7 @@ def main():
         # statistic the candidate is scored with, applied to family members.
         member_flux, member_offset = [], []
         for index, member in enumerate(reference_metrics):
-            others = [compare_sources(member['_sources'], other['_sources'])
+            others = [source_distance(member['_sources'], other['_sources'])
                       for j, other in enumerate(reference_metrics) if j != index]
             matched = [check for check in others if check['matched']]
             member_flux.append(max((check['flux_ratio_spread'] for check in matched),
@@ -312,7 +335,8 @@ def main():
                                      default=None))
         flux_p95 = percentile(member_flux, CRITERION_QUANTILE)
         offset_p95 = percentile(member_offset, CRITERION_QUANTILE)
-        entry['source_checks'] = {'candidate_vs_references': candidate_checks,
+        entry['source_checks'] = {'metric': 'bidirectional worst-case',
+                                  'candidate_vs_references': candidate_checks,
                                   'reference_pairs': pair_checks,
                                   'member_worst_flux': member_flux,
                                   'member_worst_offset': member_offset}

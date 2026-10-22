@@ -1,0 +1,58 @@
+{
+  "common-input": {
+    "passed": 4,
+    "total": 6,
+    "cases": {
+      "gpu1": 0,
+      "gpu2": 0,
+      "gpu3": 0,
+      "null": 0,
+      "ulp-plus": 1,
+      "ulp-minus": 1
+    }
+  },
+  "old-regated": {
+    "passed": 6,
+    "total": 10,
+    "cases": {
+      "gpu1": 1,
+      "gpu2": 1,
+      "gpu3": 1,
+      "gpu4": 1,
+      "gpu5": 0,
+      "gpu6": 0,
+      "gpu7": 0,
+      "gpu8": 0,
+      "gpu9": 0,
+      "gpu10": 0
+    }
+  },
+  "reference-self": {
+    "passed": 10,
+    "total": 10,
+    "cases": {
+      "cpu1": 0,
+      "cpu2": 0,
+      "cpu3": 0,
+      "cpu4": 0,
+      "cpu5": 0,
+      "cpu6": 0,
+      "cpu7": 0,
+      "cpu8": 0,
+      "cpu9": 0,
+      "cpu10": 0
+    }
+  },
+  "beam-matched": {
+    "passed": 4,
+    "total": 6,
+    "cases": {
+      "gpu1": 0,
+      "gpu2": 0,
+      "gpu3": 0,
+      "null": 0,
+      "ulp-plus": 1,
+      "ulp-minus": 1
+    }
+  }
+}

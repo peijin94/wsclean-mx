@@ -3,7 +3,22 @@
 Updated 2026-10-22. Full evidence and plan:
 `docs/gpu-next-optimization-2026-10-22.md`.
 
-## Current state
+## Follow-up
+
+`docs/gpu-followup-2026-10-22.md` supersedes the suite/quarantine status below.
+Retired inversion is excluded from production linkage and rejects explicit
+selection; its separate archive diagnostic still fails. PSF reuse now retains
+`WSCTBEAM` (radians), including correct MFS handling and malformed-key rejection.
+With matching automatic scales, three GPU controls and the null control pass
+all pixel/source gates; all seven common-input CPU/GPU/null models are bitwise
+identical. A CPU-only +1 ULP input perturbation changes the model by 0.168%.
+The corrected symmetric source metric still leaves the original family at
+6/10: those failures are preserved, not waived. Final receipts and commit/patch
+provenance are in `docs/bench/gpu-followup-20261022/delivery.json`.
+Next optimization is bounded convolution-plan/kernel reuse, not GPU inversion.
+The prior timing gain below is unchanged; this follow-up adds no speed claim.
+
+## Earlier audit state (retained for provenance)
 
 - Root `gpu-dev`; published CPU release / `main` unchanged.
 - **Plain `-mgpu` now means GPU prediction only.** Inversion and

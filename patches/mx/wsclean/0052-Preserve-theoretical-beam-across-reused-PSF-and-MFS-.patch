@@ -1,0 +1,100 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 11:31:34 -0700
+Subject: [PATCH 52/52] Preserve theoretical beam across reused PSF and MFS
+ outputs
+
+
+diff --git a/doc/source/fits_keywords.rst b/doc/source/fits_keywords.rst
+index 4d4de2bd..fb241d4b 100644
+--- a/doc/source/fits_keywords.rst
++++ b/doc/source/fits_keywords.rst
+@@ -43,6 +43,8 @@ WSClean adds the following non-standard keywords to its output FITS files:
+     WSCENVIS -- effective nr of visibilities (only for natural weighting)
+     WSCVWSUM -- sum of visibility weight (since WSClean 2.3)
+     WSCIMGWG -- Weight to be used when averaging images together
++    WSCTBEAM -- mx: effective theoretical beam in radians, preserved by reuse-psf
++                for beam fitting and automatic multiscale selection (not BMAJ/BMIN).
+     WSCNORMF -- Normalization factor that was applied to the image. The factor is
+                 useful to undo the normalization for e.g. conversion to Kelvins.
+                 WSCNORMF is available since WSClean 2.
+diff --git a/io/wscfitswriter.cpp b/io/wscfitswriter.cpp
+index f6c41788..b95e2b69 100644
+--- a/io/wscfitswriter.cpp
++++ b/io/wscfitswriter.cpp
+@@ -1,6 +1,7 @@
+ #include "wscfitswriter.h"
+ 
+ #include <wscversion.h>
++#include <cmath>
+ 
+ #include "fitsiomutex.h"
+ #include "imagefilename.h"
+@@ -118,6 +119,10 @@ void WSCFitsWriter::setChannelKeywords(const ImagingTableEntry& entry,
+   /* This is the normalization factor that was applied. The factor is useful
+    * to undo the normalization for e.g. conversion to Kelvins. */
+   _writer.SetExtraKeyword("WSCNORMF", channelInfo.normalizationFactor);
++  // Required to reproduce automatic multiscale choices when reusing a PSF.
++  // This is the theoretical beam in radians, not the fitted restoring beam.
++  if (std::isfinite(channelInfo.theoreticBeamSize) && channelInfo.theoreticBeamSize > 0.0)
++    _writer.SetExtraKeyword("WSCTBEAM", channelInfo.theoreticBeamSize);
+   _writer.SetExtraKeyword("WSCNWLAY", channelInfo.wGridSize);
+   _writer.SetExtraKeyword("WSCNVIS", channelInfo.visibilityCount);
+   _writer.SetExtraKeyword("WSCENVIS", channelInfo.effectiveVisibilityCount);
+@@ -127,12 +132,12 @@ void WSCFitsWriter::setChannelKeywords(const ImagingTableEntry& entry,
+ }
+ 
+ void WSCFitsWriter::copyWSCleanKeywords(aocommon::FitsReader& reader) {
+-  const size_t N_STRKEYWORDS = 4, N_DBLKEYWORDS = 20;
++  const size_t N_STRKEYWORDS = 4, N_DBLKEYWORDS = 21;
+   const char* strKeywords[N_STRKEYWORDS] = {"WSCVERSI", "WSCVDATE", "WSCDATAC", "WSCWEIGH"};
+   const char* dblKeywords[N_DBLKEYWORDS] = {
+       "WSCIMGWG", "WSCNWLAY", "WSCGKRNL", "WSCCHANS", "WSCCHANE", "WSCTIMES", "WSCTIMEE",
+       "WSCFIELD", "WSCNITER", "WSCNORMF", "WSCTHRES", "WSCGAIN",  "WSCMGAIN", "WSCNEGCM",
+-      "WSCNEGST", "WSCMINOR", "WSCMAJOR", "WSCNVIS",  "WSCENVIS", "WSCVWSUM"};
++      "WSCNEGST", "WSCMINOR", "WSCMAJOR", "WSCNVIS",  "WSCENVIS", "WSCVWSUM", "WSCTBEAM"};
+   for (size_t i = 0; i != N_STRKEYWORDS; ++i)
+     _writer.CopyStringKeywordIfExists(reader, strKeywords[i]);
+   for (size_t i = 0; i != N_DBLKEYWORDS; ++i)
+diff --git a/main/wsclean.cpp b/main/wsclean.cpp
+index ef957d61..412bb332 100644
+--- a/main/wsclean.cpp
++++ b/main/wsclean.cpp
+@@ -118,6 +118,21 @@ void WSClean::loadExistingImage(ImagingTableEntry& entry, bool isPSF) {
+   entry.normalizationFactor = channel_info.normalizationFactor;
+ 
+   if (isPSF) {
++    char beam_card[FLEN_CARD];
++    int beam_status = 0;
++    fits_read_card(reader.FitsHandle(), "WSCTBEAM", beam_card, &beam_status);
++    double theoretical_beam = 0.0;
++    if (beam_status != KEY_NO_EXIST) {
++      if (beam_status != 0 || !reader.ReadDoubleKeyIfExists("WSCTBEAM", theoretical_beam) ||
++          !std::isfinite(theoretical_beam) || theoretical_beam <= 0.0)
++        throw std::runtime_error("Invalid WSCTBEAM: expected a positive finite beam in radians");
++      // processFullPSF derives the effective theoretical beam from this seed.
++      channel_info.beamSizeEstimate = theoretical_beam;
++      channel_info.theoreticBeamSize = theoretical_beam;
++    } else {
++      Logger::Warn << "Warning: reused PSF lacks WSCTBEAM; the legacy theoretical-beam "
++                      "fallback can change automatic multiscale choices.\n";
++    }
+     processFullPSF(image, entry);
+ 
+     _psfImages.SetWSCFitsWriter(createWSCFitsWriter(entry, false, false));
+diff --git a/math/imageoperations.cpp b/math/imageoperations.cpp
+index 0f98e236..18fdd60a 100644
+--- a/math/imageoperations.cpp
++++ b/math/imageoperations.cpp
+@@ -191,6 +191,10 @@ void MakeMFSImage(const Settings& settings, const std::vector<OutputChannelInfo>
+   Logger::Info << "Writing " << mfs_name << "...\n";
+   writer.SetFrequency((lowestFreq + highestFreq) * 0.5, highestFreq - lowestFreq);
+   writer.SetExtraKeyword("WSCIMGWG", weightSum);
++  if (std::isfinite(mfsInfo.theoreticBeamSize) && mfsInfo.theoreticBeamSize > 0.0)
++    writer.SetExtraKeyword("WSCTBEAM", mfsInfo.theoreticBeamSize);
++  else
++    writer.RemoveExtraKeyword("WSCTBEAM");
+   writer.RemoveExtraKeyword("WSCCHANS");
+   writer.RemoveExtraKeyword("WSCCHANE");
+   writer.Write(mfs_name, mfsImage.Data());

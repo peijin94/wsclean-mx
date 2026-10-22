@@ -52,6 +52,15 @@ class CompareSourcesTests(unittest.TestCase):
 
     # --- scalar metrics -----------------------------------------------------
 
+    def test_load_metrics_matches_direct_measurement(self):
+        image = synthetic_image()
+        directory = self.write(self.root / 'load', image)
+        loaded = compare_sources.load_metrics(directory / self.product)
+        direct = compare_sources.metrics(image.astype(np.float64))
+        for key in compare_sources.PRODUCT_METRICS:
+            self.assertEqual(loaded[key], direct[key])
+        np.testing.assert_array_equal(loaded['_sources'], direct['_sources'])
+
     def test_identical_candidate_passes(self):
         reference = self.write(self.root / 'ref', synthetic_image())
         candidate = self.write(self.root / 'cand', synthetic_image())
@@ -82,6 +91,38 @@ class CompareSourcesTests(unittest.TestCase):
         candidate = self.write(self.root / 'cand', image * np.float32(1.0005))
         result = self.cli(candidate, first, second)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_reference_member_passes_with_decreasing_flux(self):
+        # A member of the reference family must fit its own max envelope,
+        # irrespective of whether its flux is the higher or lower endpoint.
+        image = synthetic_image()
+        high = self.write(self.root / 'high', image)
+        low = self.write(self.root / 'low', image * np.float32(0.9))
+        result = self.cli(high, high, low)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_reference_envelope_is_independent_of_reference_order(self):
+        image = synthetic_image()
+        high = self.write(self.root / 'high', image)
+        low = self.write(self.root / 'low', image * np.float32(0.9))
+        for candidate in (high, low):
+            for refs in ((high, low), (low, high)):
+                with self.subTest(candidate=candidate.name, order=[p.name for p in refs]):
+                    result = self.cli(candidate, *refs)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_source_distance_is_bidirectional(self):
+        a = np.array([[0., 0., 100.], [0., 2., 80.]])
+        b = np.array([[0., 0., 90.]])
+        forward = compare_sources.compare_sources(a, b)
+        backward = compare_sources.compare_sources(b, a)
+        ab = compare_sources.source_distance(a, b)
+        ba = compare_sources.source_distance(b, a)
+        for key in ('flux_ratio_spread', 'position_offset_max_px'):
+            self.assertEqual(ab[key], ba[key])
+            self.assertEqual(ab[key], max(forward[key], backward[key]))
+        self.assertEqual(ab['unmatched'] + ab['unmatched_candidate'],
+                         ba['unmatched'] + ba['unmatched_candidate'])
 
     def test_candidate_outside_reference_envelope_fails(self):
         image = synthetic_image()

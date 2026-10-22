@@ -240,9 +240,14 @@ Read [the GPU audit and next-optimization plan](docs/gpu-next-optimization-2026-
 for verified results and open limits. Earlier GPU attribution was invalid because
 main's registration code was compiled out; the audit supersedes those claims.
 Set `MX_METAL_DEBUG_TIMING=1` to obtain actual stage-execution counters.
-This remains experimental: the threaded source-envelope gate still fails 4/10
-candidates, and the archived gridding probe fails. It is not a blanket
-scientific-release approval.
+The [quarantine and matched-input follow-up](docs/gpu-followup-2026-10-22.md)
+passes the active CPU/Metal suites and GPU-specific controlled pixel/source
+gates. PSF reuse preserves the theoretical beam and automatic scale choices.
+Retired inversion is excluded from production linkage and explicitly rejected;
+its failing probe is available only through `WSCLEAN_MX_METAL_ARCHIVE=ON` and
+`scripts/test_archived_metal.sh`. The original full-pipeline source family still
+fails 4/10 candidates under unchanged limits. This remains experimental, not a
+blanket scientific-release approval.
 The broader CPU scientific-validation work remains in
 [the development plan](docs/development-plan.md).
 

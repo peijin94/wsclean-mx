@@ -1,6 +1,16 @@
 # gpu-dev audit, implementation and next optimization — 2026-10-22
 
-## Verdict
+## Follow-up status
+
+See `docs/gpu-followup-2026-10-22.md` for the subsequent quarantine and causal
+investigation. Production inversion is now structurally ducc0-only; active
+Metal/CPU suites pass, while the separately invoked archive probe still fails.
+The comparator is symmetric and PSF reuse preserves the theoretical beam.
+Beam-matched threaded GPU controls pass with bitwise-identical CLEAN models;
+the retained full-pipeline family still passes 6/10, so broader scientific
+acceptance remains open. The timing cohort below is unchanged.
+
+## Original audit verdict (before the follow-up)
 
 A real, bounded GPU prediction pipeline is implemented and measured. On the
 15-slot LWA workload, prediction time fell **20.6%** and total wall time fell
@@ -137,7 +147,7 @@ controlled scientific acceptance remains required before a release claim.
 ![Deterministic image comparison, percentile-99 stretch](bench/gpu-audit-20261022/science.png)
 ![Threaded source-envelope failures retained](bench/gpu-audit-20261022/source-envelopes.png)
 
-### Suite status — not blanket green
+### Original suite status — superseded by the follow-up separation
 
 - **CPU:** 136 Python tests and the linked native regression suite pass.
 - **Metal:** the same 136 Python tests and new prediction/peak/real-FFT/multiscale
@@ -156,7 +166,7 @@ controlled scientific acceptance remains required before a release claim.
 | Priority | Work | Acceptance criterion |
 |---|---|---|
 | P0 | Resolve threaded boundaries with a predeclared larger CPU/GPU family and known-small CPU perturbation control | Preserve failures; judge against CPU/control distributions, not a tolerance widened from GPU results |
-| P0 | Quarantine or repair retired inversion entry points/probe | No ambiguous selectable path that fails its own oracle; do not silently remove the gate |
+| Complete | Quarantine retired inversion entry points/probe | Verified outside production linkage/routing; separate archive diagnostic retains failure |
 | P1 | Keep scale kernels and reusable FFT workspaces resident with a hard aggregate-byte budget | Remove measured plan/allocation churn without lifetime or shape-key bugs; repeated production benefit |
 | P1 | Fuse convolution, RMS weighting and peak reduction when the CPU does not require transformed images | Avoid output-copy plus peak-upload; preserve masks, ties and cached-residual consumers; real radler and end-to-end gates |
 | P2 | Reuse the bounded two prediction plans across compatible calls | Separate cold planning from warm execution; safe draining/eviction and total memory bound |
