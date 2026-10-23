@@ -1,0 +1,40 @@
+{
+  "exports": [
+    {
+      "component": "wsclean",
+      "patch": "/Users/peijinz/dev/wsclean-mx/patches/mx/wsclean/0054-metal-bound-resource-reuse-and-fuse-resident-multisc.patch",
+      "commit": "ff01a434abf53ef03a02f406abe24214c87b78b6"
+    },
+    {
+      "component": "radler",
+      "patch": "/Users/peijinz/dev/wsclean-mx/patches/mx/radler/0008-multiscale-publish-immutable-kernel-identities-and-f.patch",
+      "commit": "ea55b6192b19ddc1eeaa91c563538106ccf1751a"
+    }
+  ],
+  "checks": [
+    {
+      "component": "wsclean",
+      "patches": 54,
+      "tree": "637f70972e07f1e720de69e17cfcca5289c7a186",
+      "exact": true
+    },
+    {
+      "component": "aocommon",
+      "patches": 2,
+      "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+      "exact": true
+    },
+    {
+      "component": "schaapcommon",
+      "patches": 8,
+      "tree": "e5490e48aa382a72c5b4c379dc680af560d474d9",
+      "exact": true
+    },
+    {
+      "component": "radler",
+      "patches": 8,
+      "tree": "905da33f35095f6c01dfccf687545384655e4cc6",
+      "exact": true
+    }
+  ]
+}

@@ -1,0 +1,740 @@
+[
+  {
+    "case": "resident",
+    "repeat": 1,
+    "reference": "gpuopt-r1-common-01-baseline-convolution",
+    "candidate": "gpuopt-r1-common-02-resident",
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 4.4345855712890625e-05,
+        "rel_rms": 1.133884857437317e-06,
+        "rel_peak": 7.967777417104958e-08,
+        "peak_ratio": 1.0,
+        "n_diff": 9047058,
+        "max_ulp": 1817042944,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 4.4345855712890625e-05,
+        "rel_rms": 1.4923718013896957e-06,
+        "rel_peak": 5.995889063725289e-07,
+        "peak_ratio": 0.9999998968449193,
+        "n_diff": 9119559,
+        "max_ulp": 1817272320,
+        "T2": true
+      }
+    ],
+    "passed": true
+  },
+  {
+    "case": "fused",
+    "repeat": 1,
+    "reference": "gpuopt-r1-common-01-baseline-convolution",
+    "candidate": "gpuopt-r1-common-03-fused",
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 6.753206253051758e-05,
+        "rel_rms": 1.4514179356983775e-06,
+        "rel_peak": 1.2133725555886985e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9034622,
+        "max_ulp": 1827860480,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 6.753206253051758e-05,
+        "rel_rms": 1.9104939165794007e-06,
+        "rel_peak": 9.130836437097785e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9107491,
+        "max_ulp": 1827831808,
+        "T2": true
+      }
+    ],
+    "passed": true
+  },
+  {
+    "case": "fused",
+    "repeat": 2,
+    "reference": "gpuopt-r1-common-06-baseline-convolution",
+    "candidate": "gpuopt-r1-common-04-fused",
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 5.710124969482422e-05,
+        "rel_rms": 1.4276939112196299e-06,
+        "rel_peak": 1.0259584362347512e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9056103,
+        "max_ulp": 1803083776,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 5.710124969482422e-05,
+        "rel_rms": 1.8791838486943633e-06,
+        "rel_peak": 7.720513068614014e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9127071,
+        "max_ulp": 1803083776,
+        "T2": true
+      }
+    ],
+    "passed": true
+  },
+  {
+    "case": "resident",
+    "repeat": 2,
+    "reference": "gpuopt-r1-common-06-baseline-convolution",
+    "candidate": "gpuopt-r1-common-05-resident",
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 6.416440010070801e-05,
+        "rel_rms": 1.5896191344074857e-06,
+        "rel_peak": 1.1528645684829954e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9088667,
+        "max_ulp": 1781727232,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 6.416440010070801e-05,
+        "rel_rms": 2.0924300987356166e-06,
+        "rel_peak": 8.675503463844453e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9154508,
+        "max_ulp": 1795858432,
+        "T2": true
+      }
+    ],
+    "passed": true
+  },
+  {
+    "case": "resident",
+    "repeat": 3,
+    "reference": "gpuopt-r1-common-09-baseline-convolution",
+    "candidate": "gpuopt-r1-common-10-resident",
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 6.115436553955078e-05,
+        "rel_rms": 1.1949127478242763e-06,
+        "rel_peak": 1.0987822083265707e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9035713,
+        "max_ulp": 1804746752,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 6.115436553955078e-05,
+        "rel_rms": 1.5726805792079942e-06,
+        "rel_peak": 8.268524434653423e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9110542,
+        "max_ulp": 1804992512,
+        "T2": true
+      }
+    ],
+    "passed": true
+  },
+  {
+    "case": "fused",
+    "repeat": 3,
+    "reference": "gpuopt-r1-common-09-baseline-convolution",
+    "candidate": "gpuopt-r1-common-11-fused",
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 5.269050598144531e-05,
+        "rel_rms": 1.4192038017424011e-06,
+        "rel_peak": 9.467090371936536e-08,
+        "peak_ratio": 1.0,
+        "n_diff": 9143610,
+        "max_ulp": 1793630208,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 5.269050598144531e-05,
+        "rel_rms": 1.8680030719212832e-06,
+        "rel_peak": 7.124147758512306e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 9198728,
+        "max_ulp": 1802633216,
+        "T2": true
+      }
+    ],
+    "passed": true
+  }
+]

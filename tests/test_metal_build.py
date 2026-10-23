@@ -53,7 +53,11 @@ class MetalIntegrationTest(unittest.TestCase):
         self.assertIn('tests/gpu_quarantine_check.py', text)
         for probe in ('mx-peak-probe', 'mx-vkfft-real-probe',
                       'mx-prediction-gpu-probe', 'mx-prediction-mock-probe',
-                      'mx-prediction-cpu-probe', 'mx-multiscale-batch-probe'):
+                      'mx-prediction-cpu-probe', 'mx-multiscale-batch-probe',
+                      'mx-budget-probe', 'mx-reuse-probe', 'mx-fusion-probe',
+                      'mx-fusion-public-probe', 'mx-failure-probe',
+                      'mx-metal-buffer-probe', 'mx-kernel-identity-probe',
+                      'mx-binary32-probe', 'mx-prediction-schedule-probe'):
             self.assertIn(probe, text)
 
     def test_legacy_objects_are_only_in_guarded_archive(self):

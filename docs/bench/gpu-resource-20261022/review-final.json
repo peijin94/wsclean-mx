@@ -1,0 +1,26 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    {
+      "priority": "P2",
+      "location": "bench/analyze_gpu_resources.py:31-33,66",
+      "issue": "Candidate runs pass without a budget receipt, and the reported limit is never compared with MX_METAL_MEMORY_MB. A 1024 MiB trial can therefore accept a missing cap or a self-consistent 2048 MiB cap.",
+      "minimal_fix": "Require complete budget fields for budget-configured trials, verify limit equals configured MiB × 1048576, then enforce used <= peak <= limit. Preserve compatibility with historical baselines."
+    },
+    {
+      "priority": "P2",
+      "location": "bench/analyze_gpu_resources.py:25-38,66-68",
+      "issue": "Work validation checks prediction and the fused case only. Resident/no-plans/no-kernels trials can pass with zero convolution work; serial trials can pass with serial_waits=0. These receipts cannot validate the intended experiments.",
+      "minimal_fix": "Validate case-specific work counters: require convolution batches/planes for convolution experiments and serial_waits equal successful submissions for serial trials, with zero serial waits for overlapped trials."
+    },
+    {
+      "priority": "P2",
+      "location": "tests/resource_profile_check.py:17-22",
+      "issue": "The checker groups fusion.total and fusion.copy_output as command events. The public fusion path emits these with command_id=0, so valid mx-fusion-public-probe output fails the required encode/wait/GPU assertion. Confirmed with read-only parser fixtures.",
+      "minimal_fix": "Group only fusion.encode_commit, fusion.wait, and fusion.gpu with nonzero command IDs; validate aggregate/copy spans separately."
+    }
+  ],
+  "suggestions": [],
+  "summary": "Complete scoped changes and prior blocker reports reviewed. No edits, compilation, heavy tests, or GPU/MS runs. Three validation blockers remain. CPU doubles are not native GPU evidence; final native-v3 validation remains parent-owned. Existing scientific failures remain explicit. This review makes no whole-project or scientific-release approval claim."
+}

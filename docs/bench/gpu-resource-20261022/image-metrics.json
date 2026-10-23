@@ -1,0 +1,85 @@
+{
+  "version": "ff01a434",
+  "gpu_label": "Resident convolution + peak",
+  "cpu_directory": "/Users/peijinz/dev/wsclean-mx/bench/out/gpuopt-r1-common-00-baseline-cpu/gpu-profile-delivered",
+  "gpu_directory": "/Users/peijinz/dev/wsclean-mx/bench/out/gpuopt-r1-common-03-fused/gpu-resource-v1",
+  "shape_yx": [
+    3072,
+    3072
+  ],
+  "pixel_origin": "lower; zero-based x=column, y=row",
+  "crop": {
+    "requested_center_fraction_xy": [
+      0.25,
+      0.6
+    ],
+    "center_xy": [
+      768,
+      1843
+    ],
+    "requested_center_xy_float": [
+      768.0,
+      1843.1999999999998
+    ],
+    "bounds_xyxy": [
+      384,
+      1459,
+      1152,
+      2227
+    ],
+    "shape_yx": [
+      768,
+      768
+    ]
+  },
+  "percentile": 99.0,
+  "mask": "common stored horizon mask > 0",
+  "brightness_unit": "JY/BEAM",
+  "full": {
+    "pixels": 4939357,
+    "vmax_cpu_p99": 5.11145826339723,
+    "vmin": -0.10222916526794461,
+    "difference_abs_p99": 0.0012546181678771973,
+    "cpu_peak": 556.5645751953125,
+    "gpu_peak": 556.56494140625,
+    "max_abs_difference": 0.03502601385116577,
+    "difference_rms": 0.0004995302201981478,
+    "cpu_rms": 1.8269497503081429,
+    "relative_rms": 0.0002734230758749081,
+    "relative_peak": 6.293252465605498e-05,
+    "pearson_r": 0.9999999616472707
+  },
+  "zoom": {
+    "pixels": 580161,
+    "vmax_cpu_p99": 4.130615520477324,
+    "vmin": -0.08261231040954649,
+    "difference_abs_p99": 0.0010742127895355235,
+    "cpu_peak": 424.3942565917969,
+    "gpu_peak": 424.3944091796875,
+    "max_abs_difference": 0.03131991624832153,
+    "difference_rms": 0.0005135046423700228,
+    "cpu_rms": 2.272397401457375,
+    "relative_rms": 0.00022597484139028352,
+    "relative_peak": 7.379910486971212e-05,
+    "pearson_r": 0.9999999743407724
+  },
+  "input_sha256": {
+    "cpu/img-image.fits": "719dd1f2bef4fb8a343bf44eb46a1bc1183f5b0e7982adbefbcf217ac4fb9be2",
+    "cpu/img-horizon-mask.fits": "bbf639f263a78110d32f7da19292642df056ca537b4c7007a7ed96ba9d24ab20",
+    "gpu/img-image.fits": "8b79434f7135054cb7811d38f72218f0ce83aaa961a74f88aeecde5625654512",
+    "gpu/img-horizon-mask.fits": "bbf639f263a78110d32f7da19292642df056ca537b4c7007a7ed96ba9d24ab20"
+  },
+  "fits_metadata": {
+    "CRVAL1": 37.5,
+    "CRVAL2": 37.2158491666667,
+    "CRVAL3": 66214599.609375,
+    "BMAJ": 0.173841895408689,
+    "BMIN": 0.129764147191054,
+    "BPA": 43.2591781121533,
+    "DATE-OBS": "2025-11-02T07:50:25.2",
+    "WSCVERSI": "3.7",
+    "WSCVDATE": "2026-02-16"
+  },
+  "selection": "Predeclared first matched-input pair, repeat1; not selected by agreement",
+  "strict_full_product_T2": "FAIL; horizon-masked image statistics do not replace the unchanged full-product gate"
+}

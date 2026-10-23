@@ -1,0 +1,1172 @@
+[
+  {
+    "case": "baseline-convolution",
+    "repeat": 1,
+    "reference": "gpuopt-r1-common-00-baseline-cpu",
+    "candidate": "gpuopt-r1-common-01-baseline-convolution",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.03502613306045532,
+        "rel_rms": 0.0002502583771673227,
+        "rel_peak": 6.293273884376088e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435334,
+        "max_ulp": 2017330624,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872461318969727,
+        "rel_rms": 0.0005623313561197063,
+        "rel_peak": 0.004579828666903443,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435525,
+        "max_ulp": 2011117632,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "resident",
+    "repeat": 1,
+    "reference": "gpuopt-r1-common-00-baseline-cpu",
+    "candidate": "gpuopt-r1-common-02-resident",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.03502523899078369,
+        "rel_rms": 0.0002502632806140347,
+        "rel_peak": 6.293113243596658e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435362,
+        "max_ulp": 2017329792,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872556686401367,
+        "rel_rms": 0.000562339184162534,
+        "rel_peak": 0.004579841561345722,
+        "peak_ratio": 1.0000043325326056,
+        "n_diff": 9435495,
+        "max_ulp": 2011117184,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "fused",
+    "repeat": 1,
+    "reference": "gpuopt-r1-common-00-baseline-cpu",
+    "candidate": "gpuopt-r1-common-03-fused",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.03502601385116577,
+        "rel_rms": 0.0002502554507919435,
+        "rel_peak": 6.293252465605498e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435359,
+        "max_ulp": 2017330688,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872532844543457,
+        "rel_rms": 0.0005623335294329732,
+        "rel_peak": 0.0045798383377351525,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435542,
+        "max_ulp": 2011116032,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "fused",
+    "repeat": 2,
+    "reference": "gpuopt-r1-common-07-baseline-cpu",
+    "candidate": "gpuopt-r1-common-04-fused",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.03502422571182251,
+        "rel_rms": 0.000250260842701525,
+        "rel_peak": 6.292931184046637e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435443,
+        "max_ulp": 2017331072,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872389793395996,
+        "rel_rms": 0.0005623201644084639,
+        "rel_peak": 0.004579818996071734,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435559,
+        "max_ulp": 2011115584,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "resident",
+    "repeat": 2,
+    "reference": "gpuopt-r1-common-07-baseline-cpu",
+    "candidate": "gpuopt-r1-common-05-resident",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.035025060176849365,
+        "rel_rms": 0.0002502599943925027,
+        "rel_peak": 6.293081115440772e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435446,
+        "max_ulp": 2017330048,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872294425964355,
+        "rel_rms": 0.0005623208732472712,
+        "rel_peak": 0.004579806101629455,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435584,
+        "max_ulp": 2011114304,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "baseline-convolution",
+    "repeat": 2,
+    "reference": "gpuopt-r1-common-07-baseline-cpu",
+    "candidate": "gpuopt-r1-common-06-baseline-convolution",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.03502535820007324,
+        "rel_rms": 0.00025026417998800333,
+        "rel_peak": 6.293134662367248e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435365,
+        "max_ulp": 2017331840,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872365951538086,
+        "rel_rms": 0.0005623245802243156,
+        "rel_peak": 0.004579815772461165,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435569,
+        "max_ulp": 2011116096,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "baseline-convolution",
+    "repeat": 3,
+    "reference": "gpuopt-r1-common-08-baseline-cpu",
+    "candidate": "gpuopt-r1-common-09-baseline-convolution",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.03502565622329712,
+        "rel_rms": 0.0002502464649276256,
+        "rel_peak": 6.293188209293727e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435386,
+        "max_ulp": 2017331392,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872413635253906,
+        "rel_rms": 0.0005623127390078413,
+        "rel_peak": 0.0045798222196823035,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435539,
+        "max_ulp": 2011113472,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "resident",
+    "repeat": 3,
+    "reference": "gpuopt-r1-common-08-baseline-cpu",
+    "candidate": "gpuopt-r1-common-10-resident",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.03502470254898071,
+        "rel_rms": 0.0002502557155410999,
+        "rel_peak": 6.293016859129e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435435,
+        "max_ulp": 2017330880,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.33872532844543457,
+        "rel_rms": 0.0005623215221466317,
+        "rel_peak": 0.0045798383377351525,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435575,
+        "max_ulp": 2011114112,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "fused",
+    "repeat": 3,
+    "reference": "gpuopt-r1-common-08-baseline-cpu",
+    "candidate": "gpuopt-r1-common-11-fused",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.035026371479034424,
+        "rel_rms": 0.0002502560403874046,
+        "rel_peak": 6.29331672191727e-05,
+        "peak_ratio": 1.0000006579846326,
+        "n_diff": 9435430,
+        "max_ulp": 2017332352,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.4680633544921875,
+        "rel_rms": 0.0018290518023843356,
+        "rel_peak": 0.0015081576208839343,
+        "peak_ratio": 1.0,
+        "n_diff": 9409737,
+        "max_ulp": 2080259216,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          3072,
+          3072
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.3387260437011719,
+        "rel_rms": 0.0005623315055279173,
+        "rel_peak": 0.004579848008566861,
+        "peak_ratio": 1.000004435688144,
+        "n_diff": 9435543,
+        "max_ulp": 2011115072,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  }
+]

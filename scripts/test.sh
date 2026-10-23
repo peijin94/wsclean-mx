@@ -77,14 +77,21 @@ esac
 if [ "$METAL_ENABLED" = 1 ]; then
   "$PYTHON" tests/gpu_quarantine_check.py "$BUILD"
   "$PYTHON" tests/gpu_activation_check.py "$BUILD"
+  RESOURCE_PROBES=(mx-budget-probe mx-budget-lifetime-probe mx-reuse-probe
+    mx-fusion-probe mx-fusion-public-probe mx-failure-probe mx-metal-buffer-probe
+    mx-kernel-identity-probe mx-binary32-probe mx-prediction-schedule-probe mx-fusion-scope-probe)
   "$CMAKE" --build "$BUILD" --target mx-peak-probe mx-vkfft-real-probe \
     mx-multiscale-batch-probe mx-prediction-gpu-probe mx-prediction-mock-probe \
-    mx-prediction-cpu-probe -j "${JOBS:-2}"
+    mx-prediction-cpu-probe "${RESOURCE_PROBES[@]}" -j "${JOBS:-2}"
   for probe in mx-peak-probe mx-vkfft-real-probe mx-multiscale-batch-probe \
-      mx-prediction-gpu-probe mx-prediction-mock-probe mx-prediction-cpu-probe; do
+      mx-prediction-gpu-probe mx-prediction-mock-probe mx-prediction-cpu-probe \
+      "${RESOURCE_PROBES[@]}"; do
     command=("$BUILD/metal/$probe")
     if [ "$probe" = mx-prediction-gpu-probe ]; then
       command=("$PYTHON" tests/prediction_gpu_check.py "$BUILD/metal/$probe")
+    fi
+    if [ "$probe" = mx-failure-probe ] || [ "$probe" = mx-metal-buffer-probe ]; then
+      command=(env MTL_DEBUG_LAYER=1 "${command[@]}")
     fi
     if ! "${command[@]}"; then
       printf 'FAILED: %s\n' "$probe" >&2

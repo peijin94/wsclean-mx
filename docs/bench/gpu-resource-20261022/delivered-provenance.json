@@ -1,0 +1,46 @@
+{
+  "root_baseline": "05b8dde051c97786fd5cbaaafcc02da2c0070474",
+  "branch": "gpu-dev",
+  "work": {
+    "wsclean": {
+      "commit": "ff01a434abf53ef03a02f406abe24214c87b78b6",
+      "status": ""
+    },
+    "radler": {
+      "commit": "ea55b6192b19ddc1eeaa91c563538106ccf1751a",
+      "status": ""
+    },
+    "aocommon": {
+      "commit": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+      "status": ""
+    },
+    "schaapcommon": {
+      "commit": "d6e5eee1dd1b06fa3e01a92f2eb9ab84d83498e7",
+      "status": ""
+    }
+  },
+  "binaries": {
+    "gpu-profile-delivered": {
+      "files": {
+        "wsclean": "744bc73a6d1f7a68f33708e0cde598f7cfffbcb383be201a9d499969bb9f17c1",
+        "libschaapthreading.dylib": "8ef3f61dce77761381a696a8d8cbf9f248361610796cc0f6d5aee87850122b04"
+      },
+      "dependencies": "/Users/peijinz/dev/wsclean-mx/bench/bin/gpu-profile-delivered/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 382.5.3)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.69)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1223.2.2)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n",
+      "version": "\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-53-gc782c93c\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n"
+    },
+    "gpu-resource-v1": {
+      "files": {
+        "wsclean": "76dda1bc6537a7f936a9b9541fbbb94848a55d4d374374362393592d212425d0",
+        "libschaapthreading.dylib": "8ef3f61dce77761381a696a8d8cbf9f248361610796cc0f6d5aee87850122b04"
+      },
+      "dependencies": "/Users/peijinz/dev/wsclean-mx/bench/bin/gpu-resource-v1/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 382.5.3)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.69)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1223.2.2)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n",
+      "version": "\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-54-gff01a434\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n"
+    }
+  },
+  "hardware": {
+    "machdep.cpu.brand_string": "Apple M2",
+    "hw.memsize": "17179869184",
+    "hw.ncpu": "8",
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n"
+  }
+}

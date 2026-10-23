@@ -1,0 +1,239 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 17:03:38 -0700
+Subject: [PATCH] multiscale: publish immutable kernel identities and fused
+ peak hooks
+
+
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.cc b/cpp/algorithms/multiscale/multiscale_transforms.cc
+index 329ec5c..1b9379e 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.cc
++++ b/cpp/algorithms/multiscale/multiscale_transforms.cc
+@@ -3,17 +3,54 @@
+ #include "algorithms/multiscale/multiscale_transforms.h"
+ 
+ #include <schaapcommon/math/convolution.h>
++#include <atomic>
++#include <limits>
+ 
+ using aocommon::Image;
+ 
+ namespace radler::algorithms::multiscale {
+-namespace { MultiScaleTransforms::BatchTransformHook batch_hook = nullptr; }
++namespace {
++MultiScaleTransforms::BatchTransformHook batch_hook = nullptr;
++MultiScaleTransforms::OwnedBatchTransformHook owned_batch_hook = nullptr;
++MultiScaleTransforms::FusedTransformHook fused_hook = nullptr;
++}
++std::uint64_t KernelFftCache::Fft::NextGeneration() noexcept {
++  static std::atomic<std::uint64_t> next{1};
++  auto n=next.load(std::memory_order_relaxed);
++  do { if(n==std::numeric_limits<std::uint64_t>::max())return 0; }
++  while(!next.compare_exchange_weak(n,n+1,std::memory_order_relaxed));
++  return n;
++}
++void MultiScaleTransforms::SetOwnedBatchTransformHook(OwnedBatchTransformHook hook){owned_batch_hook=hook;}
++void MultiScaleTransforms::SetFusedTransformHook(FusedTransformHook hook){
++  // The resident reduction matches Simple, including its no-candidate sentinel.
++  // Intel AVX has different public semantics: leave that oracle on the CPU.
++#if defined(__aarch64__) && !defined(__AVX__) && !defined(__SSE__)
++  fused_hook=hook;
++#else
++  fused_hook=nullptr;
++#endif
++}
++bool MultiScaleTransforms::HasFusedTransformHook(){return fused_hook!=nullptr;}
++bool MultiScaleTransforms::TryFusedScales(const std::complex<float>* image_fft,
++    const aocommon::UVector<float>& scales, float* const* images,
++    const unsigned char* const* masks, bool negative, const size_t* xb,
++    const size_t* yb, const float* weights, float* values, size_t* x,
++    size_t* y, unsigned char* found) {
++  if(!fused_hook || !image_fft || scales.empty())return false;
++  std::vector<std::shared_ptr<const KernelFftCache::Fft>> owners;
++  std::vector<const std::complex<float>*> kernels;
++  std::vector<std::uint64_t> generations;
++  for(float scale:scales){owners.push_back(kernelFft(scale));kernels.push_back(owners.back()->data());generations.push_back(owners.back()->Generation());}
++  return fused_hook(images,image_fft,kernels.data(),generations.data(),_width,_height,
++      scales.size(),masks,negative,xb,yb,weights,values,x,y,found)!=0;
++}
+ void MultiScaleTransforms::SetBatchTransformHook(BatchTransformHook hook) { batch_hook = hook; }
+ 
+ bool MultiScaleTransforms::TryTransformScales(
+     const std::complex<float>* image_fft, const aocommon::UVector<float>& scales,
+     std::vector<Image>& images) {
+-  if (!batch_hook || !image_fft || scales.empty() || _width == 0 || _height == 0)
++  if ((!batch_hook && !owned_batch_hook) || !image_fft || scales.empty() || _width == 0 || _height == 0)
+     return false;
+   // Bound stack allocations before multiplying dimensions. FFT backend has
+   // its own workspace budget; oversized calls keep the per-scale CPU route.
+@@ -23,14 +60,19 @@ bool MultiScaleTransforms::TryTransformScales(
+   std::vector<std::shared_ptr<const KernelFftCache::Fft>> owners;
+   std::vector<const std::complex<float>*> kernels;
+   std::vector<float*> pointers;
++  std::vector<std::uint64_t> generations;
+   output.reserve(scales.size()); owners.reserve(scales.size());
+   for (float scale : scales) {
+     owners.push_back(kernelFft(scale));
+     kernels.push_back(owners.back()->data());
++    generations.push_back(owners.back()->Generation());
+     output.emplace_back(_width, _height);
+     pointers.push_back(output.back().Data());
+   }
+-  if (!batch_hook(pointers.data(), image_fft, kernels.data(), _width, _height, scales.size()))
++  const int ok=owned_batch_hook
++      ? owned_batch_hook(pointers.data(),image_fft,kernels.data(),generations.data(),_width,_height,scales.size())
++      : batch_hook(pointers.data(),image_fft,kernels.data(),_width,_height,scales.size());
++  if (!ok)
+     return false;
+   images = std::move(output);
+   return true;
+@@ -46,7 +88,7 @@ std::shared_ptr<const KernelFftCache::Fft> KernelFftCache::Get(
+     const auto iter = ffts_.find(key);
+     if (iter != ffts_.end()) return iter->second;
+   }
+-  auto fft = std::make_shared<const Fft>(make());
++  auto fft = Publish(make());
+   const size_t bytes = fft->size() * sizeof(std::complex<float>);
+   std::lock_guard lock(mutex_);
+   const auto [iter, inserted] = ffts_.try_emplace(key, fft);
+@@ -76,7 +118,7 @@ std::shared_ptr<const KernelFftCache::Fft> MultiScaleTransforms::kernelFft(
+   };
+   if (_kernelCache)
+     return _kernelCache->Get(_width, _height, _shape, scale, make);
+-  return std::make_shared<const KernelFftCache::Fft>(make());
++  return KernelFftCache::Publish(make());
+ }
+ 
+ void MultiScaleTransforms::Transform(std::vector<Image>& images,
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.h b/cpp/algorithms/multiscale/multiscale_transforms.h
+index d416d5e..b2936c8 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.h
++++ b/cpp/algorithms/multiscale/multiscale_transforms.h
+@@ -4,6 +4,7 @@
+ #define RADLER_ALGORITHMS_MULTISCALE_MULTISCALE_TRANSFORMS_H_
+ 
+ #include <cmath>
++#include <cstdint>
+ #include <complex>
+ #include <functional>
+ #include <initializer_list>
+@@ -27,7 +28,37 @@ namespace radler::algorithms::multiscale {
+  */
+ class KernelFftCache {
+  public:
+-  using Fft = aocommon::UVector<std::complex<float>>;
++  class Fft : public aocommon::UVector<std::complex<float>> {
++   public:
++    using Base = aocommon::UVector<std::complex<float>>;
++    using Base::Base;
++    Fft() = default;
++    Fft(const Base& other) : Base(other) {}
++    Fft(Base&& other) noexcept : Base(std::move(other)) {}
++    Fft(const Fft& other) : Base(other) {}
++    Fft(Fft&& other) noexcept : Base(std::move(other)) {}
++    Fft& operator=(const Base& other) { Base::operator=(other); return *this; }
++    Fft& operator=(Base&& other) noexcept { Base::operator=(std::move(other)); return *this; }
++    Fft& operator=(std::initializer_list<std::complex<float>> values) {
++      Base::operator=(Base(values)); return *this;
++    }
++    Fft& operator=(const Fft& other) { Base::operator=(other); return *this; }
++    Fft& operator=(Fft&& other) noexcept { Base::operator=(std::move(other)); return *this; }
++    // Mutable vector values have no resident identity, including copies/moves
++    // of published owners. Inherited methods and escaped pointers may mutate.
++    std::uint64_t Generation() const { return generation_; }
++   private:
++    friend class KernelFftCache;
++    struct Published {};
++    Fft(const Base& other, Published) : Base(other), generation_(NextGeneration()) {}
++    static std::uint64_t NextGeneration() noexcept;
++    const std::uint64_t generation_ = 0;
++  };
++
++  // Always copy: even an rvalue maker can have escaped mutable data pointers.
++  static std::shared_ptr<const Fft> Publish(const Fft::Base& value) {
++    return std::shared_ptr<const Fft>(new Fft(value, Fft::Published{}));
++  }
+ 
+   std::shared_ptr<const Fft> Get(size_t width, size_t height,
+                                  MultiscaleShape shape, float scale,
+@@ -81,7 +112,24 @@ class MultiScaleTransforms {
+   // are committed only after success. The normal CPU path allocates no stack.
+   using BatchTransformHook = int (*)(float* const*, const std::complex<float>*,
+                                      const std::complex<float>* const*, size_t, size_t, size_t);
++  using OwnedBatchTransformHook = int (*)(float* const*, const std::complex<float>*,
++      const std::complex<float>* const*, const std::uint64_t*, size_t, size_t, size_t);
++  // Additive fusion API. images may be null (metadata only). Values are weighted
++  // signed peaks; found includes OptionalNumber sentinel semantics. Entire call
++  // must decline without publishing outputs. Masks/borders are per scale.
++  using FusedTransformHook = int (*)(float* const*, const std::complex<float>*,
++      const std::complex<float>* const*, const std::uint64_t*, size_t, size_t, size_t,
++      const unsigned char* const*, int, const size_t*, const size_t*, const float*,
++      float*, size_t*, size_t*, unsigned char*);
+   static void SetBatchTransformHook(BatchTransformHook hook);
++  static void SetOwnedBatchTransformHook(OwnedBatchTransformHook hook);
++  static void SetFusedTransformHook(FusedTransformHook hook);
++  static bool HasFusedTransformHook();
++  bool TryFusedScales(const std::complex<float>* image_fft,
++      const aocommon::UVector<float>& scales, float* const* images,
++      const unsigned char* const* masks, bool negative, const size_t* xb,
++      const size_t* yb, const float* weights, float* values, size_t* x,
++      size_t* y, unsigned char* found);
+   bool TryTransformScales(const std::complex<float>* image_fft,
+                           const aocommon::UVector<float>& scales,
+                           std::vector<aocommon::Image>& images);
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.cc b/cpp/algorithms/threaded_deconvolution_tools.cc
+index 2cebf8e..d8be4d7 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.cc
++++ b/cpp/algorithms/threaded_deconvolution_tools.cc
+@@ -94,6 +94,50 @@ void ThreadedDeconvolutionTools::FindMultiScalePeak(
+   schaapcommon::math::ConvolutionFft(image_fft.data(), image.Data(),
+                                      image.Width(), image.Height());
+ 
++  // The additive backend consumes immutable kernels and returns weighted peaks
++  // directly from padded inverse-FFT storage. Read back unweighted planes only
++  // for real CPU consumers, including the existing sequential float RMS.
++  const bool need_fused_images = transformed_images || calculate_rms;
++  constexpr size_t max_fused_pixels = (size_t(512) << 20) / sizeof(float);
++  const bool can_buffer_fused_images = !need_fused_images ||
++      (image.Height() && image.Width() <= max_fused_pixels / image.Height() / n_scales);
++  if (multiscale::MultiScaleTransforms::HasFusedTransformHook() &&
++      can_buffer_fused_images &&
++      (scale_masks.empty() || scale_masks.size() == n_scales)) {
++    std::vector<Image> fused_images;
++    std::vector<float*> pointers;
++    const bool need_images = need_fused_images;
++    if (need_images) {
++      fused_images.reserve(n_scales);pointers.reserve(n_scales);
++      for(size_t i=0;i<n_scales;++i){fused_images.emplace_back(image.Width(),image.Height());pointers.push_back(fused_images.back().Data());}
++    }
++    std::vector<size_t> xb(n_scales),yb(n_scales),x(n_scales),y(n_scales);
++    std::vector<const unsigned char*> masks(n_scales);
++    std::vector<float> values(n_scales);
++    std::vector<unsigned char> found(n_scales);
++    for(size_t i=0;i<n_scales;++i){
++      const size_t border_scale=std::ceil(scales[i]*0.5);
++      xb[i]=std::max<size_t>(std::round(image.Width()*border_ratio),border_scale);
++      yb[i]=std::max<size_t>(std::round(image.Height()*border_ratio),border_scale);
++      masks[i]=reinterpret_cast<const unsigned char*>(scale_masks.empty()?mask:scale_masks[i].data());
++    }
++    if (ms_transforms->TryFusedScales(image_fft.data(),scales,
++        need_images?pointers.data():nullptr,masks.data(),allow_negative_components,
++        xb.data(),yb.data(),rms_factor_image.Empty()?nullptr:rms_factor_image.Data(),
++        values.data(),x.data(),y.data(),found.data())) {
++      for(size_t i=0;i<n_scales;++i){
++        PeakData& r=results[i];r.x=x[i];r.y=y[i];
++        r.rms=calculate_rms?RMS(fused_images[i],image.Size()):-1.0f;
++        if(found[i]){
++          r.unnormalized_value=values[i];
++          r.normalized_value=rms_factor_image.Empty()?values[i]:values[i]/rms_factor_image[x[i]+y[i]*image.Width()];
++        }else{r.unnormalized_value.Reset();r.normalized_value.Reset();}
++      }
++      if(transformed_images)*transformed_images=std::move(fused_images);
++      return;
++    }
++  }
++
+   std::vector<Image> batch_images;
+   const bool batched = ms_transforms->TryTransformScales(image_fft.data(), scales, batch_images);
+   schaapcommon::DynamicFor<size_t> loop;

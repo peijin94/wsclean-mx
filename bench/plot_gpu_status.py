@@ -57,7 +57,8 @@ def image_stats(cpu, gpu, mask):
             'pearson_r': correlation}
 
 
-def render_comparison(cpu_dir, gpu_dir, out, version, center=(0.25, 0.6), fraction=0.25):
+def render_comparison(cpu_dir, gpu_dir, out, version, center=(0.25, 0.6), fraction=0.25,
+                      gpu_label='GPU prediction'):
     cpu_dir, gpu_dir, out = map(Path, (cpu_dir, gpu_dir, out))
     cpu, ch = fits.getdata(cpu_dir/'img-image.fits', header=True)
     gpu, gh = fits.getdata(gpu_dir/'img-image.fits', header=True)
@@ -79,7 +80,8 @@ def render_comparison(cpu_dir, gpu_dir, out, version, center=(0.25, 0.6), fracti
     x0, y0, x1, y1 = bounds['bounds_xyxy']
     full = image_stats(cpu, gpu, mask)
     zoom = image_stats(cpu[y0:y1, x0:x1], gpu[y0:y1, x0:x1], mask[y0:y1, x0:x1])
-    result = {'version': version, 'cpu_directory': str(cpu_dir), 'gpu_directory': str(gpu_dir),
+    result = {'version': version, 'gpu_label': gpu_label,
+              'cpu_directory': str(cpu_dir), 'gpu_directory': str(gpu_dir),
               'shape_yx': list(cpu.shape), 'pixel_origin': 'lower; zero-based x=column, y=row',
               'crop': bounds, 'percentile': 99.0, 'mask': 'common stored horizon mask > 0',
               'brightness_unit': ch.get('BUNIT', 'unknown'), 'full': full, 'zoom': zoom,
@@ -101,7 +103,7 @@ def render_comparison(cpu_dir, gpu_dir, out, version, center=(0.25, 0.6), fracti
         diff = b.astype(np.float64)-a.astype(np.float64)
         fig, axes = plt.subplots(1,3,figsize=(16,6))
         cmap = plt.get_cmap('inferno').copy(); cmap.set_bad('#dce1e5')
-        for ax, data, title in zip(axes[:2], [a,b], ['CPU restored (reference)','GPU prediction restored (-mgpu)']):
+        for ax, data, title in zip(axes[:2], [a,b], ['CPU restored (reference)',f'{gpu_label} restored (-mgpu)']):
             im=ax.imshow(np.ma.array(data,mask=~selected),origin='lower',extent=extent,
                          cmap=cmap,interpolation='nearest',vmin=stats['vmin'],vmax=stats['vmax_cpu_p99'])
             ax.set_title(title,fontsize=12)
@@ -121,7 +123,7 @@ def render_comparison(cpu_dir, gpu_dir, out, version, center=(0.25, 0.6), fracti
         for ax in axes:
             ax.set_xlabel('x pixel (column)'); ax.set_ylabel('y pixel (row)')
         region=f"Zoom x=[{x0},{x1}), y=[{y0},{y1}); requested center=(0.25 Nx, 0.60 Ny)" if is_zoom else f"Full field {cpu.shape[1]} x {cpu.shape[0]}; cyan box marks the requested extended-structure patch"
-        fig.suptitle(f'gpu-dev {version[:7]} | 15-slot OVRO-LWA | CPU vs GPU prediction\n{region}',fontsize=14,y=.98)
+        fig.suptitle(f'gpu-dev {version[:7]} | 15-slot OVRO-LWA | CPU vs {gpu_label}\n{region}',fontsize=14,y=.98)
         fig.text(.5,.055,f"Origin lower, zero-based pixels. Only common horizon-mask pixels shown/statistically compared ({stats['pixels']:,} pixels).",ha='center',fontsize=10)
         fig.text(.5,.025,'Same linear CPU p99 stretch for CPU/GPU; zoom has its own p99. Differences use a separate amplified symlog scale. No smoothing.',ha='center',fontsize=10)
         fig.tight_layout(rect=(0,.15,1,.89))

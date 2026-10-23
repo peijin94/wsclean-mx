@@ -1,0 +1,2802 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 17:03:38 -0700
+Subject: [PATCH] metal: bound resource reuse and fuse resident multiscale
+ peaks
+
+
+diff --git a/main/main.cpp b/main/main.cpp
+index 7dd998d5..960daf70 100644
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ -47,8 +47,11 @@ int main(int argc, char* argv[]) {
+       if (wsclean.GetSettings().useGpu) {
+         if (Enabled("MX_METAL_PEAK") && !Enabled("MX_METAL_NO_PEAK"))
+           radler::algorithms::SetPeakScanHook(&mx_peak_find);
+-        if (Enabled("MX_METAL_CONVOLVE") && !Enabled("MX_METAL_NO_CONVOLVE"))
+-          radler::algorithms::multiscale::MultiScaleTransforms::SetBatchTransformHook(&mx_convolve_many);
++        if (Enabled("MX_METAL_CONVOLVE") && !Enabled("MX_METAL_NO_CONVOLVE")) {
++          radler::algorithms::multiscale::MultiScaleTransforms::SetOwnedBatchTransformHook(&mx_convolve_many_owned);
++          if (Enabled("MX_METAL_FUSE") && !Enabled("MX_METAL_NO_FUSE"))
++            radler::algorithms::multiscale::MultiScaleTransforms::SetFusedTransformHook(&mx_convolve_peak_many);
++        }
+         // General single-transform adapter remains an explicit experiment.
+         if (Enabled("MX_METAL_SINGLE_CONVOLVE") && !Enabled("MX_METAL_NO_CONVOLVE"))
+           schaapcommon::math::SetConvolveC2RHook(&mx_convolve_c2r);
+@@ -59,7 +62,7 @@ int main(int argc, char* argv[]) {
+ #endif
+       CommandLine::Run(wsclean);
+ #ifdef WSCLEAN_MX_METAL
+-      if (wsclean.GetSettings().useGpu && Enabled("MX_METAL_DEBUG_TIMING")) {
++      if (wsclean.GetSettings().useGpu && (Enabled("MX_METAL_DEBUG_TIMING") || Enabled("MX_METAL_PROFILE"))) {
+         mx_convolve_report();
+         MxPeakStats peaks{};
+         mx_peak_get_stats(&peaks);
+diff --git a/metal/CMakeLists.txt b/metal/CMakeLists.txt
+index 497722a4..1f9243e8 100644
+--- a/metal/CMakeLists.txt
++++ b/metal/CMakeLists.txt
+@@ -7,7 +7,7 @@
+ # required; only the Metal and Foundation frameworks are linked.
+ 
+ # Production prediction FFT, peak finding and convolution only.
+-add_library(mx-metal STATIC mxvkfft.cpp mxpeak.mm mxconvolve.cpp mxpredict.cpp)
++add_library(mx-metal STATIC mxbudget.cpp mxmetalbuffer.mm mxvkfft.cpp mxpeak.mm mxconvolve.cpp mxpredict.cpp)
+ option(WSCLEAN_MX_METAL_ARCHIVE "Build retired GPU inversion/gridding experiments" OFF)
+ target_include_directories(mx-metal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+ # metal-cpp's headers are rooted at its own directory ("Foundation/...").
+@@ -18,7 +18,7 @@ if(SCHAAPCOMMON_SOURCE_DIR AND EXISTS "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0
+   # "fft/..."), matching the include the wgridder target uses.
+   target_include_directories(mx-metal PUBLIC "${SCHAAPCOMMON_SOURCE_DIR}/external")
+ endif()
+-set_source_files_properties(mxpeak.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++set_source_files_properties(mxpeak.mm mxmetalbuffer.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+ # vkFFT + Apple's metal-cpp are plain C++ and use manual retain/release, so this
+ # translation unit must NOT be compiled with ARC.
+ set_source_files_properties(mxvkfft.cpp mxconvolve.cpp mxpredict.cpp PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+@@ -130,3 +130,35 @@ target_sources(mx-vkfft-real-probe PRIVATE
+   "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/threading.cc"
+   "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/mav.cc"
+   "${SCHAAPCOMMON_SOURCE_DIR}/external/ducc0/infra/string_utils.cc")
++
++# Aggregate budget is also testable with no Metal device.
++add_executable(mx-budget-probe budget_probe.cpp mxbudget.cpp)
++
++add_executable(mx-reuse-probe reuse_probe.cpp)
++target_link_libraries(mx-reuse-probe PRIVATE mx-metal)
++add_executable(mx-kernel-identity-probe kernel_identity_probe.cpp)
++target_include_directories(mx-kernel-identity-probe PRIVATE "${RADLER_SOURCE_DIR}/cpp")
++target_link_libraries(mx-kernel-identity-probe PRIVATE radler schaapcommon)
++add_executable(mx-fusion-probe fusion_probe.cpp)
++target_include_directories(mx-fusion-probe PRIVATE "${RADLER_SOURCE_DIR}/cpp")
++target_link_libraries(mx-fusion-probe PRIVATE mx-metal radler schaapcommon)
++add_executable(mx-fusion-public-probe fusion_public_probe.cpp)
++target_include_directories(mx-fusion-public-probe PRIVATE "${RADLER_SOURCE_DIR}/cpp")
++target_link_libraries(mx-fusion-public-probe PRIVATE mx-metal radler schaapcommon)
++add_executable(mx-budget-lifetime-probe budget_lifetime_probe.mm)
++set_source_files_properties(budget_lifetime_probe.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++target_link_libraries(mx-budget-lifetime-probe PRIVATE mx-metal)
++add_executable(mx-binary32-probe binary32_probe.cpp)
++target_compile_options(mx-binary32-probe PRIVATE -fno-fast-math)
++
++add_executable(mx-prediction-schedule-probe prediction_schedule_probe.cpp)
++
++add_executable(mx-failure-probe failure_probe.cpp)
++target_link_libraries(mx-failure-probe PRIVATE mx-metal)
++add_executable(mx-fusion-scope-probe fusion_scope_probe.cpp)
++target_include_directories(mx-fusion-scope-probe PRIVATE "${RADLER_SOURCE_DIR}/cpp")
++target_link_libraries(mx-fusion-scope-probe PRIVATE radler schaapcommon)
++target_include_directories(mx-failure-probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
++add_executable(mx-metal-buffer-probe metal_buffer_probe.cpp)
++target_include_directories(mx-metal-buffer-probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/metal-cpp)
++target_link_libraries(mx-metal-buffer-probe PRIVATE mx-metal)
+diff --git a/metal/OPTIMIZATION.md b/metal/OPTIMIZATION.md
+new file mode 100644
+index 00000000..ecf19cf1
+--- /dev/null
++++ b/metal/OPTIMIZATION.md
+@@ -0,0 +1,172 @@
++# Owned Metal resources and experimental multiscale fusion
++
++Production inversion and prediction degridding remain ducc0. After command-line
++parsing, `-mgpu` registers prediction only by default. Same-binary CPU controls
++register no Metal hook. No real-MS measurement or speedup is claimed here.
++
++## Controls
++
++| Environment variable | Meaning |
++| --- | --- |
++| `MX_METAL_MEMORY_MB` | Aggregate owned-buffer budget in integer MiB. Default **1024 only when unset**; decimal digits only, range **1..65536**. Explicit invalid/empty/zero/negative/overflow values disable buffer allocations (zero budget) and emit an unconditional diagnostic. Read once, at first backend budget use. |
++| `MX_METAL_CONVOLVE=1` | Register immutable-owner batch convolution after parsed `-mgpu`. |
++| `MX_METAL_FUSE=1` | Additionally register resident weighted-peak convolution; also requires `MX_METAL_CONVOLVE=1`. |
++| `MX_METAL_NO_FUSE=1` | Override fusion registration and decline direct fusion requests. |
++| `MX_METAL_NO_PLAN_CACHE=1` | Disable retention/reuse of convolution plans and their underlying buffers. |
++| `MX_METAL_NO_KERNEL_CACHE=1` | Disable immutable GPU kernel residency independently of plan reuse. |
++| `MX_METAL_PREDICT_SERIAL=1` | Wait immediately after prediction submit, then return the latched result at the original ordered wait point. Still exactly two slots; proof line reports `serial_waits`. |
++| `MX_METAL_DEBUG_TIMING=1`, `MX_METAL_PROFILE=1` | Emit proof counters/fallback reasons; PROFILE also retains existing spans and adds pool-hit/fusion spans. |
++
++Existing `MX_METAL_NO_CONVOLVE`, `MX_METAL_SINGLE_CONVOLVE`, `MX_METAL_PEAK`,
++`MX_METAL_NO_PEAK`, and `MX_METAL_NO_PREDICT` controls remain available. Boolean
++controls treat unset, empty, and `0` as false.
++
++The budget charges each owned Metal buffer's requested capacity rounded up to
++16 KiB. It includes prediction planes, convolution input/output, resident
++kernels, peak arenas, and **every VkFFT Metal allocation site**, including LUTs,
++Bluestein/Rader work, staging, temporary buffers and dispatch push constants.
++Reservations happen before allocation. A token associated with the actual
++MTLBuffer releases the charge at final object destruction, including command
++buffer retains. Resource ownership and idle reclamation use a shared recursive
++gate; accounting releases use a separate lock, allowing Metal completion threads
++to release buffers while the host waits. Allocation overflow/refusal returns the
++CPU path without publishing partial output.
++
++This caps the sum of **requested lengths rounded to 16 KiB**. It is not a
++proven bound on `MTLBuffer::allocatedSize` or physical allocations; no
++conservative physical-allocation guarantee is claimed. It does not cap
++whole-process RSS, driver backing/pipeline/compiler overhead, other applications, CPU images/FFT caches, or
++the separately quarantined retired inversion/gridding archive. The buffer budget
++must not be represented as a process memory cap.
++
++## Reuse and interfaces
++
++* The process-wide convolution LRU retains at most **4 exact (width,height,batch)
++  plans**, including their real FFT, image-input and resident-peak scratch
++  buffers. The single-C2R hook uses this pool too; no thread-local FFT cache.
++* The shared immutable-kernel LRU retains at most **64 entries**, keyed by
++  `(owner generation,width,height)`, independent of batch plan. Active shared
++  owners pin entries. When all 64 entries are pinned, new buffers remain
++  uncached and are released with their active owners. Other consumers reclaim
++  idle plan/kernel/legacy-peak allocations before budget refusal. No in-flight allocation is evicted.
++* Radler's `KernelFftCache::Fft::Generation()` supplies a monotonic immutable
++  owner/revision token **only on immutable published snapshots**. Mutable
++  vectors (including copies/moves of published values) have token zero, so
++  inherited mutable UVector operations cannot invalidate a resident identity.
++  Publication copies into detached storage: escaped maker pointers cannot
++  mutate a snapshot. Vector construction, assignment and vector-returning makers
++  remain compatible. Cache hits retain tokens; fresh snapshots get new tokens,
++  including after address reuse. At token exhaustion, zero disables residency.
++  `shared_ptr<const Fft>` owns the snapshot for the whole call.
++* Additive Radler setters: `SetOwnedBatchTransformHook`, `SetFusedTransformHook`;
++  production entries: `mx_convolve_many_owned`, `mx_convolve_peak_many`.
++  Existing `SetBatchTransformHook`, `mx_convolve_many`, and `mx_convolve_c2r`
++  remain source-compatible. Unknown/mutable spectra use token zero/null and
++  upload each call. Nonzero tokens promise immutability; never invent them from
++  a data pointer.
++* `mx_convolve_get_stats`, `mx_convolve_clear_cache`, `mx::metal::budgetStats`
++  provide snapshots/idle reclamation. Output-copy bytes count full image row
++  copies, not driver traffic or metadata reads. Kernel bytes count uploads.
++
++Fusion is explicitly limited to **ARM64 builds using the scalar peak oracle**
++(`__aarch64__`, without `__AVX__` or `__SSE__`). Unsupported builds reject
++registration and direct backend reduction/fusion calls, retaining their actual
++CPU oracle. In particular, Intel AVX no-candidate semantics are unchanged.
++
++Fusion consumes resident **padded** inverse FFT output and per-scale masks and
++borders. It returns signed weighted peaks, exact row-major ties, found flags and
++coordinates. Radler performs the original normalization and OptionalNumber
++mapping. Requested CPU images stay **unweighted**. RMS requests force readback
++and use the existing sequential float accumulation. With neither CPU images nor
++RMS, full output-image copies are skipped.
++
++The reduction uses the binary32 weighting implementation shared with the CPU
++arithmetic probe, preserving subnormal, signed zero, NaN/inf and FLT_MIN behavior
++without relying on device denormal handling. Selection is tested against actual
++Radler `peak_finder`, not a copied oracle. Current fusion uses **two ordered GPU
++submissions** (convolution then resident reduction), with a CPU merge of tile
++metadata. It avoids image round-trips but does not yet combine encoding into one
++command buffer. Native shader/FFT/end-to-end correctness and performance remain
++parent-run gates; there is no GPU device or standalone Metal compiler in this
++sandbox.
++
++## Native probes (no Measurement Set needed)
++
++Build from the repository root:
++
++```sh
++/opt/homebrew/bin/cmake --build build-mx-metal -j4 --target wsclean \
++  mx-budget-probe mx-budget-lifetime-probe mx-binary32-probe \
++  mx-prediction-schedule-probe mx-kernel-identity-probe \
++  mx-failure-probe mx-metal-buffer-probe mx-fusion-scope-probe \
++  mx-reuse-probe mx-fusion-probe mx-fusion-public-probe \
++  mx-vkfft-real-probe mx-multiscale-batch-probe mx-peak-probe \
++  mx-prediction-cpu-probe mx-prediction-mock-probe mx-prediction-gpu-probe
++```
++
++CPU/device-independent gates:
++
++```sh
++build-mx-metal/metal/mx-budget-probe
++MX_METAL_MEMORY_MB=1 build-mx-metal/metal/mx-budget-probe 1
++MX_METAL_MEMORY_MB=invalid build-mx-metal/metal/mx-budget-probe 0
++build-mx-metal/metal/mx-budget-lifetime-probe
++build-mx-metal/metal/mx-binary32-probe
++build-mx-metal/metal/mx-kernel-identity-probe
++build-mx-metal/metal/mx-prediction-schedule-probe
++build-mx-metal/metal/mx-fusion-scope-probe
++python3 work/wsclean/metal/review_source_regression.py
++build-mx-metal/metal/mx-fusion-public-probe --cpu
++build-mx-metal/metal/mx-prediction-cpu-probe
++build-mx-metal/metal/mx-prediction-mock-probe
++```
++
++Parent must run these sequentially **outside the sandbox**, before timing:
++
++```sh
++MX_METAL_DEBUG_TIMING=1 build-mx-metal/metal/mx-reuse-probe
++MTL_DEBUG_LAYER=1 build-mx-metal/metal/mx-failure-probe
++MTL_DEBUG_LAYER=1 build-mx-metal/metal/mx-metal-buffer-probe
++build-mx-metal/metal/mx-fusion-probe
++build-mx-metal/metal/mx-fusion-public-probe
++build-mx-metal/metal/mx-vkfft-real-probe
++build-mx-metal/metal/mx-multiscale-batch-probe
++build-mx-metal/metal/mx-peak-probe
++MX_METAL_DEBUG_TIMING=1 build-mx-metal/metal/mx-prediction-gpu-probe
++MX_METAL_DEBUG_TIMING=1 MX_METAL_PREDICT_SERIAL=1 build-mx-metal/metal/mx-prediction-gpu-probe
++```
++
++New GPU gates fail explicitly if a device is absent. The existing prediction GPU
++probe returns **77** after its CPU fallback checks when native validation is
++unavailable; that is not a GPU pass. RED logs and actual sandbox build/test logs
++are under `bench/out/gpu-opt-20261022-153051/native-*`. Parent owns real-MS runs,
++paired cache/fusion/serial ablations, reporting, patch export, and commits.
++
++## Review-fix regression receipts
++
++The `fix-*` receipts in `bench/out/gpu-opt-20261022-153051/` distinguish CPU
++runs, compilation failures, source-only cleanup/scope assertions, and native
++GPU unavailability. The existing `host-native-public-fusion.log`,
++`host-native-fusion.log`, and `public-fusion.log` remain RED host receipts.
++The reserved MSL identifier `half` was renamed `halfway` in the shared
++CPU/MSL arithmetic implementation without changing formulas or tolerances.
++The binary32 CPU probe cannot validate MSL compilation: the parent must rerun
++both native fusion probes.
++
++`mx-failure-probe` injects thread-local allocation refusals at each required
++Bluestein buffer site, a genuine offset-enabled VkFFT dispatch allocation,
++and the resident scratch allocation reached after successful convolution
++completion. It checks immediate planning refusal, cleanup/recovery, and
++transactional image/metadata publication. These are real native paths with
++allocation faults, not fake FFT/GPU success returns. The source-only regression
++also checks all four planning encoder guards; native planning-append failure
++coverage itself is limited to allocations reachable by these configurations.
++
++`mx-reuse-probe` includes two asynchronous FFT owners with 128 distinct
++generations, pin/uncached/idle-trim checks, and output verification.
++`mx-metal-buffer-probe` drops host ownership while an actual Metal command
++waits on a shared event, then checks accounting after completion and final
++command release. It prints requested length, rounded charge and `allocatedSize`
++for shared/private buffers at five boundary sizes; those samples are observations,
++not proof of a physical memory bound. Both new device probes return 77 if no
++device exists; this is unavailable validation, never a GPU pass.
+diff --git a/metal/binary32_probe.cpp b/metal/binary32_probe.cpp
+new file mode 100644
+index 00000000..12ebeeb1
+--- /dev/null
++++ b/metal/binary32_probe.cpp
+@@ -0,0 +1,25 @@
++// Compare the exact PRODUCTION shader weighting functions with CPU binary32.
++#include "mxbinary32.h"
++#include <bit>
++#include <cmath>
++#include <cstdint>
++#include <cstdio>
++#include <random>
++namespace {
++using uint=std::uint32_t;using ulong=std::uint64_t;
++int clz(ulong x){return std::countl_zero(x);}
++MX_BINARY32_FUNCTIONS
++bool check(uint a,uint b){
++ volatile float aa=std::bit_cast<float>(a),bb=std::bit_cast<float>(b);
++ const float expected=aa*bb;const uint actual=multiply_bits(a,b);
++ const bool pass=std::isnan(expected)?(actual&0x7fffffff)>0x7f800000:std::bit_cast<uint>(expected)==actual;
++ if(!pass)std::printf("FAIL a=%08x b=%08x cpu=%08x production=%08x\n",a,b,std::bit_cast<uint>(expected),actual);
++ return pass;
++}
++}
++int main(){
++ const uint edge[]={0,0x80000000,1,0x80000001,0x7fffff,0x800000,0x800001,0x3f000000,0x3f800000,0x3fffffff,0x7f7fffff,0xff7fffff,0x7f800000,0xff800000,0x7fc00001};
++ for(uint a:edge)for(uint b:edge)if(!check(a,b))return 1;
++ std::mt19937 rng(1971);for(int i=0;i<2000000;++i)if(!check(rng(),rng()))return 1;
++ std::puts("PASS production binary32 weighting: edge matrix + 2000000 random pairs");
++}
+diff --git a/metal/budget_lifetime_probe.mm b/metal/budget_lifetime_probe.mm
+new file mode 100644
+index 00000000..2f5f5ab5
+--- /dev/null
++++ b/metal/budget_lifetime_probe.mm
+@@ -0,0 +1,24 @@
++// Exercise production reservation tokens without needing a GPU device.
++#include "mxbudget.h"
++#import <Foundation/Foundation.h>
++#include <cstdio>
++#include <thread>
++extern "C" bool mx_metal_track_buffer(void*,std::size_t) noexcept;
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++int main(){
++ using namespace mx::metal;
++ @autoreleasepool {
++  CHECK(reserveBytes(16384));
++  NSObject* owner=[NSObject new];
++  CHECK(mx_metal_track_buffer((__bridge void*)owner,16384));
++  CFTypeRef pending=CFBridgingRetain(owner);
++  owner=nil;CHECK(budgetStats().used==16384);
++  {
++    // Completion may release on another thread while host holds the gate.
++    std::lock_guard lock(resourceMutex());
++    std::thread completion([pending]{CFRelease(pending);});completion.join();
++  }
++  CHECK(budgetStats().used==0);
++ }
++ std::puts("PASS reservation follows final retained object lifetime, cross-thread drain");
++}
+diff --git a/metal/budget_probe.cpp b/metal/budget_probe.cpp
+new file mode 100644
+index 00000000..e2434252
+--- /dev/null
++++ b/metal/budget_probe.cpp
+@@ -0,0 +1,38 @@
++// CPU-only production allocator gate: no Metal device or fallback required.
++#include "mxbudget.h"
++#include <atomic>
++#include <cstdio>
++#include <limits>
++#include <cstdlib>
++#include <thread>
++#include <vector>
++#define CHECK(x) do { if (!(x)) { std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x); return 1; } } while(0)
++size_t idle=0;
++int main(int argc,char** argv) {
++  using namespace mx::metal;
++  const auto initial=budgetStats();
++  CHECK(initial.used==0 && initial.limit==((argc>1?std::strtoull(argv[1],nullptr,10):1024ull)<<20));
++  if(initial.limit==0) {
++    CHECK(!reserveBytes(1));
++    CHECK(budgetStats().used==0);
++    std::puts("PASS explicit invalid budget fails closed");
++    return 0;
++  }
++  CHECK(!reserveBytes(std::numeric_limits<size_t>::max()));
++  CHECK(budgetStats().used==0);
++  CHECK(reserveBytes(initial.limit));
++  CHECK(!reserveBytes(1));
++  CHECK(budgetStats().used==initial.limit);
++  releaseBytes(initial.limit);
++  addReclaimer(+[]{if(!idle)return false;releaseBytes(idle);idle=0;recordEviction();return true;});
++  CHECK(reserveBytes(16384));idle=16384;
++  CHECK(reserveBytes(initial.limit));CHECK(idle==0 && budgetStats().evictions>=1);
++  CHECK(!reserveBytes(1));releaseBytes(initial.limit);
++  std::atomic<bool> failed{false};
++  std::vector<std::thread> workers;
++  for(int t=0;t<8;++t) workers.emplace_back([&]{for(int i=0;i<2000;++i){if(!reserveBytes(4096)) failed=true; else releaseBytes(4096);}});
++  for(auto& t:workers)t.join();
++  CHECK(!failed && budgetStats().used==0);
++  CHECK(budgetStats().peak<=initial.limit && budgetStats().refusals>=2);
++  std::puts("PASS aggregate reservations, overflow, refusal, simultaneous consumers");
++}
+diff --git a/metal/failure_probe.cpp b/metal/failure_probe.cpp
+new file mode 100644
+index 00000000..5df0fed0
+--- /dev/null
++++ b/metal/failure_probe.cpp
+@@ -0,0 +1,154 @@
++// Native allocation faults at real production sites. No fake GPU returns.
++#include "thirdparty/metal-cpp/Foundation/Foundation.hpp"
++#include "thirdparty/metal-cpp/Metal/Metal.hpp"
++#include "thirdparty/metal-cpp/QuartzCore/QuartzCore.hpp"
++#include <cstring>
++#include <iostream>
++#include "mxmetalbuffer.h"
++#define VKFFT_BACKEND 5
++#include "thirdparty/vkFFT.h"
++#include "mxconvolve.h"
++#include "mxvkfft.h"
++#include <complex>
++#include <cstdio>
++#include <vector>
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++namespace {
++const char* target=nullptr;size_t hits=0,after=0;bool fired=false;
++bool fault(const char* site){
++  if(fired)++after;
++  if(target && std::strcmp(target,site)==0){++hits;fired=true;return true;}
++  return false;
++}
++void arm(const char* site){target=site;hits=after=0;fired=false;mx::metal::bufferFaultForTesting=&fault;}
++void disarm(){mx::metal::bufferFaultForTesting=nullptr;}
++int preparationFault(MTL::Device* device,MTL::CommandQueue* queue,const char* site,bool rader=false,bool multi=false){
++  auto* pool=NS::AutoreleasePool::alloc()->init();
++  const auto baseline=mx::metal::budgetStats().used;
++  uint64_t bytes=257*2*sizeof(float);
++  auto* buffer=mx::metal::newBuffer(device,bytes,MTL::ResourceStorageModeShared);CHECK(buffer);
++  VkFFTApplication app={};VkFFTConfiguration config={};
++  config.device=device;config.queue=queue;config.FFTdim=1;config.size[0]=257;
++  config.buffer=&buffer;config.bufferSize=&bytes;
++  config.fixMaxRaderPrimeFFT=rader?512:13;config.fixMaxRaderPrimeMult=13;
++  arm(site);
++  VkFFTResult result;
++  if(multi){
++    // Reach the multi-upload preparation branch at a bounded padded size;
++    // the local preparation application and all Metal commands are real.
++    app.configuration=config;app.useBluesteinFFT[0]=1;
++    VkFFTPlan plan={};plan.actualFFTSizePerAxis[0][0]=1024;plan.numAxisUploads[0]=2;
++    result=VkFFTGeneratePhaseVectors(&app,&plan,0);
++  }else result=initializeVkFFT(&app,config);
++  disarm();
++  const auto expected=std::strstr(site,"completion")?VKFFT_ERROR_FAILED_TO_SYNCHRONIZE:VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
++  std::printf("preparation site=%s result=%d hits=%zu later_operations=%zu\n",site,int(result),hits,after);
++  CHECK(hits==1 && result==expected && after==0);
++  if(!multi)CHECK(!app.localFFTPlan && !app.localFFTPlan_inverse);
++  deleteVkFFT(&app);buffer->release();pool->release();
++  CHECK(mx::metal::budgetStats().used==baseline);
++  {mx::vk::Fft retry;CHECK(retry.initShape(64,48));CHECK(retry.submitForward());CHECK(retry.wait());}
++  CHECK(mx::metal::budgetStats().used==baseline);
++  return 0;
++}
++}
++int main(){
++  auto* device=MTL::CreateSystemDefaultDevice();
++  if(!device){std::fputs("UNAVAILABLE: native Metal device required\n",stderr);return 77;}
++  auto* queue=device->newCommandQueue();CHECK(queue);
++  for(const char* site:{"vkfft-upload-command","vkfft-upload-encoder","vkfft-upload-completion",
++                       "bluestein-forward-command","bluestein-forward-encoder","bluestein-forward-completion",
++                       "bluestein-inverse-command","bluestein-inverse-encoder","bluestein-inverse-completion"})
++    CHECK(preparationFault(device,queue,site)==0);
++  for(const char* site:{"rader-prepare-command","rader-prepare-encoder","rader-prepare-completion",
++                       "vkfft-download-command","vkfft-download-encoder","vkfft-download-completion"})
++    CHECK(preparationFault(device,queue,site,true)==0);
++  for(const char* site:{"bluestein-multi-command","bluestein-multi-encoder","bluestein-multi-completion"})
++    CHECK(preparationFault(device,queue,site,false,true)==0);
++  // A failed LUT download must leave the caller's output untouched. Injected
++  // completion failure is reported only after the real command has drained.
++  for(const char* site:{"vkfft-upload-command","vkfft-upload-encoder","vkfft-upload-completion",
++                       "vkfft-download-command","vkfft-download-encoder","vkfft-download-completion"}){
++    auto* pool=NS::AutoreleasePool::alloc()->init();
++    const auto baseline=mx::metal::budgetStats().used;
++    auto* buffer=mx::metal::newBuffer(device,16384,MTL::ResourceStorageModePrivate);CHECK(buffer);
++    VkFFTApplication app={};app.configuration.device=device;app.configuration.queue=queue;
++    std::vector<unsigned char> data(16384,0x5a);
++    arm(site);
++    const auto result=std::strstr(site,"upload")?VkFFT_transferDataFromCPU(&app,data.data(),&buffer,data.size()):
++                                                VkFFT_transferDataToCPU(&app,data.data(),&buffer,data.size());
++    disarm();
++    CHECK(hits==1 && after==0);
++    CHECK(result==(std::strstr(site,"completion")?VKFFT_ERROR_FAILED_TO_SYNCHRONIZE:VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST));
++    for(auto v:data)CHECK(v==0x5a);
++    buffer->release();pool->release();CHECK(mx::metal::budgetStats().used==baseline);
++    std::printf("transfer site=%s result=%d baseline_restored=1 output_untouched=1\n",site,int(result));
++  }
++  for(const char* site:{"bluestein-phase","bluestein-forward","bluestein-inverse"}){
++    auto* pool=NS::AutoreleasePool::alloc()->init();
++    const auto baseline=mx::metal::budgetStats().used;
++    uint64_t bytes=257*2*sizeof(float);
++    auto* buffer=mx::metal::newBuffer(device,bytes,MTL::ResourceStorageModeShared);CHECK(buffer);
++    VkFFTApplication app={};VkFFTConfiguration config={};
++    config.device=device;config.queue=queue;config.FFTdim=1;config.size[0]=257;
++    config.buffer=&buffer;config.bufferSize=&bytes;
++    // Force a genuine Bluestein plan at a small size rather than Rader.
++    config.fixMaxRaderPrimeFFT=13;config.fixMaxRaderPrimeMult=13;
++    arm(site);const auto result=initializeVkFFT(&app,config);disarm();
++    std::printf("site=%s result=%d hits=%zu later_allocations=%zu\n",site,int(result),hits,after);
++    CHECK(hits==1 && result==VKFFT_ERROR_FAILED_TO_ALLOCATE);
++    // A failed required allocation must not continue planning/encoding.
++    CHECK(after==0);
++    deleteVkFFT(&app);buffer->release();pool->release();
++    CHECK(mx::metal::budgetStats().used==baseline);
++    // Recreate and execute successfully after each planning allocation fault.
++    {mx::vk::Fft retry;CHECK(retry.initShape(64,48));CHECK(retry.submitForward());CHECK(retry.wait());}
++    CHECK(mx::metal::budgetStats().used==baseline);
++  }
++  // Genuine dispatch allocation failure on an offset-enabled native plan.
++  // This exercises the allocator return inside VkFFTAppend, not a fake FFT.
++  {
++    auto* pool=NS::AutoreleasePool::alloc()->init();
++    const auto baseline=mx::metal::budgetStats().used;
++    uint64_t bytes=64*2*sizeof(float);
++    auto* buffer=mx::metal::newBuffer(device,bytes,MTL::ResourceStorageModeShared);CHECK(buffer);
++    VkFFTApplication app={};VkFFTConfiguration config={};
++    config.device=device;config.queue=queue;config.FFTdim=1;config.size[0]=64;
++    config.buffer=&buffer;config.bufferSize=&bytes;config.specifyOffsetsAtLaunch=1;
++    CHECK(initializeVkFFT(&app,config)==VKFFT_SUCCESS);
++    auto* command=queue->commandBuffer();CHECK(command);
++    auto* encoder=command->computeCommandEncoder();CHECK(encoder);
++    mx::metal::EncoderScope scope(encoder);
++    VkFFTLaunchParams launch={};launch.commandBuffer=command;launch.commandEncoder=encoder;launch.buffer=&buffer;
++    arm("vkfft-dispatch");const auto result=VkFFTAppend(&app,-1,&launch);disarm();scope.end();
++    CHECK(hits==1 && result==VKFFT_ERROR_FAILED_TO_ALLOCATE && after==0);
++    // Reuse the command after ending the failed encoder, then execute for real.
++    encoder=command->computeCommandEncoder();CHECK(encoder);
++    launch.commandEncoder=encoder;
++    CHECK(VkFFTAppend(&app,-1,&launch)==VKFFT_SUCCESS);encoder->endEncoding();
++    command->commit();command->waitUntilCompleted();
++    CHECK(command->status()==MTL::CommandBufferStatusCompleted);
++    deleteVkFFT(&app);buffer->release();pool->release();
++    CHECK(mx::metal::budgetStats().used==baseline);
++  }
++  // Late failure: convolution has actually completed when scratch is requested.
++  mx_convolve_clear_cache();const auto baseline=mx::metal::budgetStats().used;
++  constexpr size_t w=64,h=48,batch=2,nc=33*h;
++  std::vector<std::complex<float>> image(nc),kernel(nc,{1,0});image[0]={float(w*h),0};
++  const std::complex<float>* kernels[]={kernel.data(),kernel.data()};
++  std::vector<float> out(w*h*batch,-7);float* dst[]={out.data(),out.data()+w*h};
++  float values[]={-19,-19};size_t x[]={999,999},y[]={888,888},border[]={0,0};unsigned char found[]={9,9};
++  MxConvolveStats before{},end{};mx_convolve_get_stats(&before);
++  arm("resident-peak");
++  const int result=mx_convolve_peak_many(dst,image.data(),kernels,nullptr,w,h,batch,nullptr,1,border,border,nullptr,values,x,y,found);
++  disarm();mx_convolve_get_stats(&end);
++  CHECK(fired && hits==1 && result==0);
++  CHECK(end.kernel_uploads==before.kernel_uploads+batch);
++  CHECK(end.refused_resources==before.refused_resources+1);
++  CHECK(end.fused_calls==before.fused_calls && end.output_copy_bytes==before.output_copy_bytes);
++  for(float v:out)CHECK(v==-7);
++  for(size_t b=0;b<batch;++b)CHECK(values[b]==-19 && x[b]==999 && y[b]==888 && found[b]==9);
++  mx_convolve_clear_cache();CHECK(mx::metal::budgetStats().used==baseline);
++  queue->release();device->release();
++  std::puts("PASS native LUT/Bluestein/Rader command, encoder and drained completion faults; reservation recovery; dispatch and late reduction refusal with untouched outputs");
++}
+diff --git a/metal/fusion_probe.cpp b/metal/fusion_probe.cpp
+new file mode 100644
+index 00000000..fa9e5115
+--- /dev/null
++++ b/metal/fusion_probe.cpp
+@@ -0,0 +1,64 @@
++// Exact selection against ACTUAL Radler peak_finder using identical padded input.
++#include "mxvkfft.h"
++#include "mxconvolve.h"
++#include "algorithms/threaded_deconvolution_tools.h"
++#include "math/peak_finder.h"
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <cstring>
++#include <limits>
++#include <vector>
++using Tools=radler::algorithms::ThreadedDeconvolutionTools;
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++template<class F> int resident(){
++ if constexpr(!requires(F& f,const unsigned char* const* m,const size_t* b,const float* w,float* v,size_t* p,unsigned char* found){f.findPeaks(m,b,b,true,w,v,p,p,found);}){
++   std::puts("FAIL: resident weighted peak API missing");return 1;
++ }else{
++ for(auto shape:{std::pair<size_t,size_t>{128,128},{128,96}}){
++  auto [w,h]=shape;const size_t n=w*h,batch=3;
++  F f;if(!f.initReal(w,h,batch)){std::fprintf(stderr,"FAIL: native GPU required: %s\n",f.error());return 1;}
++  for(int mode=0;mode<16;++mode)for(bool negative:{false,true})for(bool weighted:{false,true}){
++   std::vector<float> images(n*batch,0),weights(n,1);
++   std::vector<unsigned char> masks(n*batch,1);std::vector<const unsigned char*> mp(batch);
++   std::vector<size_t> xb{0,1,3},yb{0,2,4},x(batch),y(batch);
++   std::vector<float> values(batch);std::vector<unsigned char> found(batch);
++   for(size_t s=0;s<batch;++s){
++    auto* a=images.data()+s*n;
++    if(mode==0){a[5*w+3]=-9;a[5*w+4]=9;a[60*w+2]=9;}
++    if(mode==1){a[6*w+4]=std::numeric_limits<float>::infinity();a[60*w+5]=-std::numeric_limits<float>::infinity();}
++    if(mode==2)std::fill_n(a,n,std::numeric_limits<float>::quiet_NaN());
++    if(mode==3){std::fill_n(a,n,-0.0f);a[5*w+2]=0.0f;}
++    if(mode==4)std::fill_n(a,n,std::numeric_limits<float>::min());
++    if(mode==5){a[5*w+6]=std::numeric_limits<float>::denorm_min();weights[5*w+6]=std::numeric_limits<float>::max();}
++    if(mode==6){a[5*w+6]=std::numeric_limits<float>::lowest();}
++    if(mode==7){a[0]=500;a[5*w+6]=8;a[70*w+4]=-8;}
++    if(mode==8){a[6*w+4]=7;a[70*w+4]=10;weights[6*w+4]=2;}
++    if(mode==9){a[6*w+4]=7;weights[6*w+4]=std::numeric_limits<float>::quiet_NaN();}
++    if(mode==10){a[6*w+4]=std::numeric_limits<float>::infinity();weights[6*w+4]=0;}
++    if(mode==12){std::fill_n(masks.data()+s*n,n,0);a[5*w+6]=8;}
++    if(mode==13){xb[s]=w/2;a[5*w+6]=8;}
++    if(mode==14){for(size_t i=0;i<n;++i){a[i]=float(int((i*109+17)%509)-254)/31;weights[i]=float(int((i*47+13)%127)-63)/17;}}
++    if(mode==15){std::fill_n(a,n,-3);a[5*w+6]=-8;}
++    if(mode==11){a[6*w+4]=std::nextafter(std::numeric_limits<float>::min(),1.0f);}
++    if(mode!=12)masks[s*n+6*w+4]=s==1?0:1;mp[s]=(s==0)?nullptr:masks.data()+s*n;
++    for(size_t row=0;row<h;++row){std::memcpy(f.data()+(s*h+row)*f.rowFloats(),a+row*w,w*sizeof(float));f.data()[(s*h+row)*f.rowFloats()+w]=1e30f;}
++   }
++   std::vector<float> saved(f.data(),f.data()+f.rowFloats()*h*batch);
++   CHECK(f.findPeaks(mp.data(),xb.data(),yb.data(),negative,weighted?weights.data():nullptr,values.data(),x.data(),y.data(),found.data()));
++   CHECK(std::memcmp(saved.data(),f.data(),saved.size()*sizeof(float))==0);
++   for(size_t s=0;s<batch;++s){
++    std::vector<float> scratch(images.begin()+s*n,images.begin()+(s+1)*n);
++    if(weighted)for(size_t i=0;i<n;++i)scratch[i]*=weights[i];
++    size_t cx=w,cy=h;auto cpu=mp[s]
++      ?radler::math::peak_finder::FindWithMask(scratch.data(),w,h,cx,cy,negative,0,h,reinterpret_cast<const bool*>(mp[s]),xb[s],yb[s])
++      :radler::math::peak_finder::Find(scratch.data(),w,h,cx,cy,negative,0,h,xb[s],yb[s]);
++    CHECK(bool(cpu)==bool(found[s]));CHECK(cx==x[s] && cy==y[s]);
++    if(cpu)CHECK(std::memcmp(&*cpu,&values[s],sizeof(float))==0);
++   }
++  }
++ }
++ std::puts("PASS exact resident weighted/unweighted masks/borders/ties/NaN/inf/zero/subnormal/no-peak");return 0;
++ }
++}
++int main(){return resident<mx::vk::Fft>();}
+diff --git a/metal/fusion_public_probe.cpp b/metal/fusion_public_probe.cpp
+new file mode 100644
+index 00000000..ee82b7fc
+--- /dev/null
++++ b/metal/fusion_public_probe.cpp
+@@ -0,0 +1,62 @@
++// Production public path, unchanged CPU fallback and optional image/RMS consumers.
++#include "mxconvolve.h"
++#include "mxbudget.h"
++#include "algorithms/threaded_deconvolution_tools.h"
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <string>
++using Tools=radler::algorithms::ThreadedDeconvolutionTools;
++using Transforms=radler::algorithms::multiscale::MultiScaleTransforms;
++using Cache=radler::algorithms::multiscale::KernelFftCache;
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++int main(int argc,char** argv){
++ const bool cpu=argc>1 && std::string(argv[1])=="--cpu";
++ if(cpu)setenv("MX_METAL_NO_FUSE","1",1);else unsetenv("MX_METAL_NO_FUSE");
++ for(auto shape:{std::pair<size_t,size_t>{128,128},{128,96}})for(bool calculate_rms:{false,true})for(bool keep:{false,true})for(bool weighted:{false,true})for(int mask_mode:{0,1,2}){
++  auto [w,h]=shape;const size_t n=w*h;
++  auto cache=std::make_shared<Cache>();Transforms transforms(w,h,radler::MultiscaleShape::kGaussianShape,cache);Tools tools;
++  aocommon::Image input(w,h),weights;
++  for(size_t i=0;i<n;++i)input[i]=float(std::sin(i*0.17)*0.03);
++  input[19*w+31]=10;input[51*w+61]=-8;
++  if(weighted){weights=aocommon::Image(w,h);for(size_t i=0;i<n;++i)weights[i]=0.75f+float(i%19)*0.03125f;}
++  aocommon::UVector<float> scales{0,3,6};
++  aocommon::UVector<bool> mask(n,true);mask[19*w+31]=false;
++  std::vector<aocommon::UVector<bool>> scale_masks;
++  if(mask_mode==2){for(size_t s=0;s<scales.size();++s){scale_masks.emplace_back(n,true);scale_masks.back()[19*w+31+s]=false;}}
++  auto saved=input;
++  std::vector<Tools::PeakData> reference,result;std::vector<aocommon::Image> ref_images,images;
++  Transforms::SetFusedTransformHook(nullptr);Transforms::SetOwnedBatchTransformHook(nullptr);Transforms::SetBatchTransformHook(nullptr);
++  tools.FindMultiScalePeak(&transforms,input,scales,reference,true,mask_mode==1?mask.data():nullptr,scale_masks,0.02f,weights,calculate_rms,keep?&ref_images:nullptr);
++  MxConvolveStats before{};mx_convolve_get_stats(&before);auto budget_before=mx::metal::budgetStats();
++  Transforms::SetFusedTransformHook(&mx_convolve_peak_many);
++  tools.FindMultiScalePeak(&transforms,input,scales,result,true,mask_mode==1?mask.data():nullptr,scale_masks,0.02f,weights,calculate_rms,keep?&images:nullptr);
++  MxConvolveStats after{};mx_convolve_get_stats(&after);
++  CHECK(result.size()==reference.size());
++  if(cpu){CHECK(after.fused_calls==before.fused_calls && after.refusals>before.refusals);CHECK(mx::metal::budgetStats().used==budget_before.used);}
++  else CHECK(after.fused_calls==before.fused_calls+1);
++  CHECK(std::memcmp(saved.Data(),input.Data(),n*sizeof(float))==0);
++  for(size_t s=0;s<scales.size();++s){
++    const auto& a=result[s];const auto& b=reference[s];
++    CHECK(bool(a.normalized_value)==bool(b.normalized_value));CHECK(bool(a.unnormalized_value)==bool(b.unnormalized_value));
++    CHECK(a.x==b.x && a.y==b.y);
++    if(a.normalized_value){const float limit=cpu?0.0f:1e-4f*std::abs(*b.normalized_value);CHECK(std::abs(*a.normalized_value-*b.normalized_value)<=limit);}
++    if(a.unnormalized_value){const float limit=cpu?0.0f:1e-4f*std::abs(*b.unnormalized_value);CHECK(std::abs(*a.unnormalized_value-*b.unnormalized_value)<=limit);}
++    if(!calculate_rms)CHECK(a.rms==-1);
++    else if(cpu)CHECK(a.rms==b.rms);
++    else CHECK(std::abs(a.rms-b.rms)<=5e-6f*b.rms);
++    if(keep){
++      double num=0,den=0,mx=0,md=0;
++      for(size_t i=0;i<n;++i){double r=ref_images[s][i],d=images[s][i]-r;num+=d*d;den+=r*r;mx=std::max(mx,std::abs(r));md=std::max(md,std::abs(d));}
++      CHECK(cpu ? num==0 : std::sqrt(num/den)<5e-6 && md/mx<1e-4);
++      // RMS is EXACTLY sequential over the available unweighted readback.
++      if(calculate_rms)CHECK(a.rms==Tools::RMS(images[s],n));
++    }
++  }
++  const size_t expected_bytes=(!cpu && (calculate_rms||keep))?n*scales.size()*sizeof(float):0;
++  CHECK(after.output_copy_bytes-before.output_copy_bytes==expected_bytes);
++ }
++ Transforms::SetFusedTransformHook(nullptr);mx_convolve_clear_cache();
++ std::printf("PASS public %s: square/rectangle, masks, weights, CPU images, report_rms, output copy counters\n",cpu?"CPU refusal/fallback":"GPU fusion");
++}
+diff --git a/metal/fusion_scope_probe.cpp b/metal/fusion_scope_probe.cpp
+new file mode 100644
+index 00000000..881068fc
+--- /dev/null
++++ b/metal/fusion_scope_probe.cpp
+@@ -0,0 +1,14 @@
++// Device-independent publication boundary for ARM scalar-oracle fusion.
++#include "algorithms/multiscale/multiscale_transforms.h"
++#include <cstdio>
++using T=radler::algorithms::multiscale::MultiScaleTransforms;
++int main(){
++  T::SetFusedTransformHook(+[](float* const*,const std::complex<float>*,const std::complex<float>* const*,const std::uint64_t*,size_t,size_t,size_t,const unsigned char* const*,int,const size_t*,const size_t*,const float*,float*,size_t*,size_t*,unsigned char*){return 1;});
++#if defined(__aarch64__) && !defined(__AVX__) && !defined(__SSE__)
++  if(!T::HasFusedTransformHook())return 1;
++#else
++  if(T::HasFusedTransformHook())return 1;
++#endif
++  T::SetFusedTransformHook(nullptr);
++  std::puts("PASS fusion hook restricted to ARM scalar-oracle configuration");
++}
+diff --git a/metal/kernel_identity_probe.cpp b/metal/kernel_identity_probe.cpp
+new file mode 100644
+index 00000000..59937aed
+--- /dev/null
++++ b/metal/kernel_identity_probe.cpp
+@@ -0,0 +1,34 @@
++// Mutable vectors remain compatible; only detached immutable snapshots get IDs.
++#include "algorithms/multiscale/multiscale_transforms.h"
++#include <cstdio>
++#include <new>
++using Cache=radler::algorithms::multiscale::KernelFftCache;
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++int main(){
++  using F=Cache::Fft;using B=F::Base;
++  B vector(12,{1,0});F a=vector;F b=B(12,{2,0});
++  a=vector;b=B(12,{3,0});a=b;b=std::move(a);b={{4,0},{5,0}};
++  CHECK(b.Generation()==0);
++  Cache c;float* escaped=nullptr;
++  std::function<B()> make=[&]()->B{B v(12,{1,0});escaped=reinterpret_cast<float*>(v.data());return v;};
++  auto first=c.Get(4,4,radler::MultiscaleShape::kGaussianShape,3,make);
++  auto hit=c.Get(4,4,radler::MultiscaleShape::kGaussianShape,3,make);
++  CHECK(first->Generation()!=0 && first->Generation()==hit->Generation());
++  // A maker can retain pointers into its result; publication must detach bytes.
++  // Compare addresses only: the original allocation may already be freed.
++  CHECK(reinterpret_cast<const float*>(first->data())!=escaped);
++  F copy(*first);CHECK(copy.Generation()==0);copy[0]={9,0};
++  F moved(std::move(copy));CHECK(moved.Generation()==0 && copy.Generation()==0);
++  auto second=c.Get(4,4,radler::MultiscaleShape::kGaussianShape,4,[&](){return moved;});
++  CHECK(second->Generation()!=first->Generation() && (*second)[0]==std::complex<float>(9,0));
++  moved.assign(12,{7,0});CHECK(moved.Generation()==0);
++  CHECK((*second)[0]==std::complex<float>(9,0));
++  alignas(Cache) unsigned char storage[sizeof(Cache)];
++  auto* old=new(storage)Cache;
++  auto old_owner=old->Get(4,4,radler::MultiscaleShape::kGaussianShape,3,make);
++  auto id=old_owner->Generation();old_owner.reset();old->~KernelFftCache();
++  auto* fresh=new(storage)Cache;
++  auto fresh_owner=fresh->Get(4,4,radler::MultiscaleShape::kGaussianShape,3,make);
++  CHECK(fresh_owner->Generation()!=id);fresh->~KernelFftCache();
++  std::puts("PASS vector construction/assignment/makers, mutable zero IDs, detached immutable owners, address reuse");
++}
+diff --git a/metal/metal_buffer_cpu.cpp b/metal/metal_buffer_cpu.cpp
+new file mode 100644
+index 00000000..e096ecf5
+--- /dev/null
++++ b/metal/metal_buffer_cpu.cpp
+@@ -0,0 +1,88 @@
++// Execute the real probe's main body against a strict CPU Metal-contract double.
++// This enforces blit alignment and models retain/release; native receipts remain
++// necessary for actual driver lifetime behavior and allocatedSize observations.
++#include <cassert>
++#include <cstdio>
++#include <cstring>
++#include <stdexcept>
++#include <vector>
++#include "mxbudget.h"
++namespace NS{
++using UInteger=size_t;
++struct Range{size_t location,length;Range(size_t x,size_t n):location(x),length(n){}};
++struct AutoreleasePool{
++ static inline AutoreleasePool* current=nullptr;
++ std::vector<void*> commands;
++ static AutoreleasePool* alloc(){return new AutoreleasePool;}
++ AutoreleasePool* init(){assert(!current);current=this;return this;}
++ void release();
++};
++}
++namespace MTL{
++using ResourceOptions=unsigned long;
++constexpr ResourceOptions ResourceStorageModeShared=0,ResourceStorageModePrivate=32;
++enum CommandBufferStatus{CommandBufferStatusCompleted};
++struct Buffer{
++ size_t n,charge=0;int refs=1;explicit Buffer(size_t bytes):n(bytes){}
++ size_t allocatedSize(){return n;}
++ void* contents(){return nullptr;}
++ void retain(){++refs;}
++ void release(){if(!--refs){mx::metal::releaseBytes(charge);delete this;}}
++};
++struct SharedEvent{
++ uint64_t value=0;
++ void setSignaledValue(uint64_t v){value=v;}
++ void release(){delete this;}
++};
++struct CommandBuffer;
++struct BlitCommandEncoder{
++ CommandBuffer* command;
++ void fillBuffer(Buffer* b,NS::Range r,unsigned char);
++ void endEncoding();
++};
++struct ComputeCommandEncoder{void endEncoding(){}};
++struct CommandBuffer{
++ int refs=1;bool encoding=false,committed=false,waited=false;
++ SharedEvent* event=nullptr;uint64_t eventValue=0;
++ std::vector<Buffer*> retained;BlitCommandEncoder blit{this};
++ void retain(){++refs;}
++ void release(){if(!--refs){for(auto* b:retained)b->release();delete this;}}
++ void encodeWait(SharedEvent* e,uint64_t v){event=e;eventValue=v;}
++ BlitCommandEncoder* blitCommandEncoder(){assert(!encoding);encoding=true;return &blit;}
++ ComputeCommandEncoder* computeCommandEncoder(){return nullptr;}
++ void commit(){assert(!encoding);committed=true;}
++ void waitUntilCompleted(){assert(committed && (!event||event->value>=eventValue));waited=true;}
++ CommandBufferStatus status(){assert(waited);return CommandBufferStatusCompleted;}
++};
++void BlitCommandEncoder::fillBuffer(Buffer* b,NS::Range r,unsigned char){
++ if(r.location%4||r.length%4||r.location+r.length>b->n)
++  throw std::runtime_error("illegal fill range: offset/length must be four-byte aligned and within buffer");
++ b->retain();command->retained.push_back(b);
++}
++void BlitCommandEncoder::endEncoding(){assert(command->encoding);command->encoding=false;}
++struct CommandQueue{
++ CommandBuffer* commandBuffer(){assert(NS::AutoreleasePool::current);auto* c=new CommandBuffer;NS::AutoreleasePool::current->commands.push_back(c);return c;}
++ void release(){delete this;}
++};
++struct Device{
++ Buffer* newBuffer(size_t n,ResourceOptions){return new Buffer(n);}
++ SharedEvent* newSharedEvent(){return new SharedEvent;}
++ CommandQueue* newCommandQueue(){return new CommandQueue;}
++ void release(){delete this;}
++};
++Device* CreateSystemDefaultDevice(){return new Device;}
++}
++void NS::AutoreleasePool::release(){for(auto* c:commands)static_cast<MTL::CommandBuffer*>(c)->release();current=nullptr;delete this;}
++extern "C" bool mx_metal_track_buffer(void* b,size_t n) noexcept{static_cast<MTL::Buffer*>(b)->charge=n;return true;}
++#include "mxmetalbuffer.h"
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++#define main runProbe
++#include "buffer_probe_body.h"
++#undef main
++int main(){
++ try{
++  const int result=runProbe();
++  if(result==0)std::puts("PASS CPU buffer contract model (no GPU or physical allocation proof)");
++  return result;
++ }catch(const std::exception& e){std::printf("FAIL CPU buffer contract: %s\n",e.what());return 1;}
++}
+diff --git a/metal/metal_buffer_probe.cpp b/metal/metal_buffer_probe.cpp
+new file mode 100644
+index 00000000..6cf28dff
+--- /dev/null
++++ b/metal/metal_buffer_probe.cpp
+@@ -0,0 +1,53 @@
++// Native Metal retain + allocatedSize observations through the real allocator.
++#include "thirdparty/metal-cpp/Foundation/Foundation.hpp"
++#include "thirdparty/metal-cpp/Metal/Metal.hpp"
++#include <cstring>
++#include "mxmetalbuffer.h"
++#include <cstdio>
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++int main(){
++  auto* device=MTL::CreateSystemDefaultDevice();
++  if(!device){std::fputs("UNAVAILABLE: native Metal device required\n",stderr);return 77;}
++  auto* queue=device->newCommandQueue();CHECK(queue);
++  const auto baseline=mx::metal::budgetStats().used;
++  for(auto options:{MTL::ResourceStorageModeShared,MTL::ResourceStorageModePrivate})
++    for(size_t n:{size_t(1),size_t(16383),size_t(16384),size_t(16385),size_t(65537)}){
++      auto* pool=NS::AutoreleasePool::alloc()->init();
++      auto* buffer=mx::metal::newBuffer(device,n,options);CHECK(buffer);
++      const size_t charge=(n+16383)&~size_t(16383);
++      std::printf("mode=%lu requested=%zu rounded_charge=%zu allocatedSize=%lu\n",(unsigned long)options,n,charge,(unsigned long)buffer->allocatedSize());
++      CHECK(mx::metal::budgetStats().used==baseline+charge);
++      buffer->release();pool->release();
++      CHECK(mx::metal::budgetStats().used==baseline);
++    }
++  // allocatedSize above is an observation, not a universal physical cap.
++  // Test command retention separately with a legal whole-buffer fill: Apple
++  // requires both the fill offset and length to be multiples of four bytes.
++  for(auto options:{MTL::ResourceStorageModeShared,MTL::ResourceStorageModePrivate}){
++      constexpr size_t n=16384,charge=16384;
++      auto* pool=NS::AutoreleasePool::alloc()->init();
++      auto* buffer=mx::metal::newBuffer(device,n,options);CHECK(buffer);
++      CHECK(mx::metal::budgetStats().used==baseline+charge);
++      auto* event=device->newSharedEvent();CHECK(event);
++      auto* command=queue->commandBuffer();CHECK(command);command->retain();
++      command->encodeWait(event,1);
++      auto* blit=command->blitCommandEncoder();CHECK(blit);
++      blit->fillBuffer(buffer,NS::Range(0,n),0);blit->endEncoding();
++      command->commit();buffer->release();buffer=nullptr;
++      // Drain autoreleased encoders/command references before observing the
++      // reservation; retain only our explicit command owner across the wait.
++      pool->release();
++      // The unsignaled GPU wait prevents completion. Only the real command
++      // retains the buffer now; a host-owner accounting token would fail here.
++      const auto retained_charge=mx::metal::budgetStats().used;
++      event->setSignaledValue(1);command->waitUntilCompleted();
++      CHECK(retained_charge==baseline+charge);
++      CHECK(command->status()==MTL::CommandBufferStatusCompleted);
++      command->release();event->release();
++      CHECK(mx::metal::budgetStats().used==baseline);
++      std::printf("retention mode=%lu legal_fill_bytes=%zu baseline_restored=1\n",(unsigned long)options,n);
++    }
++  queue->release();device->release();
++  std::puts("PASS actual Metal command retains reservation through host release and completion; allocatedSize observations above");
++  return 0;
++}
+diff --git a/metal/mxbinary32.h b/metal/mxbinary32.h
+new file mode 100644
+index 00000000..fd715eb9
+--- /dev/null
++++ b/metal/mxbinary32.h
+@@ -0,0 +1,37 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// One implementation compiled by BOTH Metal and the CPU arithmetic regression.
++#ifndef MX_BINARY32_H
++#define MX_BINARY32_H
++#define MX_BINARY32_FUNCTIONS \
++ulong rounded_shift(ulong p,int shift) { \
++  if(shift<=0)return p<<uint(-shift); \
++  if(shift>=64)return 0; \
++  ulong q=p>>uint(shift),mask=(1ul<<uint(shift))-1ul; \
++  ulong rem=p&mask,halfway=1ul<<uint(shift-1); \
++  return q+ulong(rem>halfway || (rem==halfway && (q&1ul))); \
++} \
++uint multiply_bits(uint a,uint b) { \
++  uint sign=(a^b)&0x80000000u,aa=a&0x7fffffffu,bb=b&0x7fffffffu; \
++  if(aa>0x7f800000u || bb>0x7f800000u)return 0x7fc00000u; \
++  if(aa==0x7f800000u || bb==0x7f800000u) { \
++    if(!aa || !bb)return 0x7fc00000u; \
++    return sign|0x7f800000u; \
++  } \
++  if(!aa || !bb)return sign; \
++  int ae=int(aa>>23),be=int(bb>>23); \
++  ulong sa=ulong((aa&0x7fffffu)|(ae?0x800000u:0u)); \
++  ulong sb=ulong((bb&0x7fffffu)|(be?0x800000u:0u)); \
++  int power=(ae?ae:1)+(be?be:1)-254-46; \
++  ulong p=sa*sb; \
++  int top=63-int(clz(p)),exponent=power+top; \
++  if(exponent>127)return sign|0x7f800000u; \
++  if(exponent < -126)return sign|uint(rounded_shift(p,-149-power)); \
++  ulong sig=rounded_shift(p,top-23); \
++  if(sig==0x1000000ul){sig>>=1;++exponent;} \
++  if(exponent>127)return sign|0x7f800000u; \
++  return sign|(uint(exponent+127)<<23)|(uint(sig)&0x7fffffu); \
++}
++#define MX_STRINGIFY_IMPL(...) #__VA_ARGS__
++#define MX_STRINGIFY(...) MX_STRINGIFY_IMPL(__VA_ARGS__)
++#define MX_BINARY32_STRING MX_STRINGIFY(MX_BINARY32_FUNCTIONS)
++#endif
+diff --git a/metal/mxbudget.cpp b/metal/mxbudget.cpp
+new file mode 100644
+index 00000000..f36e25c8
+--- /dev/null
++++ b/metal/mxbudget.cpp
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#include "mxbudget.h"
++#include <array>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <limits>
++namespace mx::metal {
++namespace {
++struct State {
++  std::recursive_mutex mutex;
++  std::mutex accounting;
++  BudgetStats stats{0,0,size_t(1)<<30,0,0,0};
++  std::array<bool(*)(),8> reclaimers{};
++  State() {
++    // Default only when absent. Explicit invalid input disables allocations.
++    const char* p=std::getenv("MX_METAL_MEMORY_MB");
++    if(!p)return;
++    size_t value=0;bool valid=*p;
++    for(const char* c=p;*c;++c) {
++      if(*c<'0'||*c>'9'||value>65536/10){valid=false;break;}
++      value=value*10+size_t(*c-'0');
++    }
++    if(valid && value>=1 && value<=65536 && value<=std::numeric_limits<size_t>::max()/(size_t(1)<<20))
++      stats.limit=value<<20;
++    else {
++      stats.limit=0;
++      std::fprintf(stderr,"[mx-metal] invalid MX_METAL_MEMORY_MB: expected integer MiB in 1..65536; GPU buffer allocations disabled\n");
++    }
++  }
++};
++State& state(){ static auto* s=new State;return *s; }
++}
++bool enabled(const char* name){const char* p=std::getenv(name);return p&&*p&&std::strcmp(p,"0")!=0;}
++std::recursive_mutex& resourceMutex(){return state().mutex;}
++BudgetStats budgetStats(){std::lock_guard lock(state().accounting);return state().stats;}
++bool reserveBytes(size_t n){
++  std::lock_guard lock(resourceMutex());auto& s=state();
++  if(n>s.stats.limit){std::lock_guard a(s.accounting);++s.stats.refusals;return false;}
++  for(;;){
++    {
++      std::lock_guard a(s.accounting);
++      if(n<=s.stats.limit-s.stats.used){
++        s.stats.used+=n;++s.stats.reservations;
++        if(s.stats.used>s.stats.peak)s.stats.peak=s.stats.used;
++        return true;
++      }
++    }
++    bool freed=false;
++    for(auto f:s.reclaimers)if(f && f()){freed=true;break;}
++    if(!freed){std::lock_guard a(s.accounting);++s.stats.refusals;return false;}
++  }
++}
++// Buffer deallocation may run on a Metal completion thread while the host
++// waits under resourceMutex(). Never take the resource gate from this path.
++void releaseBytes(size_t n) noexcept {std::lock_guard lock(state().accounting);state().stats.used-=n;}
++void addReclaimer(bool(*f)()){std::lock_guard lock(resourceMutex());for(auto& p:state().reclaimers){if(p==f)return;if(!p){p=f;return;}}std::abort();}
++void recordEviction(){std::lock_guard lock(state().accounting);++state().stats.evictions;}
++void budgetReport(){const auto s=budgetStats();std::fprintf(stderr,"[mx-metal] budget owned_buffer_used=%zu peak=%zu limit=%zu reservations=%llu evictions=%llu refusals=%llu (excludes process RSS/driver pipelines)\n",s.used,s.peak,s.limit,(unsigned long long)s.reservations,(unsigned long long)s.evictions,(unsigned long long)s.refusals);}
++}
+diff --git a/metal/mxbudget.h b/metal/mxbudget.h
+new file mode 100644
+index 00000000..1c42e845
+--- /dev/null
++++ b/metal/mxbudget.h
+@@ -0,0 +1,32 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#ifndef MX_METAL_BUDGET_H
++#define MX_METAL_BUDGET_H
++#include <cstddef>
++#include <cstdint>
++#include <mutex>
++namespace mx::metal {
++// Serializes resource ownership/idle eviction, not GPU execution. Recursive so
++// VkFFT planning and cache destructors can allocate/release through this gate.
++std::recursive_mutex& resourceMutex();
++struct BudgetStats { std::size_t used, peak, limit; std::uint64_t reservations, evictions, refusals; };
++BudgetStats budgetStats();
++bool reserveBytes(std::size_t bytes);
++void releaseBytes(std::size_t bytes) noexcept;
++// Reclaim exactly one idle entry; never touch pinned resources. Called under
++// resourceMutex(), including during VkFFT initialization.
++void addReclaimer(bool (*reclaim)());
++void recordEviction();
++void budgetReport();
++bool enabled(const char* name);
++class Reservation {
++ public:
++  ~Reservation(){ reset(); }
++  Reservation()=default;
++  Reservation(const Reservation&)=delete;
++  Reservation& operator=(const Reservation&)=delete;
++  bool acquire(std::size_t n) { reset(); if(!reserveBytes(n))return false; bytes_=n;return true; }
++  void reset() noexcept { if(bytes_)releaseBytes(bytes_);bytes_=0; }
++ private: std::size_t bytes_=0;
++};
++} // namespace mx::metal
++#endif
+diff --git a/metal/mxconvolve.cpp b/metal/mxconvolve.cpp
+index 43ea7d01..d5889221 100644
+--- a/metal/mxconvolve.cpp
++++ b/metal/mxconvolve.cpp
+@@ -1,106 +1,130 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
+ #include "metal/mxconvolve.h"
+ #include "metal/mxvkfft.h"
++#include "metal/mxbudget.h"
+ #include "metal/mxprofile.h"
+-#include <atomic>
+ #include <chrono>
+ #include <cstdio>
+-#include <cstdlib>
+ #include <cstring>
++#include <list>
+ #include <memory>
+-#include <mutex>
+ #include <vector>
+-
+ namespace {
+-std::atomic<size_t> batches{0}, planes{0}, singles{0}, refused{0};
+-// One bounded process-wide plan serializes concurrent GPU consumers, instead
+-// of letting every worker retain an unbounded full-scale stack.
+-std::mutex batch_mutex;
+-std::unique_ptr<mx::vk::Fft> batch_plan;
+-using Clock = std::chrono::steady_clock;
+-double plan_seconds=0, execute_seconds=0, copy_seconds=0, gpu_seconds=0;
+-size_t plan_count=0;
+-double seconds(Clock::time_point begin){return std::chrono::duration<double>(Clock::now()-begin).count();}
+-int refuse(const char* why) {
+-  if(refused.fetch_add(1)==0) std::fprintf(stderr,"[mx-metal] convolution fallback: %s\n",why);
++using mx::metal::resourceMutex;
++MxConvolveStats stats{};
++struct Entry { std::unique_ptr<mx::vk::Fft> plan; bool active=false; };
++std::list<Entry>& pool(){static auto* p=new std::list<Entry>;return *p;}
++bool evict(){for(auto i=pool().begin();i!=pool().end();++i)if(!i->active){pool().erase(i);mx::metal::recordEviction();return true;}return false;}
++struct Lease {
++  Entry* entry=nullptr;
++  bool keep=false;
++  Lease(size_t w,size_t h,size_t b) {
++    mx::metal::addReclaimer(&evict);
++    if(!mx::metal::enabled("MX_METAL_NO_PLAN_CACHE"))
++      for(auto i=pool().begin();i!=pool().end();++i)
++        if(!i->active && i->plan->width()==w && i->plan->height()==h && i->plan->batch()==b){
++          mx::profile::Context context;context.id=mx::profile::nextId();context.w=w;context.h=h;context.batch=b;
++          mx::profile::Span hit("convolution.plan_hit",context);
++          ++stats.pool_hits;i->active=true;entry=&*i;pool().splice(pool().end(),pool(),i);return;
++        }
++    ++stats.pool_misses;
++    mx::profile::Context context;context.id=mx::profile::nextId();context.w=w;context.h=h;context.batch=b;
++    mx::profile::Span miss("convolution.plan_miss",context);miss.ok=false;
++    while(pool().size()>=4 && evict()){}
++    pool().push_back({std::make_unique<mx::vk::Fft>(),true});entry=&pool().back();
++    bool initialized=false;
++    try { initialized=entry->plan->initReal(w,h,b); }
++    catch(...) {pool().pop_back();entry=nullptr;throw;}
++    if(!initialized){
++      if(mx::metal::enabled("MX_METAL_DEBUG_TIMING")||mx::metal::enabled("MX_METAL_PROFILE"))std::fprintf(stderr,"[mx-metal] plan refusal: %s\n",entry->plan->error());
++      pool().pop_back();entry=nullptr;
++    }else miss.ok=true;
++  }
++  ~Lease(){if(entry){entry->active=false;if(!keep || mx::metal::enabled("MX_METAL_NO_PLAN_CACHE"))for(auto i=pool().begin();i!=pool().end();++i)if(&*i==entry){pool().erase(i);break;}}}
++  mx::vk::Fft* get(){return entry?entry->plan.get():nullptr;}
++};
++enum class Reason { Disabled, Arguments, Resources, Execution, Exception };
++int refuse(const char* why,Reason reason=Reason::Execution){
++  ++stats.refusals;
++  switch(reason){
++    case Reason::Disabled:++stats.refused_disabled;break;
++    case Reason::Arguments:++stats.refused_arguments;break;
++    case Reason::Resources:++stats.refused_resources;break;
++    case Reason::Execution:++stats.refused_execution;break;
++    case Reason::Exception:++stats.refused_exception;break;
++  }
++  if(mx::metal::enabled("MX_METAL_DEBUG_TIMING")||mx::metal::enabled("MX_METAL_PROFILE"))std::fprintf(stderr,"[mx-metal] convolution fallback: %s\n",why);
+   return 0;
+ }
+-bool disabled(){const char* v=std::getenv("MX_METAL_NO_CONVOLVE");return v&&std::strcmp(v,"0")!=0;}
++int refuseFft(mx::vk::Fft* f){const char* why=f->error();return refuse(why,(std::strstr(why,"budget")||std::strstr(why,"allocation"))?Reason::Resources:Reason::Execution);}
++bool valid(size_t w,size_t h,size_t b){return w&&h&&b&&b<=32&&w%2==0&&w<=16384&&h<=16384;}
+ }
+-extern "C" int mx_convolve_many(float* const* images,const std::complex<float>* image,
+-                                const std::complex<float>* const* kernels,
+-                                size_t w,size_t h,size_t count){
+-  if(disabled())return 0;
+-  if(!images||!image||!kernels||!w||!h||!count||count>32||w%2||w>16384||h>16384)
+-    return refuse("unsupported dimensions or null input");
+-  const size_t pitch=2*(w/2+1);
+-  if(pitch>((size_t(512)<<20)/sizeof(float))/h/count)return refuse("512 MiB batch FFT budget exceeded");
+-  for(size_t i=0;i<count;++i)if(!images[i]||!kernels[i])return refuse("null scale buffer");
+-  mx::profile::Context profile;
+-  profile.id=mx::profile::nextId();profile.w=w;profile.h=h;profile.batch=count;
+-  mx::profile::Span total("convolution.total",profile);total.ok=false;
+-  mx::profile::Span mutex_wait("convolution.batch_mutex_wait",profile);
+-  std::lock_guard lock(batch_mutex);
+-  mutex_wait.finish();
+-  auto stamp=Clock::now();
+-  if(!batch_plan||batch_plan->width()!=w||batch_plan->height()!=h||batch_plan->batch()!=count){
+-    mx::profile::Span miss("convolution.plan_miss",profile);miss.ok=false;
+-    batch_plan=std::make_unique<mx::vk::Fft>();
+-    batch_plan->profileOwner(profile.id);
+-    if(!batch_plan->initReal(w,h,count)){int r=refuse(batch_plan->error());batch_plan.reset();return r;}
+-    miss.ok=true;
+-    ++plan_count;
+-    if(std::getenv("MX_METAL_DEBUG_TIMING"))std::fprintf(stderr,"[mx-metal] convolve plan batch=%zu init_s=%.6f\n",count,seconds(stamp));
+-  }
+-  plan_seconds+=seconds(stamp);stamp=Clock::now();
+-  std::vector<const float*> kp;kp.reserve(count);
+-  for(size_t i=0;i<count;++i)kp.push_back(reinterpret_cast<const float*>(kernels[i]));
+-  batch_plan->profileOwner(profile.id);
+-  if(!batch_plan->submitConvolution(reinterpret_cast<const float*>(image),kp.data())||!batch_plan->wait())
+-    return refuse(batch_plan->error());
+-  execute_seconds+=seconds(stamp);gpu_seconds+=batch_plan->gpuSeconds();stamp=Clock::now();
+-  auto output_context=profile;output_context.bytes=count*w*h*sizeof(float);
+-  mx::profile::Span output_copy("convolution.copy_output",output_context);
+-  const float* data=batch_plan->data();
+-  for(size_t b=0;b<count;++b)for(size_t y=0;y<h;++y)
+-    std::memcpy(images[b]+y*w,data+(b*h+y)*pitch,w*sizeof(float));
+-  output_copy.finish();
+-  copy_seconds+=seconds(stamp);
+-  ++batches;planes+=count;
+-  total.ok=true;
+-  return 1;
++extern "C" int mx_convolve_many_owned(float* const* images,const std::complex<float>* image,
++    const std::complex<float>* const* kernels,const std::uint64_t* generations,size_t w,size_t h,size_t count){
++  std::lock_guard lock(resourceMutex());
++  if(mx::metal::enabled("MX_METAL_NO_CONVOLVE"))return refuse("disabled",Reason::Disabled);
++  if(!images||!image||!kernels||!valid(w,h,count))return refuse("arguments/dimensions",Reason::Arguments);
++  for(size_t i=0;i<count;++i)if(!images[i]||!kernels[i])return refuse("null plane",Reason::Arguments);
++  try {
++    mx::profile::Context c;c.id=mx::profile::nextId();c.w=w;c.h=h;c.batch=count;
++    mx::profile::Span total("convolution.total",c);total.ok=false;
++    Lease lease(w,h,count);auto* f=lease.get();if(!f)return refuse("aggregate budget/allocation/planning",Reason::Resources);
++    f->profileOwner(c.id);
++    std::vector<const float*> kp;kp.reserve(count);
++    for(size_t i=0;i<count;++i)kp.push_back(reinterpret_cast<const float*>(kernels[i]));
++    if(!f->submitConvolution(reinterpret_cast<const float*>(image),kp.data(),generations)||!f->wait())return refuseFft(f);
++    c.bytes=count*w*h*sizeof(float);mx::profile::Span copy("convolution.copy_output",c);
++    const float* data=f->data();const size_t pitch=f->rowFloats();
++    for(size_t b=0;b<count;++b)for(size_t y=0;y<h;++y)std::memcpy(images[b]+y*w,data+(b*h+y)*pitch,w*sizeof(float));
++    lease.keep=true;stats.output_copy_bytes+=c.bytes;++stats.batches;stats.planes+=count;total.ok=true;return 1;
++  }catch(...){return refuse("exception",Reason::Exception);}
+ }
+-extern "C" int mx_convolve_c2r(float* image,const std::complex<float>* product,size_t w,size_t h){
+-  if(disabled())return 0;
+-  if(!image||!product||!w||!h||w%2)return refuse("unsupported single C2R input");
+-  // Opt-in compatibility adapter; multiscale uses the single shared batch above.
+-  mx::profile::Context profile;
+-  profile.id=mx::profile::nextId();profile.w=w;profile.h=h;profile.batch=1;
+-  mx::profile::Span total("convolution.total",profile);total.ok=false;
+-  thread_local std::unique_ptr<mx::vk::Fft> plan;
+-  if(!plan||plan->width()!=w||plan->height()!=h){
+-    mx::profile::Span miss("convolution.plan_miss",profile);miss.ok=false;
+-    plan=std::make_unique<mx::vk::Fft>();
+-    plan->profileOwner(profile.id);
+-    if(!plan->initReal(w,h)){int r=refuse(plan->error());plan.reset();return r;}
+-    miss.ok=true;
+-  }
+-  const size_t pitch=plan->rowFloats();
+-  plan->profileOwner(profile.id);
+-  auto copy_context=profile;copy_context.bytes=pitch*h*sizeof(float);
+-  mx::profile::Span input_copy("convolution.copy_inputs",copy_context);
+-  std::memcpy(plan->data(),product,pitch*h*sizeof(float));
+-  input_copy.finish();
+-  if(!plan->submit()||!plan->wait())return refuse(plan->error());
+-  copy_context.bytes=w*h*sizeof(float);
+-  mx::profile::Span output_copy("convolution.copy_output",copy_context);
+-  for(size_t y=0;y<h;++y)std::memcpy(image+y*w,plan->data()+y*pitch,w*sizeof(float));
+-  output_copy.finish();
+-  ++singles;
+-  total.ok=true;
+-  return 1;
++extern "C" int mx_convolve_peak_many(float* const* images,const std::complex<float>* image,
++    const std::complex<float>* const* kernels,const std::uint64_t* generations,size_t w,size_t h,size_t count,
++    const unsigned char* const* masks,int negative,const size_t* xb,const size_t* yb,const float* weights,
++    float* values,size_t* x,size_t* y,unsigned char* found){
++  std::lock_guard lock(resourceMutex());
++#if !defined(__aarch64__) || defined(__AVX__) || defined(__SSE__)
++  return refuse("fusion requires ARM scalar peak oracle",Reason::Disabled);
++#endif
++  if(mx::metal::enabled("MX_METAL_NO_CONVOLVE") || mx::metal::enabled("MX_METAL_NO_FUSE"))return refuse("fusion disabled",Reason::Disabled);
++  if(!image||!kernels||!valid(w,h,count)||!xb||!yb||!values||!x||!y||!found)return refuse("fusion arguments",Reason::Arguments);
++  for(size_t b=0;b<count;++b)if(!kernels[b] || (images && !images[b]) || xb[b]>w || yb[b]>h)return refuse("fusion plane/border",Reason::Arguments);
++  try {
++    mx::profile::Context c;c.id=mx::profile::nextId();c.w=w;c.h=h;c.batch=count;
++    mx::profile::Span total("fusion.total",c);total.ok=false;
++    Lease lease(w,h,count);auto* f=lease.get();if(!f)return refuse("fusion budget/planning",Reason::Resources);
++    f->profileOwner(c.id);
++    std::vector<const float*> kp;kp.reserve(count);
++    for(size_t b=0;b<count;++b)kp.push_back(reinterpret_cast<const float*>(kernels[b]));
++    std::vector<float> v(count);std::vector<size_t> xs(count),ys(count);std::vector<unsigned char> flags(count);
++    if(!f->submitConvolution(reinterpret_cast<const float*>(image),kp.data(),generations)||!f->wait()||
++       !f->findPeaks(masks,xb,yb,negative,weights,v.data(),xs.data(),ys.data(),flags.data()))return refuseFft(f);
++    lease.keep=true;
++    if(images){
++      c.bytes=count*w*h*sizeof(float);mx::profile::Span copy("fusion.copy_output",c);
++      const float* data=f->data();const size_t pitch=f->rowFloats();
++      for(size_t b=0;b<count;++b)for(size_t row=0;row<h;++row)std::memcpy(images[b]+row*w,data+(b*h+row)*pitch,w*sizeof(float));
++      stats.output_copy_bytes+=c.bytes;
++    }
++    for(size_t b=0;b<count;++b){values[b]=v[b];x[b]=xs[b];y[b]=ys[b];found[b]=flags[b];}
++    ++stats.batches;stats.planes+=count;++stats.fused_calls;stats.fused_planes+=count;total.ok=true;return 1;
++  }catch(...){return refuse("fusion exception",Reason::Exception);}
+ }
+-extern "C" void mx_convolve_report(){
+-  std::fprintf(stderr,"[mx-metal] convolution batches=%zu planes=%zu singles=%zu refused=%zu\n",
+-               batches.load(),planes.load(),singles.load(),refused.load());
+-  std::fprintf(stderr,"[mx-metal] convolution plans=%zu init_s=%.6f execute_s=%.6f gpu_s=%.6f readback_s=%.6f\n",plan_count,plan_seconds,execute_seconds,gpu_seconds,copy_seconds);
++extern "C" int mx_convolve_many(float* const* images,const std::complex<float>* image,
++    const std::complex<float>* const* kernels,size_t w,size_t h,size_t b){return mx_convolve_many_owned(images,image,kernels,nullptr,w,h,b);}
++extern "C" int mx_convolve_c2r(float* image,const std::complex<float>* product,size_t w,size_t h){
++  std::lock_guard lock(resourceMutex());
++  if(mx::metal::enabled("MX_METAL_NO_CONVOLVE"))return refuse("disabled",Reason::Disabled);
++  if(!image||!product||!valid(w,h,1))return refuse("single arguments/dimensions",Reason::Arguments);
++  try {
++    Lease lease(w,h,1);auto* f=lease.get();if(!f)return refuse("single budget/planning",Reason::Resources);
++    const size_t pitch=f->rowFloats();std::memcpy(f->data(),product,pitch*h*sizeof(float));
++    if(!f->submit()||!f->wait())return refuseFft(f);
++    for(size_t y=0;y<h;++y)std::memcpy(image+y*w,f->data()+y*pitch,w*sizeof(float));
++    lease.keep=true;stats.output_copy_bytes+=w*h*sizeof(float);return 1;
++  }catch(...){return refuse("single exception",Reason::Exception);}
+ }
++extern "C" void mx_convolve_get_stats(MxConvolveStats* out){if(!out)return;std::lock_guard lock(resourceMutex());*out=stats;auto k=mx::vk::Fft::kernelStats();out->kernel_hits=k.hits;out->kernel_uploads=k.uploads;out->kernel_bytes=k.bytes;}
++extern "C" void mx_convolve_clear_cache(){std::lock_guard lock(resourceMutex());while(evict()){}mx::vk::Fft::clearKernelCache();}
++extern "C" void mx_convolve_report(){MxConvolveStats s{};mx_convolve_get_stats(&s);std::fprintf(stderr,"[mx-metal] convolution batches=%llu planes=%llu pool_hits=%llu pool_misses=%llu kernel_hits=%llu kernel_uploads=%llu kernel_bytes=%llu output_copy_bytes=%llu fused_calls=%llu fused_planes=%llu refusals=%llu\n",(unsigned long long)s.batches,(unsigned long long)s.planes,(unsigned long long)s.pool_hits,(unsigned long long)s.pool_misses,(unsigned long long)s.kernel_hits,(unsigned long long)s.kernel_uploads,(unsigned long long)s.kernel_bytes,(unsigned long long)s.output_copy_bytes,(unsigned long long)s.fused_calls,(unsigned long long)s.fused_planes,(unsigned long long)s.refusals);std::fprintf(stderr,"[mx-metal] convolution fallback_reasons disabled=%llu arguments=%llu resources=%llu execution=%llu exception=%llu\n",(unsigned long long)s.refused_disabled,(unsigned long long)s.refused_arguments,(unsigned long long)s.refused_resources,(unsigned long long)s.refused_execution,(unsigned long long)s.refused_exception);mx::metal::budgetReport();}
+diff --git a/metal/mxconvolve.h b/metal/mxconvolve.h
+index 0914c3f8..d75db7d8 100644
+--- a/metal/mxconvolve.h
++++ b/metal/mxconvolve.h
+@@ -3,6 +3,7 @@
+ #define MX_MXCONVOLVE_H
+ #include <complex>
+ #include <cstddef>
++#include <cstdint>
+ extern "C" {
+ int mx_convolve_c2r(float* image, const std::complex<float>* product,
+                     std::size_t width, std::size_t height);
+@@ -12,6 +13,24 @@ int mx_convolve_c2r(float* image, const std::complex<float>* product,
+ int mx_convolve_many(float* const* images, const std::complex<float>* image_fft,
+                      const std::complex<float>* const* kernels,
+                      std::size_t width, std::size_t height, std::size_t count);
++// Nonzero generations identify immutable owner revisions, never data addresses.
++int mx_convolve_many_owned(float* const* images, const std::complex<float>* image_fft,
++    const std::complex<float>* const* kernels, const std::uint64_t* generations,
++    std::size_t width, std::size_t height, std::size_t count);
++int mx_convolve_peak_many(float* const* images, const std::complex<float>* image_fft,
++    const std::complex<float>* const* kernels, const std::uint64_t* generations,
++    std::size_t width, std::size_t height, std::size_t count,
++    const unsigned char* const* masks, int negative, const std::size_t* xb,
++    const std::size_t* yb, const float* weights, float* values, std::size_t* x,
++    std::size_t* y, unsigned char* found);
++struct MxConvolveStats {
++  std::uint64_t pool_hits, pool_misses, kernel_hits, kernel_uploads, kernel_bytes;
++  std::uint64_t batches, planes, output_copy_bytes, fused_calls, fused_planes, refusals;
++  std::uint64_t refused_disabled, refused_arguments, refused_resources, refused_execution, refused_exception;
++};
++void mx_convolve_get_stats(MxConvolveStats* out);
++// Drains/clears idle resources; active or in-flight owners are never evicted.
++void mx_convolve_clear_cache();
+ void mx_convolve_report();
+ }
+ #endif
+diff --git a/metal/mxmetalbuffer.h b/metal/mxmetalbuffer.h
+new file mode 100644
+index 00000000..8ea80f1d
+--- /dev/null
++++ b/metal/mxmetalbuffer.h
+@@ -0,0 +1,59 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#ifndef MX_METAL_BUFFER_H
++#define MX_METAL_BUFFER_H
++#include "mxbudget.h"
++#include <limits>
++// Attach the reservation to the actual MTLBuffer lifetime, including command
++// buffer retains. No accounting by pointers, estimates of LUT sizes, or RSS.
++extern "C" bool mx_metal_track_buffer(void* buffer, std::size_t bytes) noexcept;
++namespace mx::metal {
++// Explicit native-test seam: thread-local, inert unless a probe arms it.
++inline thread_local bool (*bufferFaultForTesting)(const char* site) = nullptr;
++inline bool commandFault(const char* site) {
++  return bufferFaultForTesting && bufferFaultForTesting(site);
++}
++inline MTL::CommandBuffer* preparationCommand(MTL::CommandQueue* queue, const char* site) {
++  return commandFault(site) ? nullptr : queue->commandBuffer();
++}
++inline MTL::ComputeCommandEncoder* preparationEncoder(MTL::CommandBuffer* command, const char* site) {
++  return commandFault(site) ? nullptr : command->computeCommandEncoder();
++}
++inline MTL::BlitCommandEncoder* transferEncoder(MTL::CommandBuffer* command, const char* site) {
++  return commandFault(site) ? nullptr : command->blitCommandEncoder();
++}
++inline bool completedPreparation(MTL::CommandBuffer* command, const char* site) {
++  // Drain the real command even when the test requests a failed completion.
++  command->waitUntilCompleted();
++  const bool completed = command->status() == MTL::CommandBufferStatusCompleted;
++  const bool failed = commandFault(site);
++  return completed && !failed;
++}
++class EncoderScope {
++ public:
++  explicit EncoderScope(MTL::ComputeCommandEncoder* encoder) : encoder_(encoder) {}
++  ~EncoderScope() { end(); }
++  EncoderScope(const EncoderScope&) = delete;
++  EncoderScope& operator=(const EncoderScope&) = delete;
++  void end() { if(encoder_){encoder_->endEncoding();encoder_=nullptr;} }
++ private:
++  MTL::ComputeCommandEncoder* encoder_;
++};
++inline MTL::Buffer* newBuffer(MTL::Device* device, NS::UInteger n, MTL::ResourceOptions options, const char* site="buffer") {
++  // Accounting units are requested lengths rounded to 16 KiB. This is not
++  // a measured bound on allocatedSize or physical/driver allocation.
++  if(bufferFaultForTesting && bufferFaultForTesting(site))return nullptr;
++  if(n>std::numeric_limits<size_t>::max()-16383)return nullptr;
++  const size_t charged=(size_t(n)+16383)&~size_t(16383);
++  if(!reserveBytes(charged))return nullptr;
++  auto* b=device->newBuffer(n,options);
++  if(!b){releaseBytes(charged);return nullptr;}
++  if(!mx_metal_track_buffer(b,charged)){b->release();releaseBytes(charged);return nullptr;}
++  return b;
++}
++inline MTL::Buffer* newBuffer(MTL::Device* device, const void* data, NS::UInteger n, MTL::ResourceOptions options) {
++  auto* b=newBuffer(device,n,options);
++  if(b && n)std::memcpy(b->contents(),data,n);
++  return b;
++}
++}
++#endif
+diff --git a/metal/mxmetalbuffer.mm b/metal/mxmetalbuffer.mm
+new file mode 100644
+index 00000000..1f8c4983
+--- /dev/null
++++ b/metal/mxmetalbuffer.mm
+@@ -0,0 +1,20 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#include "mxbudget.h"
++#import <Foundation/Foundation.h>
++#import <objc/runtime.h>
++@interface MXMetalBudgetToken : NSObject
++@property(nonatomic) std::size_t bytes;
++@end
++@implementation MXMetalBudgetToken
++- (void)dealloc { mx::metal::releaseBytes(_bytes); }
++@end
++extern "C" bool mx_metal_track_buffer(void* buffer, std::size_t bytes) noexcept {
++  @try {
++    MXMetalBudgetToken* token=[MXMetalBudgetToken new];
++    if(!token)return false;
++    static char key;
++    objc_setAssociatedObject((__bridge id)buffer,&key,token,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    token.bytes=bytes;
++    return true;
++  } @catch(NSException*) { return false; }
++}
+diff --git a/metal/mxpeak.mm b/metal/mxpeak.mm
+index 0b9e3048..2b8ca01c 100644
+--- a/metal/mxpeak.mm
++++ b/metal/mxpeak.mm
+@@ -1,5 +1,7 @@
+ #include "metal/mxpeak.h"
+ #include "metal/mxprofile.h"
++#include "metal/mxbudget.h"
++extern "C" bool mx_metal_track_buffer(void*, std::size_t) noexcept;
+ 
+ #import <Foundation/Foundation.h>
+ #import <Metal/Metal.h>
+@@ -98,7 +100,7 @@ int Decline(Reason reason, const char* message) {
+   static std::atomic<unsigned> reported{0};
+   const unsigned bit = 1u << reason;
+   ++stats.declines;
+-  if (!(reported.fetch_or(bit) & bit))
++  if (!(reported.fetch_or(bit) & bit) && (Debug() || mx::metal::enabled("MX_METAL_PROFILE")))
+     std::fprintf(stderr, "mxpeak: CPU fallback: %s (further occurrences suppressed)\n", message);
+   return 0;
+ }
+@@ -112,6 +114,7 @@ struct Ctx {
+   Reason failure = kDevice;
+   const char* why = "no Metal device";
+   bool ok = false;
++  bool busy = false;
+   Ctx() {
+     mx::profile::Context profile;profile.id=mx::profile::nextId();
+     mx::profile::Span setup("peak.pipeline_setup",profile);setup.ok=false;
+@@ -154,6 +157,14 @@ struct Ctx {
+ Ctx& Context() {
+   // C++ guarantees exactly-once construction and publishes a fully built context.
+   static Ctx ctx;
++  static const bool registered=[] {
++    mx::metal::addReclaimer(+[] {
++      Ctx& c=Context();
++      if(!c.busy && c.scratch){c.scratch=nil;mx::metal::recordEviction();return true;}
++      return false;
++    });return true;
++  }();
++  (void)registered;
+   return ctx;
+ }
+ struct Params { std::uint32_t width, height, xb, yb, tiles, negative, has_mask, pad; };
+@@ -211,12 +222,14 @@ extern "C" int mx_peak_find_many(const float* const* images, std::size_t nscales
+   const std::size_t total = result_offset + nscales * sizeof(Peak);
+   if (total > kScratchLimit)
+     return Decline(kSize, "batch and reduction exceed 512 MiB scratch budget");
++  std::lock_guard resource_lock(mx::metal::resourceMutex());
+   Ctx& ctx = Context();
+   if (!ctx.ok) return Decline(ctx.failure, ctx.why);
+   const auto start = std::chrono::steady_clock::now();
+   mx::profile::Span mutex_wait("peak.mutex_wait",profile);
+   std::lock_guard<std::mutex> lock(ctx.mutex);
+   mutex_wait.finish();
++  struct Busy { Ctx& ctx; Busy(Ctx& c):ctx(c){ctx.busy=true;} ~Busy(){ctx.busy=false;} } busy(ctx);
+   @autoreleasepool {
+     if (total > ctx.device.maxBufferLength)
+       return Decline(kSize, "batch exceeds Metal maxBufferLength");
+@@ -225,7 +238,12 @@ extern "C" int mx_peak_find_many(const float* const* images, std::size_t nscales
+       mx::profile::Span allocation("peak.allocate_scratch",allocation_context);
+       // Release old storage before growth; at most one bounded arena is retained.
+       ctx.scratch = nil;
++      const size_t charged=(total+16383)&~size_t(16383);
++      if(!mx::metal::reserveBytes(charged))return Decline(kAllocation,"aggregate backend budget refused peak scratch");
+       ctx.scratch = [ctx.device newBufferWithLength:total options:MTLResourceStorageModeShared];
++      if(!ctx.scratch || !mx_metal_track_buffer((__bridge void*)ctx.scratch,charged)){
++        ctx.scratch=nil;mx::metal::releaseBytes(charged);
++      }
+       allocation.ok=ctx.scratch!=nil;
+       ctx.scratch_id=ctx.scratch?mx::profile::nextId():0;
+     }
+diff --git a/metal/mxpredict.cpp b/metal/mxpredict.cpp
+index ff744d36..647521a9 100644
+--- a/metal/mxpredict.cpp
++++ b/metal/mxpredict.cpp
+@@ -3,6 +3,8 @@
+ #include "ducc0/wgridder/mx_prediction.h"
+ #include "metal/mxvkfft.h"
+ #include "metal/mxprofile.h"
++#include "metal/mxbudget.h"
++#include "metal/mxpredictioncompletion.h"
+ #include <atomic>
+ #include <chrono>
+ #include <cstdio>
+@@ -11,10 +13,10 @@
+ 
+ namespace {
+ std::atomic<bool> enabled{false};
+-bool debug() noexcept { return std::getenv("MX_METAL_DEBUG_TIMING") != nullptr; }
++bool debug() noexcept { return mx::metal::enabled("MX_METAL_DEBUG_TIMING") || mx::metal::enabled("MX_METAL_PROFILE"); }
+ void refuse(const char* reason) noexcept {
+   static std::atomic<bool> reported{false};
+-  if (!reported.exchange(true) || debug())
++  if (debug() && !reported.exchange(true))
+     std::fprintf(stderr,"MX prediction refusal: %s\n",reason);
+ }
+ class Session final : public ducc0::detail_gridder::PredictionSession {
+@@ -37,34 +39,38 @@ class Session final : public ducc0::detail_gridder::PredictionSession {
+     mx::profile::emit(stage,c,event_begin[slot],mx::profile::now());
+   }
+   mx::vk::Fft fft[2];
+-  std::size_t submitted=0, completed=0, fallback=0, initialized_planes=0;
+-  bool submitted_ok[2]{};
++  std::size_t submitted=0, completed=0, fallback=0, initialized_planes=0, serial_waits=0;
++  mx::metal::PredictionCompletion completion[2];
+   double gpu_seconds=0;
+   std::chrono::steady_clock::time_point begin=std::chrono::steady_clock::now();
+   ~Session() override {
+     // Drain before the proof line and before either shared plane releases.
+-    for(auto& f:fft) f.wait();
++    for(auto& f:fft){try{f.wait();}catch(...){}}
+     if(profile.id) mx::profile::emit("prediction.session",profile,profile_begin,mx::profile::now(),profile_ready);
+     if (debug()) std::fprintf(stderr,
+-      "MX prediction proof: shared_planes=%zu submitted=%zu completed=%zu cpu_fallback=%zu grid_memcpy_bytes=0 gpu_s=%.6f wall_s=%.6f\n",
+-      initialized_planes,submitted,completed,fallback,gpu_seconds,
++      "MX prediction proof: shared_planes=%zu submitted=%zu completed=%zu cpu_fallback=%zu grid_memcpy_bytes=0 serial_waits=%zu gpu_s=%.6f wall_s=%.6f\n",
++      initialized_planes,submitted,completed,fallback,serial_waits,gpu_seconds,
+       std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count());
+   }
+   std::complex<float>* data(std::size_t slot) noexcept override {
+     return reinterpret_cast<std::complex<float>*>(fft[slot].data());
+   }
+   bool submit(std::size_t slot, std::size_t plane) noexcept override {
++    try {
+     fft[slot].profileOwner(profile.id,slot,plane);
+     bool ok=fft[slot].submitForward();
+-    submitted_ok[slot]=ok;
++    const bool serial=mx::metal::enabled("MX_METAL_PREDICT_SERIAL");
++    completion[slot].submitted(ok,serial,[&](){++serial_waits;return fft[slot].wait();});
+     if(ok) ++submitted;
+     if(std::getenv("MX_METAL_DEBUG_PLANES")) std::fprintf(stderr,"MX prediction submit plane=%zu slot=%zu ok=%d%s%s\n",
+       plane,slot,ok,ok?"":" reason=",ok?"":fft[slot].error());
+     return ok;
++    } catch(...) {
++      completion[slot].submitted(false,false,[]{return false;});return false;
++    }
+   }
+   bool wait(std::size_t slot, std::size_t plane) noexcept override {
+-    bool drained=fft[slot].wait();
+-    bool ok=drained && submitted_ok[slot];
++    bool ok=completion[slot].finish([&](){return fft[slot].wait();});
+     if(ok) { ++completed; gpu_seconds+=fft[slot].gpuSeconds(); } else ++fallback;
+     if(std::getenv("MX_METAL_DEBUG_PLANES")) std::fprintf(stderr,"MX prediction wait plane=%zu slot=%zu ok=%d gpu_s=%.9g%s%s\n",
+       plane,slot,ok,fft[slot].gpuSeconds(),ok?"":" reason=",ok?"":fft[slot].error());
+@@ -78,7 +84,8 @@ mx_prediction_create(std::size_t nu, std::size_t nv, bool is_float) noexcept {
+   if(!enabled.load(std::memory_order_acquire)) return nullptr;
+   if(std::getenv("MX_METAL_NO_PREDICT")){refuse("MX_METAL_NO_PREDICT");return nullptr;}
+   if(!is_float){refuse("double/unsupported calculation type");return nullptr;}
+-  // At most 1 GiB of shared plane storage (two 8192-square complex planes).
++  // Two ordered planes; actual buffers plus all VkFFT internals share the
++  // process-wide owned-backend budget. Idle convolution caches yield to these.
+   if(!nu||!nv||nu>8192||nv>8192){refuse("shape outside two-plane memory budget");return nullptr;}
+   try {
+     auto s=std::make_unique<Session>(nv,nu);
+diff --git a/metal/mxpredictioncompletion.h b/metal/mxpredictioncompletion.h
+new file mode 100644
+index 00000000..589c82df
+--- /dev/null
++++ b/metal/mxpredictioncompletion.h
+@@ -0,0 +1,24 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#ifndef MX_PREDICTION_COMPLETION_H
++#define MX_PREDICTION_COMPLETION_H
++namespace mx::metal {
++// SERIAL waits at submission but exposes its latched outcome only at the usual
++// ordered consume/wait point. Failed early waits must never turn into successes
++// merely because a later Fft::wait() has no outstanding command buffer.
++class PredictionCompletion {
++ public:
++  template<class Wait> void submitted(bool ok,bool serial,Wait wait) noexcept {
++    pending_=true;submit_ok_=ok;serial_=ok&&serial;result_=serial_?drain(wait):false;
++  }
++  template<class Wait> bool finish(Wait wait) noexcept {
++    if(!pending_)return false;
++    pending_=false;const bool ok=serial_?result_:drain(wait);return submit_ok_&&ok;
++  }
++ private:
++  template<class Wait> static bool drain(Wait wait) noexcept {
++    try {return wait();} catch(...) {return false;}
++  }
++  bool pending_=false,submit_ok_=false,serial_=false,result_=false;
++};
++}
++#endif
+diff --git a/metal/mxresidentpeak.h b/metal/mxresidentpeak.h
+new file mode 100644
+index 00000000..4f20c2aa
+--- /dev/null
++++ b/metal/mxresidentpeak.h
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Integer IEEE binary32 weighting avoids Metal's optional denormal flushing.
++// Reduction compares positive magnitude bits, preserving NaN/inf and strict
++// FLT_MIN behavior even on devices whose float arithmetic flushes subnormals.
++#include "mxbinary32.h"
++static const char* kResidentPeakSource=R"MSL(
++#include <metal_stdlib>
++using namespace metal;
++struct Peak { uint score, bits, index, pad; };
++struct Params { uint w,h,pitch,xb,yb,tiles,negative,weighted,masked; };
++)MSL" MX_BINARY32_STRING R"MSL(
++bool better(Peak a,Peak b){return a.score>b.score || (a.score==b.score && a.index<b.index);}
++kernel void resident_peak(device const uint* images [[buffer(0)]],
++    device const uchar* masks [[buffer(1)]],device const uint* weights [[buffer(2)]],
++    device Peak* partial [[buffer(3)]],constant Params& p [[buffer(4)]],
++    uint group [[threadgroup_position_in_grid]],uint tid [[thread_position_in_threadgroup]]) {
++  Peak best={0x00800000u,0u,0xffffffffu,0u};
++  uint iw=p.w-2*p.xb,count=iw*(p.h-2*p.yb);
++  uint begin=group*4096,end=begin+min(4096u,count-begin);
++  for(uint i=begin+tid;i<end;i+=256){
++    uint row=i/iw+p.yb,col=i%iw+p.xb,index=row*p.w+col;
++    if(p.masked && !masks[index])continue;
++    uint bits=images[row*p.pitch+col];
++    if(p.weighted)bits=multiply_bits(bits,weights[index]);
++    uint score=bits&0x7fffffffu;
++    if(score>0x00800000u && score<=0x7f800000u && (p.negative || !(bits&0x80000000u))){
++      Peak candidate={score,bits,index,0u};if(better(candidate,best))best=candidate;
++    }
++  }
++  threadgroup Peak local[256];local[tid]=best;
++  threadgroup_barrier(mem_flags::mem_threadgroup);
++  for(uint stride=128;stride;stride>>=1){
++    if(tid<stride && better(local[tid+stride],local[tid]))local[tid]=local[tid+stride];
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++  }
++  if(!tid)partial[group]=local[0];
++}
++)MSL";
+diff --git a/metal/mxvkfft.cpp b/metal/mxvkfft.cpp
+index 899ff901..3df87b2b 100644
+--- a/metal/mxvkfft.cpp
++++ b/metal/mxvkfft.cpp
+@@ -6,24 +6,55 @@
+ #include "thirdparty/metal-cpp/Foundation/Foundation.hpp"
+ #include "thirdparty/metal-cpp/Metal/Metal.hpp"
+ #include "thirdparty/metal-cpp/QuartzCore/QuartzCore.hpp"
++#include <cstring>
++#include "mxmetalbuffer.h"
+ #define VKFFT_BACKEND 5
+ #include "thirdparty/vkFFT.h"
+ #include "mxvkfft.h"
+ #include "mxprofile.h"
++#include "mxresidentpeak.h"
+ #include <cstring>
+ #include <limits>
+ #include <mutex>
+ #include <string>
++#include <list>
++#include <memory>
++#include <vector>
+ 
+ namespace mx::vk {
+ namespace {
+ // VkFFT planning touches process-global locale; serialize plan create/delete.
+-std::mutex& plannerMutex() { static auto* m = new std::mutex; return *m; }
++std::recursive_mutex& plannerMutex() { static auto* m = new std::recursive_mutex; return *m; }
+ struct Pool {
+   NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
+   ~Pool() { pool->release(); }
+ };
+ }
++namespace {
++using BufferOwner=std::shared_ptr<MTL::Buffer>;
++struct KernelEntry { uint64_t generation; size_t w,h; BufferOwner buffer; };
++std::list<KernelEntry>& kernelCache(){static auto* c=new std::list<KernelEntry>;return *c;}
++Fft::KernelStats kernel_stats{};
++bool evictKernel(){for(auto i=kernelCache().begin();i!=kernelCache().end();++i)if(i->buffer.use_count()==1){kernelCache().erase(i);mx::metal::recordEviction();return true;}return false;}
++BufferOwner kernelBuffer(MTL::Device* device,const float* data,size_t w,size_t h,uint64_t generation){
++  mx::metal::addReclaimer(&evictKernel);
++  const bool cache=generation && !mx::metal::enabled("MX_METAL_NO_KERNEL_CACHE");
++  if(cache)for(auto i=kernelCache().begin();i!=kernelCache().end();++i)
++    if(i->generation==generation && i->w==w && i->h==h){++kernel_stats.hits;auto b=i->buffer;kernelCache().splice(kernelCache().end(),kernelCache(),i);return b;}
++  const size_t bytes=2*(w/2+1)*h*sizeof(float);
++  BufferOwner buffer(mx::metal::newBuffer(device,data,bytes,MTL::ResourceStorageModeShared),[](MTL::Buffer* p){if(p)p->release();});
++  if(!buffer)return {};
++  ++kernel_stats.uploads;kernel_stats.bytes+=bytes;
++  if(cache){
++    while(kernelCache().size()>=64 && evictKernel()){}
++    if(kernelCache().size()<64)kernelCache().push_back({generation,w,h,buffer});
++    else ++kernel_stats.uncached_uploads;
++  }
++  return buffer;
++}
++}
++void Fft::clearKernelCache(){std::lock_guard lock(mx::metal::resourceMutex());while(evictKernel()){}}
++Fft::KernelStats Fft::kernelStats(){std::lock_guard lock(mx::metal::resourceMutex());auto result=kernel_stats;result.entries=kernelCache().size();return result;}
+ struct Fft::Impl {
+   mx::profile::Context profile;
+   const char* command_stage="fft.gpu";
+@@ -34,24 +65,29 @@ struct Fft::Impl {
+   MTL::CommandQueue* queue=nullptr;
+   MTL::Buffer* buffer=nullptr;
+   MTL::Buffer* image_buffer=nullptr;
+-  MTL::Buffer* kernel_buffer=nullptr;
++  std::vector<BufferOwner> active_kernels;
+   MTL::ComputePipelineState* product_pipeline=nullptr;
++  MTL::ComputePipelineState* peak_pipeline=nullptr;
++  MTL::Buffer* peak_scratch=nullptr;
+   bool real=false;
+   VkFFTApplication app={};
+-  bool planned=false;
++  bool planned=false,app_started=false;
+   MTL::CommandBuffer* cb=nullptr;
+   double gpu_seconds=0;
+   std::string error;
+   bool wait();
+   ~Impl() {
++    std::lock_guard resource_lock(mx::metal::resourceMutex());
+     Pool pool;
+     if(cb){
+-      if(profile.id)wait();
++      if(profile.id){try{wait();}catch(...){}}
+       else {cb->waitUntilCompleted();cb->release();}
+     }
+-    if(planned){std::lock_guard lock(plannerMutex());deleteVkFFT(&app);}
++    if(app_started){std::lock_guard lock(plannerMutex());deleteVkFFT(&app);}
+     if(product_pipeline) product_pipeline->release();
+-    if(kernel_buffer) kernel_buffer->release();
++    if(peak_pipeline)peak_pipeline->release();
++    if(peak_scratch)peak_scratch->release();
++    active_kernels.clear();
+     if(image_buffer) image_buffer->release();
+     if(buffer) buffer->release();
+     if(queue) queue->release();
+@@ -65,7 +101,8 @@ bool Fft::initBatched(std::size_t n,std::size_t b){return initShape(n,n,b);}
+ bool Fft::initShape(std::size_t w,std::size_t h,std::size_t b){return initialize(w,h,b,false);}
+ bool Fft::initReal(std::size_t w,std::size_t h,std::size_t b){return initialize(w,h,b,true);}
+ bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
+-  if(impl_->planned || impl_->buffer){delete impl_;impl_=new Impl;}
++  std::lock_guard resource_lock(mx::metal::resourceMutex());
++  if(impl_->planned || impl_->device || impl_->buffer){delete impl_;impl_=new Impl;}
+   Impl& s=*impl_;
+   s.profile.w=w;s.profile.h=h;s.profile.batch=b;
+   mx::profile::Span initialize("fft.initialize",s.profile);
+@@ -82,7 +119,7 @@ bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
+   s.profile.bytes=s.bytes;
+   initialize.bytes(s.bytes);
+   // Bound each plan. Consumers additionally bound the number of live plans.
+-  if(s.bytes>(uint64_t(1)<<30)){s.error="FFT shared buffer exceeds 1 GiB budget";return false;}
++
+   Pool pool;
+   s.device=MTL::CreateSystemDefaultDevice();
+   if(!s.device){s.error="no Metal device";return false;}
+@@ -90,8 +127,8 @@ bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
+   s.queue=s.device->newCommandQueue();
+   if(!s.queue){s.error="no Metal command queue";return false;}
+   mx::profile::Span allocation("fft.allocate_zero",s.profile);
+-  s.buffer=s.device->newBuffer(s.bytes,MTL::ResourceStorageModeShared);
+-  if(!s.buffer){allocation.ok=false;s.error="shared FFT allocation failed";return false;}
++  s.buffer=mx::metal::newBuffer(s.device,s.bytes,MTL::ResourceStorageModeShared);
++  if(!s.buffer){allocation.ok=false;s.error="aggregate budget refused or shared FFT allocation failed";return false;}
+   std::memset(s.buffer->contents(),0,s.bytes);
+   allocation.finish();
+   VkFFTConfiguration config={};
+@@ -104,10 +141,11 @@ bool Fft::initialize(std::size_t w,std::size_t h,std::size_t b,bool real) {
+   std::lock_guard lock(plannerMutex());
+   mutex_wait.finish();
+   mx::profile::Span planner("fft.planner",s.profile);
++  s.app_started=true;
+   const VkFFTResult res=initializeVkFFT(&s.app,config);
+   planner.ok=res==VKFFT_SUCCESS;
+   planner.finish();
+-  if(res!=VKFFT_SUCCESS){s.error="initializeVkFFT failed: "+std::to_string(int(res));return false;}
++  if(res!=VKFFT_SUCCESS){deleteVkFFT(&s.app);s.app_started=false;s.error="initializeVkFFT failed: "+std::to_string(int(res));return false;}
+   s.planned=true;
+   initialize.ok=true;
+   return true;
+@@ -121,6 +159,7 @@ std::size_t Fft::rowFloats()const{return impl_->pitch;}
+ bool Fft::submit(){return submitDirection(+1);}
+ bool Fft::submitForward(){return submitDirection(-1);}
+ bool Fft::submitDirection(int direction){
++  std::lock_guard resource_lock(mx::metal::resourceMutex());
+   Impl& s=*impl_;
+   if(!s.planned){s.error="FFT not initialized";return false;}
+   if(s.cb){s.error="FFT already in flight; wait before resubmitting";return false;}
+@@ -142,12 +181,13 @@ bool Fft::submitDirection(int direction){
+   encode.ok=true;
+   return true;
+ }
+-bool Fft::submitConvolution(const float* image,const float* const* kernels){
++bool Fft::submitConvolution(const float* image,const float* const* kernels,const uint64_t* generations){
++  std::lock_guard resource_lock(mx::metal::resourceMutex());
+   Impl& s=*impl_;
+   if(!s.planned||!s.real||!image||!kernels||s.cb){s.error="invalid real convolution state";return false;}
+   const size_t nc=(s.w/2+1)*s.h;
+   for(size_t b=0;b<s.batch;++b)if(!kernels[b]){s.error="null convolution kernel";return false;}
+-  if(s.bytes>(uint64_t(1)<<29)){s.error="convolution exceeds 512 MiB FFT workspace budget";return false;}
++
+   Pool pool;
+   s.profile.direction=1;s.profile.command=mx::profile::nextId();
+   s.command_stage="convolution.gpu";
+@@ -179,18 +219,19 @@ bool Fft::submitConvolution(const float* image,const float* const* kernels){
+     if(!s.product_pipeline){s.error="convolution pipeline creation failed";return false;}
+     compile.ok=true;
+   }
+-  if(!s.image_buffer || !s.kernel_buffer) {
+-    auto allocation_context=s.profile;
+-    allocation_context.bytes=(!s.image_buffer?nc*2*sizeof(float):0)+(!s.kernel_buffer?s.bytes:0);
+-    mx::profile::Span allocation("convolution.allocate_inputs",allocation_context);
+-    if(!s.image_buffer)s.image_buffer=s.device->newBuffer(nc*2*sizeof(float),MTL::ResourceStorageModeShared);
+-    if(!s.kernel_buffer)s.kernel_buffer=s.device->newBuffer(s.bytes,MTL::ResourceStorageModeShared);
+-    if(!s.image_buffer||!s.kernel_buffer){allocation.ok=false;s.error="convolution input allocation failed";return false;}
++  if(!s.image_buffer) {
++    s.image_buffer=mx::metal::newBuffer(s.device,nc*2*sizeof(float),MTL::ResourceStorageModeShared);
++    if(!s.image_buffer){s.error="aggregate budget refused convolution image";return false;}
++  }
++  std::vector<BufferOwner> active;active.reserve(s.batch);
++  for(size_t b=0;b<s.batch;++b){
++    auto buffer=kernelBuffer(s.device,kernels[b],s.w,s.h,generations?generations[b]:0);
++    if(!buffer){s.error="aggregate budget refused convolution kernel";return false;}
++    active.push_back(std::move(buffer));
+   }
+-  auto copy_context=s.profile;copy_context.bytes=(s.batch+1)*nc*2*sizeof(float);
++  auto copy_context=s.profile;copy_context.bytes=nc*2*sizeof(float);
+   mx::profile::Span copy("convolution.copy_inputs",copy_context);
+   std::memcpy(s.image_buffer->contents(),image,nc*2*sizeof(float));
+-  for(size_t b=0;b<s.batch;++b)std::memcpy(static_cast<float*>(s.kernel_buffer->contents())+2*b*nc,kernels[b],nc*2*sizeof(float));
+   copy.finish();
+   mx::profile::Span encode("convolution.encode_commit",s.profile);encode.ok=false;
+   auto* cb=s.queue->commandBuffer();
+@@ -198,11 +239,15 @@ bool Fft::submitConvolution(const float* image,const float* const* kernels){
+   auto* enc=cb->computeCommandEncoder();
+   if(!enc){s.error="no convolution encoder";return false;}
+   enc->setComputePipelineState(s.product_pipeline);
+-  enc->setBuffer(s.image_buffer,0,0);enc->setBuffer(s.kernel_buffer,0,1);enc->setBuffer(s.buffer,0,2);
+-  const uint32_t ncomplex=nc,count=nc*s.batch;
++  const uint32_t ncomplex=nc,count=nc;
+   const float factor=1.0/double(s.w*s.h);
++  enc->setBuffer(s.image_buffer,0,0);
+   enc->setBytes(&ncomplex,sizeof(ncomplex),3);enc->setBytes(&count,sizeof(count),4);enc->setBytes(&factor,sizeof(factor),5);
+-  enc->dispatchThreads(MTL::Size(count,1,1),MTL::Size(256,1,1));enc->endEncoding();
++  for(size_t b=0;b<s.batch;++b){
++    enc->setBuffer(active[b].get(),0,1);enc->setBuffer(s.buffer,b*nc*2*sizeof(float),2);
++    enc->dispatchThreads(MTL::Size(count,1,1),MTL::Size(256,1,1));
++  }
++  enc->endEncoding();
+   // Separate encoders in one command buffer provide resource dependency ordering.
+   enc=cb->computeCommandEncoder();
+   if(!enc){s.error="no inverse FFT encoder";return false;}
+@@ -210,13 +255,93 @@ bool Fft::submitConvolution(const float* image,const float* const* kernels){
+   const auto result=VkFFTAppend(&s.app,+1,&launch);
+   enc->endEncoding();
+   if(result!=VKFFT_SUCCESS){s.error="convolution VkFFTAppend failed: "+std::to_string(int(result));return false;}
+-  s.cb=cb->retain();cb->commit();encode.ok=true;return true;
++  s.active_kernels=std::move(active);s.cb=cb->retain();cb->commit();encode.ok=true;return true;
++}
++
++bool Fft::findPeaks(const unsigned char* const* masks,const size_t* xb,
++    const size_t* yb,bool negative,const float* weights,float* values,
++    size_t* x,size_t* y,unsigned char* found) {
++  std::lock_guard resource_lock(mx::metal::resourceMutex());
++  Impl& s=*impl_;
++#if !defined(__aarch64__) || defined(__AVX__) || defined(__SSE__)
++  s.error="resident fusion requires ARM scalar peak oracle";return false;
++#endif
++  if(!s.planned || !s.real || s.cb || !xb || !yb || !values || !x || !y || !found){s.error="invalid resident peak arguments/state";return false;}
++  for(size_t b=0;b<s.batch;++b)if(xb[b]>s.w || yb[b]>s.h){s.error="resident border exceeds dimensions";return false;}
++  Pool autorelease;
++  if(!s.peak_pipeline){
++    auto* opts=MTL::CompileOptions::alloc()->init();opts->setFastMathEnabled(false);
++    NS::Error* error=nullptr;
++    auto* lib=s.device->newLibrary(NS::String::string(kResidentPeakSource,NS::UTF8StringEncoding),opts,&error);opts->release();
++    if(!lib){s.error="resident peak shader compile failed";if(error)s.error+=std::string(": ")+error->localizedDescription()->utf8String();return false;}
++    auto* fn=lib->newFunction(NS::String::string("resident_peak",NS::UTF8StringEncoding));
++    if(fn){s.peak_pipeline=s.device->newComputePipelineState(fn,&error);fn->release();}lib->release();
++    if(!s.peak_pipeline || s.peak_pipeline->maxTotalThreadsPerThreadgroup()<256){if(s.peak_pipeline){s.peak_pipeline->release();s.peak_pipeline=nullptr;}s.error="resident peak pipeline unavailable";return false;}
++  }
++  struct Peak {uint32_t score,bits,index,pad;};
++  struct Params {uint32_t w,h,pitch,xb,yb,tiles,negative,weighted,masked;};
++  const size_t n=s.w*s.h,max_tiles=(n+4095)/4096;
++  bool masked=false;for(size_t b=0;b<s.batch;++b)masked|=masks && masks[b];
++  const size_t weight_bytes=weights?n*sizeof(float):0;
++  const size_t mask_bytes=masked?s.batch*n:0;
++  const size_t partial_offset=(weight_bytes+mask_bytes+255)&~size_t(255);
++  const size_t bytes=partial_offset+s.batch*max_tiles*sizeof(Peak);
++  if(!s.peak_scratch || s.peak_scratch->length()<bytes){
++    if(s.peak_scratch){s.peak_scratch->release();s.peak_scratch=nullptr;}
++    s.peak_scratch=mx::metal::newBuffer(s.device,bytes,MTL::ResourceStorageModeShared,"resident-peak");
++    if(!s.peak_scratch){s.error="aggregate budget refused resident peak scratch";return false;}
++  }
++  auto* data=static_cast<unsigned char*>(s.peak_scratch->contents());
++  {
++    auto copy_context=s.profile;
++    copy_context.bytes=weight_bytes;
++    if(masked)for(size_t b=0;b<s.batch;++b)if(masks && masks[b])copy_context.bytes+=n;
++    mx::profile::Span copy("fusion.copy_inputs",copy_context);
++    if(weights)std::memcpy(data,weights,weight_bytes);
++    if(masked)for(size_t b=0;b<s.batch;++b)if(masks && masks[b])std::memcpy(data+weight_bytes+b*n,masks[b],n);
++  }
++  s.profile.command=mx::profile::nextId();s.command_stage="fusion.gpu";
++  mx::profile::Span encode("fusion.encode_commit",s.profile);encode.ok=false;
++  auto* cb=s.queue->commandBuffer();if(!cb){s.error="resident peak command unavailable";return false;}
++  auto* enc=cb->computeCommandEncoder();if(!enc){s.error="resident peak encoder unavailable";return false;}
++  enc->setComputePipelineState(s.peak_pipeline);
++  std::vector<size_t> tile_counts(s.batch);
++  for(size_t b=0;b<s.batch;++b){
++    if(xb[b]>=s.w-xb[b] || yb[b]>=s.h-yb[b])continue;
++    const size_t tiles=((s.w-2*xb[b])*(s.h-2*yb[b])+4095)/4096;tile_counts[b]=tiles;
++    const Params p{uint32_t(s.w),uint32_t(s.h),uint32_t(s.pitch),uint32_t(xb[b]),uint32_t(yb[b]),uint32_t(tiles),negative?1u:0u,weights?1u:0u,(masks && masks[b])?1u:0u};
++    enc->setBuffer(s.buffer,b*s.h*s.pitch*sizeof(float),0);
++    enc->setBuffer(s.peak_scratch,masked?weight_bytes+b*n:0,1);
++    enc->setBuffer(s.peak_scratch,0,2);
++    enc->setBuffer(s.peak_scratch,partial_offset+b*max_tiles*sizeof(Peak),3);
++    enc->setBytes(&p,sizeof(p),4);
++    enc->dispatchThreadgroups(MTL::Size(tiles,1,1),MTL::Size(256,1,1));
++  }
++  enc->endEncoding();
++  s.cb=cb->retain();cb->commit();encode.ok=true;encode.finish();
++  if(!s.wait())return false;
++  std::vector<Peak> result(s.batch,Peak{0x00800000u,0,0xffffffffu,0});
++  for(size_t b=0;b<s.batch;++b){
++    const auto* partial=reinterpret_cast<const Peak*>(data+partial_offset+b*max_tiles*sizeof(Peak));
++    for(size_t t=0;t<tile_counts[b];++t){const Peak p=partial[t];auto& r=result[b];if(p.score>r.score || (p.score==r.score && p.index<r.index))r=p;}
++    if(result[b].index!=0xffffffffu && result[b].index>=n){s.error="resident peak invalid GPU index";return false;}
++  }
++  // No more failures or allocations after this point: publish the whole batch.
++  for(size_t b=0;b<s.batch;++b){
++    const auto p=result[b];std::memcpy(values+b,&p.bits,sizeof(float));
++    x[b]=p.index==0xffffffffu?s.w:p.index%s.w;y[b]=p.index==0xffffffffu?s.h:p.index/s.w;
++    found[b]=p.index!=0xffffffffu && p.bits!=0xff7fffffu;
++  }
++  return true;
+ }
+ 
+ bool Fft::Impl::wait(){
++  std::lock_guard resource_lock(mx::metal::resourceMutex());
+   Impl& s=*this;
+   if(!s.cb)return s.planned;
+-  mx::profile::Span blocking(s.command_stage[0]=='c'?"convolution.wait":"fft.wait",s.profile);
++  const char* wait_stage=s.command_stage[0]=='c'?"convolution.wait":
++      (std::strcmp(s.command_stage,"fusion.gpu")==0?"fusion.wait":"fft.wait");
++  mx::profile::Span blocking(wait_stage,s.profile);
+   s.cb->waitUntilCompleted();
+   const bool ok=s.cb->status()==MTL::CommandBufferStatusCompleted;
+   blocking.ok=ok;blocking.finish();
+@@ -224,8 +349,11 @@ bool Fft::Impl::wait(){
+   const double gpu_start=ok?s.cb->GPUStartTime():0,gpu_end=ok?s.cb->GPUEndTime():0;
+   s.gpu_seconds=ok?gpu_end-gpu_start:0;
+   if(s.profile.id && ok) mx::profile::emit(s.command_stage,s.profile,gpu_start,gpu_end,ok);
++  struct ReleaseCommand {
++    Impl& s;
++    ~ReleaseCommand(){s.cb->release();s.cb=nullptr;s.active_kernels.clear();}
++  } release{s};
+   if(!ok){s.error="Metal command buffer failed";if(s.cb->error())s.error+=std::string(": ")+s.cb->error()->localizedDescription()->utf8String();}
+-  s.cb->release();s.cb=nullptr;
+   return ok;
+ }
+ bool Fft::wait(){return impl_->wait();}
+diff --git a/metal/mxvkfft.h b/metal/mxvkfft.h
+index 57f787be..481fcb73 100644
+--- a/metal/mxvkfft.h
++++ b/metal/mxvkfft.h
+@@ -29,7 +29,16 @@ class Fft {
+   bool submitForward();
+   // One GPU product kernel + batched C2R in a single command-buffer submission.
+   // Input is one half-spectrum; kernels contains batch() half-spectra.
+-  bool submitConvolution(const float* image_fft, const float* const* kernel_ffts);
++  bool submitConvolution(const float* image_fft, const float* const* kernel_ffts,
++                         const std::uint64_t* generations = nullptr);
++  static void clearKernelCache();
++  struct KernelStats { std::uint64_t hits, uploads, bytes, uncached_uploads; std::size_t entries; };
++  static KernelStats kernelStats();
++  // Synchronous weighting/reduction on resident padded real planes. Does not
++  // modify the image. No-peak is success with found=0 and CPU coordinates.
++  bool findPeaks(const unsigned char* const* masks, const std::size_t* xb,
++      const std::size_t* yb, bool negative, const float* weights, float* values,
++      std::size_t* x, std::size_t* y, unsigned char* found);
+   bool wait();
+   double gpuSeconds() const;
+   // Trace linkage only; no clock or Metal operation when profiling is off.
+diff --git a/metal/prediction_schedule_probe.cpp b/metal/prediction_schedule_probe.cpp
+new file mode 100644
+index 00000000..c57c96df
+--- /dev/null
++++ b/metal/prediction_schedule_probe.cpp
+@@ -0,0 +1,23 @@
++// Scheduling state used by the PRODUCTION prediction session (no FFT mock math).
++#include "mxpredictioncompletion.h"
++#include <cstdio>
++#include <initializer_list>
++#include <stdexcept>
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++int main(){
++ for(bool serial:{false,true})for(bool submit_ok:{false,true})for(bool wait_ok:{false,true}){
++  mx::metal::PredictionCompletion pending;int waits=0;
++  auto wait=[&]()noexcept{++waits;return wait_ok;};
++  pending.submitted(submit_ok,serial,wait);
++  CHECK(waits==(submit_ok&&serial?1:0));
++  CHECK(pending.finish(wait)==(submit_ok&&wait_ok));
++  CHECK(waits==1);
++  CHECK(!pending.finish(wait));CHECK(waits==1);
++ }
++ for(bool serial:{false,true}){
++  mx::metal::PredictionCompletion pending;int waits=0;
++  auto throwing=[&]()->bool{++waits;throw std::runtime_error("wait failure");};
++  pending.submitted(true,serial,throwing);CHECK(!pending.finish(throwing));CHECK(waits==1);
++ }
++ std::puts("PASS serial/overlapped completion: wait once, latch failures, preserve later result accounting");
++}
+diff --git a/metal/reuse_probe.cpp b/metal/reuse_probe.cpp
+new file mode 100644
+index 00000000..00009ea1
+--- /dev/null
++++ b/metal/reuse_probe.cpp
+@@ -0,0 +1,137 @@
++// Production plan/buffer cache, atomic refusal, draining and shared budget gate.
++#include "mxconvolve.h"
++#include "mxvkfft.h"
++#include "mxbudget.h"
++#include "mxpeak.h"
++#include "mxpredict.h"
++#define DUCC0_MX_PREDICTION_PROVIDER
++#include "ducc0/wgridder/mx_prediction.h"
++#include <atomic>
++#include <complex>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <thread>
++#include <memory>
++#include <vector>
++#define CHECK(x) do{if(!(x)){std::fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++int main(){
++  unsetenv("MX_METAL_NO_PLAN_CACHE");
++  mx_convolve_clear_cache();
++  MxConvolveStats before{};mx_convolve_get_stats(&before);
++  for(size_t b:{1,2,1,3,2}){
++    const size_t w=64,h=48,nc=(w/2+1)*h;
++    std::vector<std::complex<float>> image(nc),kernel(nc,{1,0});image[0]={float(w*h),0};
++    auto saved=image;auto saved_kernel=kernel;
++    std::vector<float> output(w*h*b,-7);std::vector<float*> dest;std::vector<const std::complex<float>*> kernels;
++    for(size_t i=0;i<b;++i){dest.push_back(output.data()+i*w*h);kernels.push_back(kernel.data());}
++    CHECK(mx_convolve_many(dest.data(),image.data(),kernels.data(),w,h,b)==1);
++    CHECK(saved==image && saved_kernel==kernel);
++    for(float f:output)CHECK(std::abs(f-1)<5e-6);
++  }
++  MxConvolveStats after{};mx_convolve_get_stats(&after);
++  CHECK(after.pool_hits>=before.pool_hits+2 && after.pool_misses==before.pool_misses+3);
++  // Same immutable kernel is deduplicated across batch plans. Replacing the
++  // owner revision at the SAME host address must upload fresh contents.
++  {
++    const size_t w=64,h=48,nc=(w/2+1)*h;
++    std::vector<std::complex<float>> image(nc),kernel(nc,{1,0});image[0]={float(w*h),0};
++    std::vector<float> out(w*h*2);float* dst[]={out.data(),out.data()+w*h};
++    const std::complex<float>* k[]={kernel.data(),kernel.data()};uint64_t ids[]={10001,10001};
++    MxConvolveStats start{},end{};mx_convolve_get_stats(&start);
++    CHECK(mx_convolve_many_owned(dst,image.data(),k,ids,w,h,1));
++    CHECK(mx_convolve_many_owned(dst,image.data(),k,ids,w,h,2));
++    mx_convolve_get_stats(&end);CHECK(end.kernel_uploads==start.kernel_uploads+1 && end.kernel_hits>=start.kernel_hits+2);
++    std::fill(kernel.begin(),kernel.end(),std::complex<float>{2,0});ids[0]=10002;
++    CHECK(mx_convolve_many_owned(dst,image.data(),k,ids,w,h,1));for(size_t i=0;i<w*h;++i)CHECK(std::abs(out[i]-2)<5e-6);
++    // Unknown/mutable inputs must upload on EVERY call, regardless of address.
++    CHECK(mx_convolve_many(dst,image.data(),k,w,h,1));
++    std::fill(kernel.begin(),kernel.end(),std::complex<float>{3,0});
++    CHECK(mx_convolve_many(dst,image.data(),k,w,h,1));for(size_t i=0;i<w*h;++i)CHECK(std::abs(out[i]-3)<5e-6);
++    // An unrelated consumer requests the entire budget: idle plans AND kernels
++    // yield, then a new convolution refuses without partially changing outputs.
++    const auto limit=mx::metal::budgetStats().limit;
++    CHECK(mx::metal::reserveBytes(limit));
++    CHECK(mx::metal::budgetStats().used==limit && mx::metal::budgetStats().evictions>0);
++    std::fill(out.begin(),out.end(),-7);
++    CHECK(!mx_convolve_many(dst,image.data(),k,w,h,1));for(float value:out)CHECK(value==-7);
++    mx::metal::releaseBytes(limit);
++  }
++  mx_convolve_clear_cache();CHECK(mx::metal::budgetStats().used==0);
++  // Both commands retain 64 distinct generations until their owners wait.
++  // Cache pressure must keep the second batch uncached, never grow past 64.
++  {
++    mx::vk::Fft first,second;
++    CHECK(first.initReal(64,48,64) && second.initReal(64,48,64));
++    std::vector<float> image(2*33*48,0),kernel(2*33*48,0);
++    image[0]=64*48;kernel[0]=1;
++    std::vector<const float*> kernels(64,kernel.data());
++    std::vector<uint64_t> a(64),b(64);
++    for(size_t i=0;i<64;++i){a[i]=20000+i;b[i]=21000+i;}
++    CHECK(first.submitConvolution(image.data(),kernels.data(),a.data()));
++    CHECK(mx::vk::Fft::kernelStats().entries==64);
++    auto before_uncached=mx::vk::Fft::kernelStats().uncached_uploads;
++    CHECK(second.submitConvolution(image.data(),kernels.data(),b.data()));
++    CHECK(mx::vk::Fft::kernelStats().entries==64);
++    CHECK(mx::vk::Fft::kernelStats().uncached_uploads==before_uncached+64);
++    mx::vk::Fft::clearKernelCache();CHECK(mx::vk::Fft::kernelStats().entries==64);
++    CHECK(first.wait());
++    mx::vk::Fft::clearKernelCache();CHECK(mx::vk::Fft::kernelStats().entries==0);
++    CHECK(second.wait());
++    // Completed uncached entries do not silently become resident.
++    CHECK(mx::vk::Fft::kernelStats().entries==0);
++    CHECK(second.submitConvolution(image.data(),kernels.data(),b.data()));
++    CHECK(second.wait());CHECK(mx::vk::Fft::kernelStats().entries==64);
++    for(auto* f:{&first,&second})for(size_t b=0;b<64;++b)
++      for(size_t row=0;row<48;++row)for(size_t x=0;x<64;++x)
++        CHECK(std::abs(f->data()[(b*48+row)*f->rowFloats()+x]-1)<5e-6);
++  }
++  mx_convolve_clear_cache();CHECK(mx::metal::budgetStats().used==0);
++
++  {
++    MxConvolveStats start{},end{};mx_convolve_get_stats(&start);
++    auto evictions=mx::metal::budgetStats().evictions;
++    for(size_t w:{80,96,112,128,144,80}){
++      const size_t h=48,nc=(w/2+1)*h;
++      std::vector<std::complex<float>> image(nc),kernel(nc,{1,0});image[0]={float(w*h),0};
++      std::vector<float> out(w*h);float* dst[]={out.data()};const std::complex<float>* k[]={kernel.data()};
++      CHECK(mx_convolve_many(dst,image.data(),k,w,h,1));
++      for(float value:out)CHECK(std::abs(value-1)<5e-6);
++    }
++    mx_convolve_get_stats(&end);CHECK(end.pool_misses==start.pool_misses+6);
++    CHECK(mx::metal::budgetStats().evictions>=evictions+2);
++  }
++  mx_convolve_clear_cache();CHECK(mx::metal::budgetStats().used==0);
++  // Destruction of in-flight work must drain before actual buffer reservations disappear.
++  {mx::vk::Fft f;CHECK(f.initShape(64,48));CHECK(f.submitForward());
++    auto remaining=mx::metal::budgetStats().limit-mx::metal::budgetStats().used;
++    CHECK(mx::metal::reserveBytes(remaining));CHECK(!mx::metal::reserveBytes(1));
++    mx::metal::releaseBytes(remaining);
++  }
++  CHECK(mx::metal::budgetStats().used==0);
++  std::atomic<bool> ok{true};std::vector<std::thread> threads;
++  for(int i=0;i<4;++i)threads.emplace_back([&]{mx::vk::Fft f;if(!f.initShape(64,48)||!f.submitForward()||!f.wait())ok=false;});
++  for(auto& t:threads)t.join();CHECK(ok);
++  mx_convolve_clear_cache();CHECK(mx::metal::budgetStats().used==0);
++  {
++    // A real two-plane prediction session stays pinned while convolution and
++    // the legacy peak consumer reserve additional storage from the SAME gate.
++    mx_predict_register();
++    std::unique_ptr<ducc0::detail_gridder::PredictionSession> prediction(mx_prediction_create(48,64,true));
++    CHECK(prediction);
++    std::fill_n(prediction->data(0),64*48,std::complex<float>{1,0});CHECK(prediction->submit(0,0));
++    std::vector<std::complex<float>> image(33*48),kernel(33*48,{1,0});image[0]={float(64*48),0};
++    std::vector<float> out(64*48);float* dst[]={out.data()};const std::complex<float>* k[]={kernel.data()};
++    CHECK(mx_convolve_many(dst,image.data(),k,64,48,1));
++    float value=-1;size_t x=999,y=999;CHECK(mx_peak_find(out.data(),64,48,nullptr,1,0,0,&value,&x,&y));
++    CHECK(value==1 && x==0 && y==0);CHECK(prediction->wait(0,0));
++  }
++  {const auto limit=mx::metal::budgetStats().limit;CHECK(mx::metal::reserveBytes(limit));mx::metal::releaseBytes(limit);}
++  CHECK(mx::metal::budgetStats().used==0);
++  setenv("MX_METAL_NO_PLAN_CACHE","1",1);setenv("MX_METAL_NO_KERNEL_CACHE","1",1);
++  {std::vector<std::complex<float>> spec(33*48,{1,0});std::vector<float> output(64*48);float* dst[]={output.data()};const std::complex<float>* kernels[]={spec.data()};uint64_t id=999;
++   CHECK(mx_convolve_many_owned(dst,spec.data(),kernels,&id,64,48,1));}
++  CHECK(mx::metal::budgetStats().used==0);
++  unsetenv("MX_METAL_NO_PLAN_CACHE");unsetenv("MX_METAL_NO_KERNEL_CACHE");
++  std::puts("PASS real GPU reuse/revisit, input preservation, concurrent consumers, drain");
++}
+diff --git a/metal/review_source_regression.py b/metal/review_source_regression.py
+new file mode 100644
+index 00000000..163836c1
+--- /dev/null
++++ b/metal/review_source_regression.py
+@@ -0,0 +1,31 @@
++"""Source-only checks for native cleanup/scope when no device is available.
++These are NOT GPU validation; failure_probe and fusion probes are native gates.
++"""
++from pathlib import Path
++import re
++root = Path(__file__).resolve().parent
++vk = (root / 'thirdparty/vkFFT.h').read_text()
++phase = vk[vk.index('static inline VkFFTResult VkFFTGeneratePhaseVectors('):]
++phase = phase[:phase.index('#ifdef VkFFT_use_FP128_Bluestein_RaderFFT')]
++checks = []
++for name in ('bufferBluestein', 'bufferBluesteinFFT', 'bufferBluesteinIFFT'):
++    checks.append((f'immediate {name} refusal', bool(re.search(
++        rf'app->{name}\[axis_id\] = mx::metal::newBuffer[^;]+;\s*if \(!app->{name}\[axis_id\]\) return VKFFT_ERROR_FAILED_TO_ALLOCATE;', phase))))
++for start in ['VkFFTGeneratePhaseVectors(', 'VkFFTGenerateRaderFFTKernel(']:
++    # Inspect only Metal planning blocks that create a compute encoder.
++    section = vk[vk.index('static inline VkFFTResult '+start):]
++    end = section.find('\nstatic inline ', 1)
++    if end != -1:
++        section = section[:end]
++    encoders = list(re.finditer(r'MTL::ComputeCommandEncoder\* commandEncoder = mx::metal::preparationEncoder\([^;]+;', section))
++    checks.append((f'preparation encoder sites {start}', len(encoders) == (3 if start == 'VkFFTGeneratePhaseVectors(' else 1)))
++    for i, match in enumerate(encoders):
++        tail = section[match.end():]
++        tail = tail[:tail.index('commandBuffer->commit();')]
++        checks.append((f'encoder guard {start} #{i}', 'EncoderScope' in tail and bool(re.search(r'if \(resFFT != VKFFT_SUCCESS\) \{\s*encoder_scope.end\(\);', tail))))
++cc = (root / '../../radler/cpp/algorithms/multiscale/multiscale_transforms.cc').resolve().read_text()
++setter = cc[cc.index('void MultiScaleTransforms::SetFusedTransformHook'):cc.index('bool MultiScaleTransforms::HasFusedTransformHook')]
++checks.append(('ARM scalar-only hook registration', '#if defined(__aarch64__) && !defined(__AVX__) && !defined(__SSE__)' in setter))
++for name, ok in checks:
++    print(('PASS ' if ok else 'FAIL ') + name)
++raise SystemExit(0 if all(ok for _, ok in checks) else 1)
+diff --git a/metal/thirdparty/vkFFT.h b/metal/thirdparty/vkFFT.h
+index c106b3bc..5e99f45b 100644
+--- a/metal/thirdparty/vkFFT.h
++++ b/metal/thirdparty/vkFFT.h
+@@ -1,3 +1,4 @@
++// mx modification: every Metal buffer reserves aggregate backend budget before allocation.
+ // This file is part of VkFFT, a Vulkan Fast Fourier Transform library
+ //
+ // Copyright (C) 2020 - present Dmitrii Tolmachev <dtolm96@gmail.com>
+@@ -28101,21 +28102,24 @@ static inline VkFFTResult VkFFT_transferDataFromCPU(VkFFTApplication* app, void*
+ 		return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ 	}
+ #elif(VKFFT_BACKEND==5)
+-	MTL::Buffer* stagingBuffer = app->configuration.device->newBuffer(cpu_arr, transferSize, MTL::ResourceStorageModeShared);
+-	MTL::CommandBuffer* copyCommandBuffer = app->configuration.queue->commandBuffer();
+-	if (copyCommandBuffer == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
+-	MTL::BlitCommandEncoder* blitCommandEncoder = copyCommandBuffer->blitCommandEncoder();
+-	if (blitCommandEncoder == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
++	if (!input_buffer || !((MTL::Buffer**)input_buffer)[0]) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
++	MTL::Buffer* stagingBuffer = mx::metal::newBuffer(app->configuration.device,cpu_arr, transferSize, MTL::ResourceStorageModeShared);
++	if (!stagingBuffer) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
++	MTL::CommandBuffer* copyCommandBuffer = mx::metal::preparationCommand(app->configuration.queue, "vkfft-upload-command");
++	if (copyCommandBuffer == 0) { stagingBuffer->release(); return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST; }
++	MTL::BlitCommandEncoder* blitCommandEncoder = mx::metal::transferEncoder(copyCommandBuffer, "vkfft-upload-encoder");
++	if (blitCommandEncoder == 0) { stagingBuffer->release(); return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST; }
+ 	MTL::Buffer* buffer = ((MTL::Buffer**)input_buffer)[0];
+ 	blitCommandEncoder->copyFromBuffer((MTL::Buffer*)stagingBuffer, 0, (MTL::Buffer*)buffer, 0, transferSize);
+ 	blitCommandEncoder->endEncoding();
+ 	copyCommandBuffer->commit();
+-	copyCommandBuffer->waitUntilCompleted();
++	const bool completed = mx::metal::completedPreparation(copyCommandBuffer, "vkfft-upload-completion");
+ 	// mx patch: blitCommandEncoder and copyCommandBuffer are autoreleased
+ 	// objects under Apple's metal-cpp, so releasing them here double-frees at
+ 	// the pool drain (EXC_BAD_ACCESS in objc_release). Only stagingBuffer,
+ 	// which came from newBuffer(), is owned here.
+ 	stagingBuffer->release();
++	if (!completed) return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ #endif
+ 	return resFFT;
+ }
+@@ -28216,19 +28220,22 @@ static inline VkFFTResult VkFFT_transferDataToCPU(VkFFTApplication* app, void* c
+ 		return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ 	}
+ #elif(VKFFT_BACKEND==5)
+-	MTL::Buffer* stagingBuffer = app->configuration.device->newBuffer(transferSize, MTL::ResourceStorageModeShared);
+-	MTL::CommandBuffer* copyCommandBuffer = app->configuration.queue->commandBuffer();
+-	if (copyCommandBuffer == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
+-	MTL::BlitCommandEncoder* blitCommandEncoder = copyCommandBuffer->blitCommandEncoder();
+-	if (blitCommandEncoder == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
++	if (!output_buffer || !((MTL::Buffer**)output_buffer)[0]) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
++	MTL::Buffer* stagingBuffer = mx::metal::newBuffer(app->configuration.device,transferSize, MTL::ResourceStorageModeShared);
++	if (!stagingBuffer) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
++	MTL::CommandBuffer* copyCommandBuffer = mx::metal::preparationCommand(app->configuration.queue, "vkfft-download-command");
++	if (copyCommandBuffer == 0) { stagingBuffer->release(); return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST; }
++	MTL::BlitCommandEncoder* blitCommandEncoder = mx::metal::transferEncoder(copyCommandBuffer, "vkfft-download-encoder");
++	if (blitCommandEncoder == 0) { stagingBuffer->release(); return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST; }
+ 	MTL::Buffer* buffer = ((MTL::Buffer**)output_buffer)[0];
+ 	blitCommandEncoder->copyFromBuffer((MTL::Buffer*)buffer, 0, (MTL::Buffer*)stagingBuffer, 0, transferSize);
+ 	blitCommandEncoder->endEncoding();
+ 	copyCommandBuffer->commit();
+-	copyCommandBuffer->waitUntilCompleted();
++	const bool completed = mx::metal::completedPreparation(copyCommandBuffer, "vkfft-download-completion");
+ 	// mx patch: see VkFFT_transferDataToGPU above (autoreleased Metal objects).
+-	memcpy(cpu_arr, stagingBuffer->contents(), transferSize);
++	if (completed) memcpy(cpu_arr, stagingBuffer->contents(), transferSize);
+ 	stagingBuffer->release();
++	if (!completed) return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ #endif
+ 	return resFFT;
+ }
+@@ -28415,7 +28422,7 @@ static inline void deleteVkFFT(VkFFTApplication* app) {
+ 				if (res == ZE_RESULT_SUCCESS) app->configuration.tempBuffer[0] = 0;
+ 			}
+ #elif(VKFFT_BACKEND==5)
+-			if (app->configuration.tempBuffer[0] != 0) {
++			if (app->configuration.tempBuffer && app->configuration.tempBuffer[0] != 0) {
+ 				((MTL::Buffer*)app->configuration.tempBuffer[0])->release();
+ 			}
+ #endif
+@@ -31645,13 +31652,16 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 		if (res != ZE_RESULT_SUCCESS) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
+ 	}
+ #elif(VKFFT_BACKEND==5)
+-	app->bufferBluestein[axis_id] = app->configuration.device->newBuffer(bufferSize, MTL::ResourceStorageModePrivate);
++	app->bufferBluestein[axis_id] = mx::metal::newBuffer(app->configuration.device,bufferSize, MTL::ResourceStorageModePrivate, "bluestein-phase");
++	if (!app->bufferBluestein[axis_id]) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
+ 
+ 	if (!app->configuration.makeInversePlanOnly) {
+-		app->bufferBluesteinFFT[axis_id] = app->configuration.device->newBuffer(bufferSize, MTL::ResourceStorageModePrivate);
++		app->bufferBluesteinFFT[axis_id] = mx::metal::newBuffer(app->configuration.device,bufferSize, MTL::ResourceStorageModePrivate, "bluestein-forward");
++		if (!app->bufferBluesteinFFT[axis_id]) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
+ 	}
+ 	if (!app->configuration.makeForwardPlanOnly) {
+-		app->bufferBluesteinIFFT[axis_id] = app->configuration.device->newBuffer(bufferSize, MTL::ResourceStorageModePrivate);
++		app->bufferBluesteinIFFT[axis_id] = mx::metal::newBuffer(app->configuration.device,bufferSize, MTL::ResourceStorageModePrivate, "bluestein-inverse");
++		if (!app->bufferBluesteinIFFT[axis_id]) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
+ 	}
+ #endif
+ #ifdef VkFFT_use_FP128_Bluestein_RaderFFT
+@@ -31828,12 +31838,27 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 		kernelPreparationConfiguration.isInputFormatted = 1;
+ 		resFFT = initializeVkFFT(&kernelPreparationApplication, kernelPreparationConfiguration);
+ 		if (resFFT != VKFFT_SUCCESS) return resFFT;
++#if(VKFFT_BACKEND==5)
++        // Arm only after success: initializeVkFFT owns its failure cleanup.
++        struct PreparationOwner {
++            VkFFTApplication* p;
++            ~PreparationOwner() { deleteVkFFT(p); }
++        } preparationOwner{&kernelPreparationApplication};
++#endif
+ 		if (kernelPreparationConfiguration.loadApplicationFromString) {
+ 			app->currentApplicationStringPos += kernelPreparationApplication.currentApplicationStringPos;
+ 		}
+ 		void* phaseVectors = malloc(bufferSize);
++#if(VKFFT_BACKEND==5)
++        struct PhaseVectorsOwner {
++            void* p;
++            ~PhaseVectorsOwner() { free(p); }
++        } phaseVectorsOwner{phaseVectors};
++#endif
+ 		if (!phaseVectors) {
++#if(VKFFT_BACKEND!=5)
+ 			deleteVkFFT(&kernelPreparationApplication);
++#endif
+ 			return VKFFT_ERROR_MALLOC_FAILED;
+ 		}
+ 		uint64_t phaseVectorsNonZeroSize = (((app->configuration.performDCT == 4) && (app->configuration.size[axis_id] % 2 == 0)) || ((FFTPlan->multiUploadR2C) && (axis_id == 0))) ? app->configuration.size[axis_id] / 2 : app->configuration.size[axis_id];
+@@ -31870,8 +31895,12 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 			}
+ 			resFFT = VkFFT_transferDataFromCPU(app, phaseVectors, &app->bufferBluestein[axis_id], bufferSize);
+ 			if (resFFT != VKFFT_SUCCESS) {
++#if(VKFFT_BACKEND!=5)
+ 				free(phaseVectors);
++#endif
++#if(VKFFT_BACKEND!=5)
+ 				deleteVkFFT(&kernelPreparationApplication);
++#endif
+ 				return resFFT;
+ 			}
+ #if(VKFFT_BACKEND==0)
+@@ -32026,10 +32055,11 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 			}
+ #elif(VKFFT_BACKEND==5)
+ 			VkFFTLaunchParams launchParams = {};
+-			MTL::CommandBuffer* commandBuffer = app->configuration.queue->commandBuffer();
++			MTL::CommandBuffer* commandBuffer = mx::metal::preparationCommand(app->configuration.queue, "bluestein-multi-command");
+ 			if (commandBuffer == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
+-			MTL::ComputeCommandEncoder* commandEncoder = commandBuffer->computeCommandEncoder();
++			MTL::ComputeCommandEncoder* commandEncoder = mx::metal::preparationEncoder(commandBuffer, "bluestein-multi-encoder");
+ 			if (commandEncoder == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
++			mx::metal::EncoderScope encoder_scope(commandEncoder);
+ 
+ 			launchParams.commandBuffer = commandBuffer;
+ 			launchParams.commandEncoder = commandEncoder;
+@@ -32037,13 +32067,13 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 			launchParams.buffer = &app->bufferBluesteinIFFT[axis_id];
+ 			resFFT = VkFFTAppend(&kernelPreparationApplication, -1, &launchParams);
+ 			if (resFFT != VKFFT_SUCCESS) {
+-				free(phaseVectors);
+-				deleteVkFFT(&kernelPreparationApplication);
++				encoder_scope.end();
+ 				return resFFT;
+ 			}
+-			commandEncoder->endEncoding();
++			encoder_scope.end();
+ 			commandBuffer->commit();
+-			commandBuffer->waitUntilCompleted();
++			if (!mx::metal::completedPreparation(commandBuffer, "bluestein-multi-completion"))
++                return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ 			// mx: computeCommandEncoder() returns autoreleased storage.
+ 			// mx: commandBuffer() returns autoreleased storage.
+ #endif
+@@ -32095,8 +32125,12 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 		}
+ 		resFFT = VkFFT_transferDataFromCPU(app, phaseVectors, &app->bufferBluestein[axis_id], bufferSize);
+ 		if (resFFT != VKFFT_SUCCESS) {
++#if(VKFFT_BACKEND!=5)
+ 			free(phaseVectors);
++#endif
++#if(VKFFT_BACKEND!=5)
+ 			deleteVkFFT(&kernelPreparationApplication);
++#endif
+ 			return resFFT;
+ 		}
+ #if(VKFFT_BACKEND==0)
+@@ -32401,44 +32435,46 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 		VkFFTLaunchParams launchParams = {};
+ 		launchParams.inputBuffer = &app->bufferBluestein[axis_id];
+ 		if (!app->configuration.makeInversePlanOnly) {
+-			MTL::CommandBuffer* commandBuffer = app->configuration.queue->commandBuffer();
++			MTL::CommandBuffer* commandBuffer = mx::metal::preparationCommand(app->configuration.queue, "bluestein-forward-command");
+ 			if (commandBuffer == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
+-			MTL::ComputeCommandEncoder* commandEncoder = commandBuffer->computeCommandEncoder();
++			MTL::ComputeCommandEncoder* commandEncoder = mx::metal::preparationEncoder(commandBuffer, "bluestein-forward-encoder");
+ 			if (commandEncoder == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
++			mx::metal::EncoderScope encoder_scope(commandEncoder);
+ 
+ 			launchParams.commandBuffer = commandBuffer;
+ 			launchParams.commandEncoder = commandEncoder;
+ 			launchParams.buffer = &app->bufferBluesteinFFT[axis_id];
+ 			resFFT = VkFFTAppend(&kernelPreparationApplication, -1, &launchParams);
+ 			if (resFFT != VKFFT_SUCCESS) {
+-				free(phaseVectors);
+-				deleteVkFFT(&kernelPreparationApplication);
++				encoder_scope.end();
+ 				return resFFT;
+ 			}
+-			commandEncoder->endEncoding();
++			encoder_scope.end();
+ 			commandBuffer->commit();
+-			commandBuffer->waitUntilCompleted();
++			if (!mx::metal::completedPreparation(commandBuffer, "bluestein-forward-completion"))
++                return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ 			// mx: computeCommandEncoder() returns autoreleased storage.
+ 			// mx: commandBuffer() returns autoreleased storage.
+ 		}
+ 		if ((FFTPlan->numAxisUploads[axis_id] == 1) && (!app->configuration.makeForwardPlanOnly)) {
+-			MTL::CommandBuffer* commandBuffer = app->configuration.queue->commandBuffer();
++			MTL::CommandBuffer* commandBuffer = mx::metal::preparationCommand(app->configuration.queue, "bluestein-inverse-command");
+ 			if (commandBuffer == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
+-			MTL::ComputeCommandEncoder* commandEncoder = commandBuffer->computeCommandEncoder();
++			MTL::ComputeCommandEncoder* commandEncoder = mx::metal::preparationEncoder(commandBuffer, "bluestein-inverse-encoder");
+ 			if (commandEncoder == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
++			mx::metal::EncoderScope encoder_scope(commandEncoder);
+ 
+ 			launchParams.commandBuffer = commandBuffer;
+ 			launchParams.commandEncoder = commandEncoder;
+ 			launchParams.buffer = &app->bufferBluesteinIFFT[axis_id];
+ 			resFFT = VkFFTAppend(&kernelPreparationApplication, 1, &launchParams);
+ 			if (resFFT != VKFFT_SUCCESS) {
+-				free(phaseVectors);
+-				deleteVkFFT(&kernelPreparationApplication);
++				encoder_scope.end();
+ 				return resFFT;
+ 			}
+-			commandEncoder->endEncoding();
++			encoder_scope.end();
+ 			commandBuffer->commit();
+-			commandBuffer->waitUntilCompleted();
++			if (!mx::metal::completedPreparation(commandBuffer, "bluestein-inverse-completion"))
++                return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ 			// mx: computeCommandEncoder() returns autoreleased storage.
+ 			// mx: commandBuffer() returns autoreleased storage.
+ 		}
+@@ -32453,13 +32489,19 @@ static inline VkFFTResult VkFFTGeneratePhaseVectors(VkFFTApplication* app, VkFFT
+ 			app->applicationBluesteinStringSize[axis_id] = kernelPreparationApplication.applicationStringSize;
+ 			app->applicationBluesteinString[axis_id] = calloc(app->applicationBluesteinStringSize[axis_id], 1);
+ 			if (!app->applicationBluesteinString[axis_id]) {
++#if(VKFFT_BACKEND!=5)
+ 				deleteVkFFT(&kernelPreparationApplication);
++#endif
+ 				return VKFFT_ERROR_MALLOC_FAILED;
+ 			}
+ 			memcpy(app->applicationBluesteinString[axis_id], kernelPreparationApplication.saveApplicationString, app->applicationBluesteinStringSize[axis_id]);
+ 		}
++#if(VKFFT_BACKEND!=5)
+ 		deleteVkFFT(&kernelPreparationApplication);
++#endif
++#if(VKFFT_BACKEND!=5)
+ 		free(phaseVectors);
++#endif
+ #ifdef VkFFT_use_FP128_Bluestein_RaderFFT
+ 	}
+ #endif
+@@ -32587,6 +32629,13 @@ static inline VkFFTResult VkFFTGenerateRaderFFTKernel(VkFFTApplication* app, VkF
+ 				kernelPreparationConfiguration.bufferSize = &bufferSize;
+ 				resFFT = initializeVkFFT(&kernelPreparationApplication, kernelPreparationConfiguration);
+ 				if (resFFT != VKFFT_SUCCESS) return resFFT;
++#if(VKFFT_BACKEND==5)
++        // Arm only after success: initializeVkFFT owns its failure cleanup.
++        struct PreparationOwner {
++            VkFFTApplication* p;
++            ~PreparationOwner() { deleteVkFFT(p); }
++        } preparationOwner{&kernelPreparationApplication};
++#endif
+ 
+ #if(VKFFT_BACKEND==0)
+ 				VkDeviceMemory bufferRaderFFTDeviceMemory;
+@@ -32600,7 +32649,11 @@ static inline VkFFTResult VkFFTGenerateRaderFFTKernel(VkFFTApplication* app, VkF
+ #elif(VKFFT_BACKEND==4)
+ 				void* bufferRaderFFT;
+ #elif(VKFFT_BACKEND==5)
+-				MTL::Buffer* bufferRaderFFT;
++				MTL::Buffer* bufferRaderFFT = nullptr;
++                struct TempBufferOwner {
++                    MTL::Buffer*& p;
++                    ~TempBufferOwner(){if(p)p->release();}
++                } tempBufferOwner{bufferRaderFFT};
+ #endif
+ #if(VKFFT_BACKEND==0)
+ 				VkResult res = VK_SUCCESS;
+@@ -32627,13 +32680,19 @@ static inline VkFFTResult VkFFTGenerateRaderFFTKernel(VkFFTApplication* app, VkF
+ 				res = zeMemAllocDevice(app->configuration.context[0], &device_desc, bufferSize, sizeof(float), app->configuration.device[0], &bufferRaderFFT);
+ 				if (res != ZE_RESULT_SUCCESS) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
+ #elif(VKFFT_BACKEND==5)
+-				bufferRaderFFT = app->configuration.device->newBuffer(bufferSize, MTL::ResourceStorageModePrivate);
++				bufferRaderFFT = mx::metal::newBuffer(app->configuration.device,bufferSize, MTL::ResourceStorageModePrivate);
+ #endif
+ 
+ 				resFFT = VkFFT_transferDataFromCPU(app, axis->specializationConstants.raderContainer[i].raderFFTkernel, &bufferRaderFFT, bufferSize);
+ 				if (resFFT != VKFFT_SUCCESS) {
+ 					free(axis->specializationConstants.raderContainer[i].raderFFTkernel);
++#if(VKFFT_BACKEND==5)
++                    app->raderFFTkernel[write_id]=0;
++                    axis->specializationConstants.raderContainer[i].raderFFTkernel=0;
++#endif
++#if(VKFFT_BACKEND!=5)
+ 					deleteVkFFT(&kernelPreparationApplication);
++#endif
+ 					return resFFT;
+ 				}
+ #if(VKFFT_BACKEND==0)
+@@ -32783,30 +32842,42 @@ static inline VkFFTResult VkFFTGenerateRaderFFTKernel(VkFFTApplication* app, VkF
+ 				}
+ #elif(VKFFT_BACKEND==5)
+ 				VkFFTLaunchParams launchParams = {};
+-				MTL::CommandBuffer* commandBuffer = app->configuration.queue->commandBuffer();
++				MTL::CommandBuffer* commandBuffer = mx::metal::preparationCommand(app->configuration.queue, "rader-prepare-command");
+ 				if (commandBuffer == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
+-				MTL::ComputeCommandEncoder* commandEncoder = commandBuffer->computeCommandEncoder();
++				MTL::ComputeCommandEncoder* commandEncoder = mx::metal::preparationEncoder(commandBuffer, "rader-prepare-encoder");
+ 				if (commandEncoder == 0) return VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST;
++				mx::metal::EncoderScope encoder_scope(commandEncoder);
+ 
+ 				launchParams.commandBuffer = commandBuffer;
+ 				launchParams.commandEncoder = commandEncoder;
+ 				launchParams.buffer = &bufferRaderFFT;
+ 				resFFT = VkFFTAppend(&kernelPreparationApplication, -1, &launchParams);
+ 				if (resFFT != VKFFT_SUCCESS) {
++					encoder_scope.end();
+ 					free(axis->specializationConstants.raderContainer[i].raderFFTkernel);
+-					deleteVkFFT(&kernelPreparationApplication);
++#if(VKFFT_BACKEND==5)
++                    app->raderFFTkernel[write_id]=0;
++                    axis->specializationConstants.raderContainer[i].raderFFTkernel=0;
++#endif
+ 					return resFFT;
+ 				}
+-				commandEncoder->endEncoding();
++				encoder_scope.end();
+ 				commandBuffer->commit();
+-				commandBuffer->waitUntilCompleted();
++				if (!mx::metal::completedPreparation(commandBuffer, "rader-prepare-completion"))
++                return VKFFT_ERROR_FAILED_TO_SYNCHRONIZE;
+ 				// mx: computeCommandEncoder() returns autoreleased storage.
+ 				// mx: commandBuffer() returns autoreleased storage.
+ #endif
+ 				resFFT = VkFFT_transferDataToCPU(&kernelPreparationApplication, axis->specializationConstants.raderContainer[i].raderFFTkernel, &bufferRaderFFT, bufferSize);
+ 				if (resFFT != VKFFT_SUCCESS) {
+ 					free(axis->specializationConstants.raderContainer[i].raderFFTkernel);
++#if(VKFFT_BACKEND==5)
++                    app->raderFFTkernel[write_id]=0;
++                    axis->specializationConstants.raderContainer[i].raderFFTkernel=0;
++#endif
++#if(VKFFT_BACKEND!=5)
+ 					deleteVkFFT(&kernelPreparationApplication);
++#endif
+ 					return resFFT;
+ 				}
+ 
+@@ -32828,9 +32899,11 @@ static inline VkFFTResult VkFFTGenerateRaderFFTKernel(VkFFTApplication* app, VkF
+ #elif(VKFFT_BACKEND==4)
+ 				zeMemFree(app->configuration.context[0], bufferRaderFFT);
+ #elif(VKFFT_BACKEND==5)
+-				bufferRaderFFT->release();
++				bufferRaderFFT->release();bufferRaderFFT=nullptr;
+ #endif
++#if(VKFFT_BACKEND!=5)
+ 				deleteVkFFT(&kernelPreparationApplication);
++#endif
+ 			}
+ 		}
+ 		if (app->configuration.loadApplicationFromString) {
+@@ -33959,7 +34032,7 @@ static inline VkFFTResult VkFFTPlanR2CMultiUploadDecomposition(VkFFTApplication*
+ 					return resFFT;
+ 				}
+ #elif(VKFFT_BACKEND==5)
+-				axis->bufferLUT = app->configuration.device->newBuffer(axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
++				axis->bufferLUT = mx::metal::newBuffer(app->configuration.device,axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
+ 
+ 				resFFT = VkFFT_transferDataFromCPU(app, tempLUT, &axis->bufferLUT, axis->bufferLUTSize);
+ 				if (resFFT != VKFFT_SUCCESS) {
+@@ -34067,7 +34140,7 @@ static inline VkFFTResult VkFFTPlanR2CMultiUploadDecomposition(VkFFTApplication*
+ 					return resFFT;
+ 				}
+ #elif(VKFFT_BACKEND==5)
+-				axis->bufferLUT = app->configuration.device->newBuffer(axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
++				axis->bufferLUT = mx::metal::newBuffer(app->configuration.device,axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
+ 
+ 				resFFT = VkFFT_transferDataFromCPU(app, tempLUT, &axis->bufferLUT, axis->bufferLUTSize);
+ 				if (resFFT != VKFFT_SUCCESS) {
+@@ -35769,7 +35842,8 @@ static inline VkFFTResult VkFFTPlanAxis(VkFFTApplication* app, VkFFTPlan* FFTPla
+ 			deleteVkFFT(app);
+ 			return VKFFT_ERROR_MALLOC_FAILED;
+ 		}
+-		app->configuration.tempBuffer[0] = app->configuration.device->newBuffer(app->configuration.tempBufferSize[0], MTL::ResourceStorageModePrivate);
++		app->configuration.tempBuffer[0] = mx::metal::newBuffer(app->configuration.device,app->configuration.tempBufferSize[0], MTL::ResourceStorageModePrivate);
++		if (!app->configuration.tempBuffer[0]) { deleteVkFFT(app); return VKFFT_ERROR_FAILED_TO_ALLOCATE; }
+ #endif
+ 	}
+ 	//generate Rader Kernels
+@@ -36276,7 +36350,7 @@ static inline VkFFTResult VkFFTPlanAxis(VkFFTApplication* app, VkFFTPlan* FFTPla
+ 								return resFFT;
+ 							}
+ #elif(VKFFT_BACKEND==5)
+-							axis->bufferLUT = app->configuration.device->newBuffer(axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
++							axis->bufferLUT = mx::metal::newBuffer(app->configuration.device,axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
+ 							resFFT = VkFFT_transferDataFromCPU(app, tempLUT, &axis->bufferLUT, axis->bufferLUTSize);
+ 							if (resFFT != VKFFT_SUCCESS) {
+ 								deleteVkFFT(app);
+@@ -36589,7 +36663,7 @@ static inline VkFFTResult VkFFTPlanAxis(VkFFTApplication* app, VkFFTPlan* FFTPla
+ 								return resFFT;
+ 							}
+ #elif(VKFFT_BACKEND==5)
+-							axis->bufferLUT = app->configuration.device->newBuffer(axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
++							axis->bufferLUT = mx::metal::newBuffer(app->configuration.device,axis->bufferLUTSize, MTL::ResourceStorageModePrivate);
+ 							resFFT = VkFFT_transferDataFromCPU(app, tempLUT, &axis->bufferLUT, axis->bufferLUTSize);
+ 							if (resFFT != VKFFT_SUCCESS) {
+ 								deleteVkFFT(app);
+@@ -36706,7 +36780,7 @@ static inline VkFFTResult VkFFTPlanAxis(VkFFTApplication* app, VkFFTPlan* FFTPla
+ 				return resFFT;
+ 			}
+ #elif(VKFFT_BACKEND==5)
+-			app->bufferRaderUintLUT[axis_id][axis_upload_id] = app->configuration.device->newBuffer(app->bufferRaderUintLUTSize[axis_id][axis_upload_id], MTL::ResourceStorageModePrivate);
++			app->bufferRaderUintLUT[axis_id][axis_upload_id] = mx::metal::newBuffer(app->configuration.device,app->bufferRaderUintLUTSize[axis_id][axis_upload_id], MTL::ResourceStorageModePrivate);
+ 			resFFT = VkFFT_transferDataFromCPU(app, tempRaderUintLUT, &app->bufferRaderUintLUT[axis_id][axis_upload_id], app->bufferRaderUintLUTSize[axis_id][axis_upload_id]);
+ 			if (resFFT != VKFFT_SUCCESS) {
+ 				deleteVkFFT(app);
+@@ -40884,7 +40958,8 @@ static inline VkFFTResult dispatchEnhanced(VkFFTApplication* app, VkFFTAxis* axi
+ 				if (axis->pushConstants.structSize > 0) {
+ 					if (app->configuration.useUint64) {
+ 						if (!axis->pushConstants.dataUintBuffer) {
+-							axis->pushConstants.dataUintBuffer = app->configuration.device->newBuffer(axis->pushConstants.structSize, MTL::ResourceStorageModeShared);
++							axis->pushConstants.dataUintBuffer = mx::metal::newBuffer(app->configuration.device,axis->pushConstants.structSize, MTL::ResourceStorageModeShared, "vkfft-dispatch");
++							if (!axis->pushConstants.dataUintBuffer) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
+ 							memcpy(axis->pushConstants.dataUintBuffer->contents(), axis->pushConstants.dataUint64, axis->pushConstants.structSize);
+ 							axis->updatePushConstants = 0;
+ 						}
+@@ -40896,7 +40971,8 @@ static inline VkFFTResult dispatchEnhanced(VkFFTApplication* app, VkFFTAxis* axi
+ 					}
+ 					else {
+ 						if (!axis->pushConstants.dataUintBuffer) {
+-							axis->pushConstants.dataUintBuffer = app->configuration.device->newBuffer(axis->pushConstants.structSize, MTL::ResourceStorageModeShared);
++							axis->pushConstants.dataUintBuffer = mx::metal::newBuffer(app->configuration.device,axis->pushConstants.structSize, MTL::ResourceStorageModeShared, "vkfft-dispatch");
++							if (!axis->pushConstants.dataUintBuffer) return VKFFT_ERROR_FAILED_TO_ALLOCATE;
+ 							memcpy(axis->pushConstants.dataUintBuffer->contents(), axis->pushConstants.dataUint32, axis->pushConstants.structSize);
+ 							axis->updatePushConstants = 0;
+ 						}
+diff --git a/metal/vendor_failure_cpu.cpp b/metal/vendor_failure_cpu.cpp
+new file mode 100644
+index 00000000..fb691760
+--- /dev/null
++++ b/metal/vendor_failure_cpu.cpp
+@@ -0,0 +1,126 @@
++// Behavioral execution of unmodified vendor function bodies with CPU doubles.
++// Never a GPU receipt. The real allocator's reservation helper is exercised.
++#include <cassert>
++#include <cmath>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <set>
++#include <vector>
++#include "mxbudget.h"
++static std::set<void*> host;
++static void* trackedMalloc(size_t n){auto* p=std::malloc(n);if(p)host.insert(p);return p;}
++static void trackedFree(void* p){if(p){assert(host.erase(p)==1);std::free(p);}}
++static int commandAt, encoderAt, errorAt, commands, encoders, commits, waits, active;
++static int initResult, appendResult, liveApps, deletes;
++static std::set<void*> buffers;
++namespace MTL {
++using ResourceOptions=unsigned long;
++constexpr ResourceOptions ResourceStorageModeShared=0,ResourceStorageModePrivate=32;
++enum CommandBufferStatus{CommandBufferStatusCompleted,CommandBufferStatusError};
++struct Buffer {
++ std::vector<unsigned char> data;size_t charge=0;
++ explicit Buffer(size_t n):data(n){buffers.insert(this);}
++ void* contents(){return data.data();}
++ void release(){assert(buffers.erase(this)==1);mx::metal::releaseBytes(charge);delete this;}
++};
++struct Device{Buffer* newBuffer(size_t n,ResourceOptions){return new Buffer(n);}};
++struct BlitCommandEncoder{
++ void copyFromBuffer(Buffer* a,size_t x,Buffer* b,size_t y,size_t n){std::memcpy(b->data.data()+y,a->data.data()+x,n);}
++ void endEncoding(){--active;}
++};
++struct ComputeCommandEncoder{void endEncoding(){--active;}};
++struct CommandBuffer{
++ int id;bool committed=false,waited=false;BlitCommandEncoder blit;ComputeCommandEncoder compute;
++ BlitCommandEncoder* blitCommandEncoder(){if(++encoders==encoderAt)return nullptr;++active;return &blit;}
++ ComputeCommandEncoder* computeCommandEncoder(){if(++encoders==encoderAt)return nullptr;++active;return &compute;}
++ void commit(){assert(!active);committed=true;++commits;}
++ void waitUntilCompleted(){assert(committed);waited=true;++waits;}
++ CommandBufferStatus status(){assert(waited);return id==errorAt?CommandBufferStatusError:CommandBufferStatusCompleted;}
++};
++struct CommandQueue{
++ std::vector<CommandBuffer*> owned;
++ CommandBuffer* commandBuffer(){if(++commands==commandAt)return nullptr;auto* c=new CommandBuffer{};c->id=commands;owned.push_back(c);return c;}
++ void drain(){for(auto* c:owned)delete c;owned.clear();}
++};
++}
++namespace NS{using UInteger=size_t;}
++extern "C" bool mx_metal_track_buffer(void* b,size_t n) noexcept{static_cast<MTL::Buffer*>(b)->charge=n;return true;}
++#include "mxmetalbuffer.h"
++enum VkFFTResult{VKFFT_SUCCESS,VKFFT_ERROR_FAILED_TO_ALLOCATE,VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST,
++ VKFFT_ERROR_FAILED_TO_SYNCHRONIZE,VKFFT_ERROR_MALLOC_FAILED,VKFFT_ERROR_FAILED_TO_COPY};
++struct VkFFTConfiguration{
++ MTL::Device* device{};MTL::CommandQueue* queue{};MTL::Buffer** tempBuffer{};
++ uint64_t *tempBufferSize{},*bufferSize{},*inputBufferSize{};
++ uint64_t size[3]{},FFTdim{},doublePrecision{},doublePrecisionFloatMemory{},useLUT{},registerBoost{},
++ disableReorderFourStep{},fixMinRaderPrimeFFT{},fixMinRaderPrimeMult{},fixMaxRaderPrimeFFT{},fixMaxRaderPrimeMult{},
++ saveApplicationToString{},loadApplicationFromString{},performBandwidthBoost{},considerAllAxesStrided{},userTempBuffer{},
++ tempBufferNum{},isInputFormatted{},makeForwardPlanOnly{},makeInversePlanOnly{},performDCT{};
++ void* loadApplicationString{};
++};
++struct VkFFTApplication{
++ VkFFTConfiguration configuration{};MTL::Buffer *bufferBluestein[3]{},*bufferBluesteinFFT[3]{},*bufferBluesteinIFFT[3]{};
++ uint64_t bufferBluesteinSize[3]{},currentApplicationStringPos{},applicationStringSize{},applicationBluesteinStringSize[3]{},
++ numRaderFFTPrimes{},rader_primes[32]{},rader_buffer_size[32]{},applicationStringOffsetRader{};
++ void *applicationBluesteinString[3]{},*saveApplicationString{},*raderFFTkernel[32]{};
++ MTL::Buffer* local{};
++};
++struct VkFFTPlan{uint64_t actualFFTSizePerAxis[3][3]{},numAxisUploads[3]{},multiUploadR2C{};};
++struct Rader{uint64_t type{},prime{},generator{};void* raderFFTkernel{};};
++struct VkFFTAxis{struct{uint64_t useRader{},numRaderPrimes{};Rader raderContainer[32]{};}specializationConstants;};
++struct VkFFTLaunchParams{MTL::CommandBuffer* commandBuffer{};MTL::ComputeCommandEncoder* commandEncoder{};MTL::Buffer **buffer{},**inputBuffer{};};
++static void deleteVkFFT(VkFFTApplication* a){
++ if(a->local){a->local->release();a->local=nullptr;--liveApps;}
++ ++deletes;
++ for(auto** bs:{a->bufferBluestein,a->bufferBluesteinFFT,a->bufferBluesteinIFFT})for(int i=0;i<3;++i)if(bs[i]){bs[i]->release();bs[i]=nullptr;}
++ for(auto*& p:a->raderFFTkernel)if(p){trackedFree(p);p=nullptr;}
++}
++static VkFFTResult initializeVkFFT(VkFFTApplication* a,VkFFTConfiguration c){
++ a->configuration=c;a->local=mx::metal::newBuffer(c.device,16384,MTL::ResourceStorageModePrivate);++liveApps;
++ if(initResult){deleteVkFFT(a);return VKFFT_ERROR_FAILED_TO_ALLOCATE;}return VKFFT_SUCCESS;
++}
++static VkFFTResult VkFFTAppend(VkFFTApplication*,int,VkFFTLaunchParams*){return appendResult?VKFFT_ERROR_FAILED_TO_ALLOCATE:VKFFT_SUCCESS;}
++#define malloc trackedMalloc
++#define free trackedFree
++#include "vendor_bodies.h"
++#undef malloc
++#undef free
++static int failures=0,cases=0;
++#define EXPECT(x) do{if(!(x)){std::printf("FAIL case=%s line=%d: %s\n",label,__LINE__,#x);++failures;}}while(0)
++int main(){
++ MTL::Device d;MTL::CommandQueue q;
++ // Sweep every synchronous command and encoder in both Bluestein layouts,
++ // Rader preparation, and direct LUT transfer/download.
++ int totals[5]{};
++ for(int mode=0;mode<5;++mode)for(int kind=0;kind<(mode<3?6:4);++kind){
++  int count=kind>=1&&kind<=3?totals[mode]:1;
++  for(int at=1;at<=count;++at){
++   char label[80];std::snprintf(label,sizeof(label),"mode%d/kind%d/at%d",mode,kind,at);++cases;
++   commandAt=kind==1?at:0;encoderAt=kind==2?at:0;errorAt=kind==3?at:0;
++   commands=encoders=commits=waits=active=deletes=0;initResult=kind==4;appendResult=kind==5;
++   VkFFTApplication app{};app.configuration.device=&d;app.configuration.queue=&q;app.configuration.size[0]=17;
++   VkFFTResult result;unsigned char output[128];std::memset(output,0x5a,sizeof(output));
++   if(mode<2){VkFFTPlan plan{};plan.actualFFTSizePerAxis[0][0]=32;plan.numAxisUploads[0]=mode+1;result=VkFFTGeneratePhaseVectors(&app,&plan,0);}
++   else if(mode==2){VkFFTAxis axis{};axis.specializationConstants.useRader=1;axis.specializationConstants.numRaderPrimes=1;axis.specializationConstants.raderContainer[0].prime=17;axis.specializationConstants.raderContainer[0].generator=3;result=VkFFTGenerateRaderFFTKernel(&app,&axis);}
++   else{auto* b=mx::metal::newBuffer(&d,128,MTL::ResourceStorageModePrivate);
++    result=mode==3?VkFFT_transferDataFromCPU(&app,output,&b,128):VkFFT_transferDataToCPU(&app,output,&b,128);b->release();}
++   if(kind==0){totals[mode]=commands;EXPECT(result==VKFFT_SUCCESS);}
++   else if((kind<=3)||(mode<3)){
++    EXPECT(result==(kind==3?VKFFT_ERROR_FAILED_TO_SYNCHRONIZE:kind<=2?VKFFT_ERROR_FAILED_TO_CREATE_COMMAND_LIST:VKFFT_ERROR_FAILED_TO_ALLOCATE));
++    if(kind<=3){EXPECT(commands==at);EXPECT(waits==(kind==3?at:at-1));}
++    if(kind==3&&mode==4)for(auto v:output)EXPECT(v==0x5a);
++   }
++   EXPECT(active==0);EXPECT(commits==waits);EXPECT(liveApps==0);
++   // initialize owns cleanup on failure; successful local apps delete once.
++   if(mode<3)EXPECT(deletes==1);
++   deleteVkFFT(&app);q.drain();EXPECT(mx::metal::budgetStats().used==0);EXPECT(host.empty());
++   std::printf("case=%s result=%d commands=%d waits=%d live_apps=%d host_allocs=%zu reserved=%zu\n",label,int(result),commands,waits,liveApps,host.size(),mx::metal::budgetStats().used);
++   // Keep failures independent in RED runs, after recording leaked ownership.
++   while(!buffers.empty())static_cast<MTL::Buffer*>(*buffers.begin())->release();
++   while(!host.empty())trackedFree(*host.begin());liveApps=0;
++  }
++ }
++ std::printf("%s CPU vendor behavioral cases=%d failures=%d (Metal/compiler doubles; no GPU)\n",failures?"FAIL":"PASS",cases,failures);
++ return failures?1:0;
++}
+diff --git a/metal/vendor_failure_regression.py b/metal/vendor_failure_regression.py
+new file mode 100644
+index 00000000..c3a57d6b
+--- /dev/null
++++ b/metal/vendor_failure_regression.py
+@@ -0,0 +1,48 @@
++"""CPU behavioral gate for the actual vendor transfer/preparation bodies.
++
++The Metal API and nested FFT compiler are deterministic doubles. This does not
++prove GPU behavior; failure_probe.cpp is the corresponding native gate.
++Scratch/build products must be placed in the supplied artifact directory.
++"""
++import argparse
++from pathlib import Path
++import subprocess
++
++p = argparse.ArgumentParser()
++p.add_argument('artifactdir', type=Path)
++p.add_argument('--vendor-source', type=Path, help='Optional pre-fix vendor for RED')
++p.add_argument('--buffer-source', type=Path, help='Optional pre-fix probe for RED')
++a = p.parse_args()
++root = Path(__file__).resolve().parent
++out = a.artifactdir.resolve()
++out.mkdir(parents=True, exist_ok=True)
++vendor = (a.vendor_source or root / 'thirdparty/vkFFT.h').read_text()
++bodies = []
++for name in ('VkFFT_transferDataFromCPU', 'VkFFT_transferDataToCPU',
++             'VkFFTGeneratePhaseVectors', 'VkFFTGenerateRaderFFTKernel'):
++    start = vendor.index('static inline VkFFTResult ' + name + '(')
++    end = vendor.index('\nstatic inline ', start + 1)
++    bodies.append(vendor[start:end])
++# Select the production Metal branches without rewriting their statements.
++subprocess.run(['clang++', '-E', '-P', '-x', 'c++', '-DVKFFT_BACKEND=5',
++                '-', '-o', str(out / 'vendor_bodies.h')],
++               input='\n'.join(bodies), text=True, check=True)
++binary = out / 'vendor-failure-cpu'
++subprocess.run(['clang++', '-std=c++17', '-g', '-fsanitize=address,undefined',
++                '-I', str(out), '-I', str(root),
++                str(root / 'vendor_failure_cpu.cpp'), str(root / 'mxbudget.cpp'),
++                '-o', str(binary)], check=True)
++vendor_result = subprocess.run([str(binary)]).returncode
++probe = (a.buffer_source or root / 'metal_buffer_probe.cpp').read_text()
++(out / 'buffer_probe_body.h').write_text(probe[probe.index('int main(){'):])
++binary = out / 'buffer-contract-cpu'
++subprocess.run(['clang++', '-std=c++17', '-g', '-fsanitize=address,undefined',
++                '-I', str(out), '-I', str(root),
++                str(root / 'metal_buffer_cpu.cpp'), str(root / 'mxbudget.cpp'),
++                '-o', str(binary)], check=True)
++buffer_run = subprocess.run([str(binary)], text=True, stdout=subprocess.PIPE,
++                            stderr=subprocess.STDOUT)
++for line in buffer_run.stdout.splitlines():
++    print('[CPU contract double] ' + line, flush=True)
++buffer_result = buffer_run.returncode
++raise SystemExit(vendor_result or buffer_result)

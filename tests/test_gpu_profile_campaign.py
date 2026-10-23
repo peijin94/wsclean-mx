@@ -9,6 +9,39 @@ from bench import gpu_profile_campaign as campaign
 from bench.gpu_profile_campaign import matching_pids,make_plan
 
 class GpuCampaignTest(unittest.TestCase):
+    def test_feature_environment_overrides_are_recorded_and_passed(self):
+        job=make_plan('timing')[2]
+        job['env_overrides']={'MX_METAL_FUSE':'1','MX_METAL_MEMORY_MB':'512'}
+        process=Mock(returncode=0)
+        process.poll.return_value=0
+        process.wait.return_value=0
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(campaign,'health',return_value={}), \
+                 patch.object(campaign.subprocess,'Popen',return_value=process) as popen, \
+                 patch.object(campaign.os,'killpg'), patch('builtins.print'):
+                result=campaign.run_job(job,Path(directory))
+            self.assertEqual(result['env'].get('MX_METAL_FUSE'),'1')
+            self.assertEqual(result['env'].get('MX_METAL_MEMORY_MB'),'512')
+            self.assertEqual(result['env']['MX_METAL_CONVOLVE'],'1')
+            self.assertEqual(popen.call_args.kwargs['env']['MX_METAL_FUSE'],'1')
+            self.assertNotIn('MX_METAL_PROFILE',result['env'])
+
+    def test_overrides_cannot_change_profiling_or_process_environment(self):
+        cases=[{'PATH':'/invalid'}, {'MX_METAL_PROFILE':'1'},
+               {'MX_METAL_DEBUG_TIMING':'0'}, {'MX_WGRIDDER_VERBOSE':'1'},
+               {'MX_METAL_FUSE':1}, {'MX_METAL_FUSE':'1\x00'}, []]
+        for extra in cases:
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as directory:
+                job=make_plan('timing')[1];job['env_overrides']=extra
+                process=Mock(returncode=0);process.poll.return_value=0;process.wait.return_value=0
+                with patch.object(campaign,'health',return_value={}), \
+                     patch.object(campaign.subprocess,'Popen',return_value=process) as popen, \
+                     patch.object(campaign.os,'killpg'), patch('builtins.print'):
+                    with self.assertRaisesRegex(ValueError,'override'):
+                        campaign.run_job(job,Path(directory))
+                    popen.assert_not_called()
+                self.assertEqual(list(Path(directory).iterdir()),[])
+
     def test_nonzero_sampler_exit_fails_job_and_preserves_receipt(self):
         job=make_plan('sample')[1]
         process=Mock(returncode=0)

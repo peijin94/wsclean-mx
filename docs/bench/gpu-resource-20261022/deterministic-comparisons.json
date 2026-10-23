@@ -1,0 +1,912 @@
+[
+  {
+    "case": "baseline-cpu-aa",
+    "repeat": 1,
+    "reference": "gpuopt-r1-deterministic-00-baseline-cpu",
+    "candidate": "gpuopt-r1-deterministic-01-baseline-cpu-aa",
+    "tier": "T0",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      }
+    ]
+  },
+  {
+    "case": "candidate-cpu",
+    "repeat": 1,
+    "reference": "gpuopt-r1-deterministic-00-baseline-cpu",
+    "candidate": "gpuopt-r1-deterministic-02-candidate-cpu",
+    "tier": "T0",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      }
+    ]
+  },
+  {
+    "case": "baseline-convolution",
+    "repeat": 1,
+    "reference": "gpuopt-r1-deterministic-00-baseline-cpu",
+    "candidate": "gpuopt-r1-deterministic-03-baseline-convolution",
+    "tier": "T2",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.0001220703125,
+        "rel_rms": 3.670244819828666e-07,
+        "rel_peak": 2.4748355626445843e-07,
+        "peak_ratio": 1.0000001856126672,
+        "n_diff": 971318,
+        "max_ulp": 2139517,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 7.259845733642578e-05,
+        "rel_rms": 1.0154993131658414e-07,
+        "rel_peak": 1.5843360531175087e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 1028131,
+        "max_ulp": 1732760165,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.000125885009765625,
+        "rel_rms": 4.2718904776905524e-07,
+        "rel_peak": 1.790663415834804e-06,
+        "peak_ratio": 1.0,
+        "n_diff": 947179,
+        "max_ulp": 2627386,
+        "T0": false,
+        "T2": true
+      }
+    ]
+  },
+  {
+    "case": "resident",
+    "repeat": 1,
+    "reference": "gpuopt-r1-deterministic-03-baseline-convolution",
+    "candidate": "gpuopt-r1-deterministic-04-resident",
+    "tier": "T0",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      }
+    ]
+  },
+  {
+    "case": "fused",
+    "repeat": 1,
+    "reference": "gpuopt-r1-deterministic-03-baseline-convolution",
+    "candidate": "gpuopt-r1-deterministic-05-fused",
+    "tier": "T0",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      }
+    ]
+  },
+  {
+    "case": "disabled",
+    "repeat": 1,
+    "reference": "gpuopt-r1-deterministic-00-baseline-cpu",
+    "candidate": "gpuopt-r1-deterministic-06-disabled",
+    "tier": "T0",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      }
+    ]
+  },
+  {
+    "case": "budget-refusal",
+    "repeat": 1,
+    "reference": "gpuopt-r1-deterministic-00-baseline-cpu",
+    "candidate": "gpuopt-r1-deterministic-07-budget-refusal",
+    "tier": "T0",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          1024,
+          1024
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      }
+    ]
+  }
+]

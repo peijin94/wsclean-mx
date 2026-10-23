@@ -252,6 +252,13 @@ The [detailed GPU profiling report](docs/gpu-profiling-2026-10-22.md) includes
 CPU/GPU timelines, utilization limits, copy/plan budgets, thread scaling and
 resource-reuse ablations. Set `MX_METAL_PROFILE=1` for optional structured traces;
 GPU command residency is not shader occupancy.
+The [resource-residency implementation](docs/gpu-resource-optimization-2026-10-22.md)
+adds bounded plan/kernel reuse, a shared owned-buffer budget, and optional resident
+weighted-peak processing (`MX_METAL_CONVOLVE=1 MX_METAL_FUSE=1`). Deterministic
+reuse/fusion outputs match the previous GPU-convolution path bitwise. Matched-input
+3K comparisons against CPU still fail strict T2 for both old and new convolution,
+so deconvolution remains opt-in. `MX_METAL_MEMORY_MB` defaults to 1024 MiB for
+backend-owned buffer capacities; it is not a whole-process RSS cap.
 The broader CPU scientific-validation work remains in
 [the development plan](docs/development-plan.md).
 

@@ -1,0 +1,7 @@
+comparable
+baseline-default: wall 23.86-24.96s (span 4.4%) | 4 sample(s), instructions 795.96-797.05G, cycles 291.97-292.70G (span 0.2%)
+baseline-convolution: wall 24.29-26.38s (span 7.9%) | 4 sample(s), instructions 761.78-763.30G, cycles 281.75-286.62G (span 1.7%)
+candidate-default: wall 23.92-24.39s (span 1.9%) | 4 sample(s), instructions 795.62-796.67G, cycles 291.01-293.16G (span 0.7%)
+resident: wall 24.14-25.22s (span 4.3%) | 4 sample(s), instructions 758.60-760.15G, cycles 280.40-283.64G (span 1.1%)
+fused: wall 24.62-25.37s (span 3.0%) | 4 sample(s), instructions 752.39-753.10G, cycles 276.81-279.00G (span 0.8%)
+resolution: a wall difference smaller than the widest within-variant span above is not resolvable by this run (descriptive heuristic: an observed range is not a computed bound, and a single repeat gives no repeatability estimate)

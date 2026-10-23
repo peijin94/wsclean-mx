@@ -5,6 +5,14 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- Resource/residency implementation: `docs/gpu-resource-optimization-2026-10-22.md`;
+  WSClean `ff01a434`, Radler `ea55b61`, frozen `gpu-resource-v1`. Bounded plans and
+  immutable kernels, aggregate owned-buffer cap (default1GiB), opt-in fused peaks,
+  serial overlap diagnostic. Native gates and deterministic T0 optimization
+  comparisons pass. All9 matched-input3K CPU-vs-convolution T2 comparisons fail,
+  including oldGPU controls; keep deconvolution opt-in and thresholds unchanged.
+  Budget covers rounded owned buffer capacities, NOT whole RSS/driver overhead.
+
 - Current profiling: `docs/gpu-profiling-2026-10-22.md`. 52 completed WSClean
   runs plus validated synthetic reuse ablations. Default prediction CPU degrid
   dominates; command residency ~48-54% of session, ~5-6% whole run. Convolution

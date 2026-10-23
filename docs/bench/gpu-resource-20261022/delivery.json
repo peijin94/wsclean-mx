@@ -1,0 +1,85 @@
+{
+  "native_commits": {
+    "wsclean": {
+      "commit": "ff01a434abf53ef03a02f406abe24214c87b78b6",
+      "status": ""
+    },
+    "radler": {
+      "commit": "ea55b6192b19ddc1eeaa91c563538106ccf1751a",
+      "status": ""
+    },
+    "aocommon": {
+      "commit": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+      "status": ""
+    },
+    "schaapcommon": {
+      "commit": "d6e5eee1dd1b06fa3e01a92f2eb9ab84d83498e7",
+      "status": ""
+    }
+  },
+  "main_unchanged": "dfd19061f09502af9a1d1d419c771db27ff4671a",
+  "planned_campaign_runs": 79,
+  "additional_pilot_runs": 3,
+  "additional_live_build_runs": 1,
+  "native_probe_configurations": 17,
+  "native_probe_failures": 0,
+  "python_tests": 208,
+  "python_exit": 0,
+  "upstream_tests": {
+    "passed": 160,
+    "skipped": 4,
+    "assertions_passed": 869917,
+    "exit": 0
+  },
+  "pixel_comparisons": {
+    "deterministic": {
+      "pairs": 7,
+      "passed": 7,
+      "failed": 0
+    },
+    "common": {
+      "pairs": 9,
+      "passed": 0,
+      "failed": 9
+    },
+    "timing": {
+      "pairs": 16,
+      "passed": 1,
+      "failed": 15
+    },
+    "stress": {
+      "pairs": 2,
+      "passed": 1,
+      "failed": 1
+    }
+  },
+  "optimization_vs_old_gpu": {
+    "pairs": 6,
+    "all_T2_pass": true,
+    "all_models_bitwise": true
+  },
+  "live_binary_vs_snapshot_all_products_bitwise": true,
+  "protected_input": {
+    "files": 108,
+    "bytes": 4428203949,
+    "hashes_and_modes_unchanged": true
+  },
+  "budget_scope": "explicitly owned Metal requested capacities rounded16KiB; not physical driver overhead or RSS",
+  "all_measured_budget_receipts_within_requested_cap": true,
+  "scientific_release_approved": false,
+  "default_gpu_deconvolution_enabled": false,
+  "external_publication": false,
+  "raw_evidence": "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-opt-20261022-153051",
+  "review_artifacts": [
+    "review-final.json",
+    "review-rootfixed.json",
+    "review-plotfixed.json",
+    "delivery-review.json"
+  ],
+  "plots": {
+    "overlap.png": "0644818880da15d869060cb9ec0d094319ad15ee044b9a80955880dd47f0ff47",
+    "restored-extended-zoom.png": "cf63a28d6a0d1f1f1cf9bc33be40668cd4a3bf33858c0641c33e5b4588d45ea6",
+    "restored-full-field.png": "16accc67b2daf4c12b2dbdc5c4dec89874f2652b0abeb9fb8f60d7992133481a",
+    "resources.png": "3f7e986b6b8e8f38795df8994944c53f4336f27a7021c0719bcbbcfa5fedf076"
+  }
+}

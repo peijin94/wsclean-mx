@@ -1,0 +1,18 @@
+
+hardware counters and mode assessment (read this before the ratios):
+  baseline-default: wall 23.86-24.96s (span 4.4%) | 4 sample(s), instructions 795.96-797.05G, cycles 291.97-292.70G (span 0.2%)
+  baseline-convolution: wall 24.29-26.38s (span 7.9%) | 4 sample(s), instructions 761.78-763.30G, cycles 281.75-286.62G (span 1.7%)
+  candidate-default: wall 23.92-24.39s (span 1.9%) | 4 sample(s), instructions 795.62-796.67G, cycles 291.01-293.16G (span 0.7%)
+  resident: wall 24.14-25.22s (span 4.3%) | 4 sample(s), instructions 758.60-760.15G, cycles 280.40-283.64G (span 1.1%)
+  fused: wall 24.62-25.37s (span 3.0%) | 4 sample(s), instructions 752.39-753.10G, cycles 276.81-279.00G (span 0.8%)
+  mode: comparable
+  resolution: a wall difference smaller than the widest within-variant span above is not resolvable by this run (descriptive heuristic: an observed range is not a computed bound, and a single repeat gives no repeatability estimate)
+  -> the wall comparison below is not explained by a host timing mode
+
+variant                 wall min/med         inversion min/med        prediction min/med     deconvolution min/med
+baseline-default    23.86 / 24.32 (1.00x)    13.45 / 13.87 (1.00x)     2.96 /  3.14 (1.00x)     5.23 /  5.37 (1.00x)
+baseline-convolution    24.29 / 25.16 (0.98x)    13.59 / 14.20 (0.99x)     2.97 /  3.00 (1.00x)     5.87 /  6.02 (0.89x)
+candidate-default    23.92 / 24.30 (1.00x)    13.57 / 13.91 (0.99x)     2.97 /  2.99 (1.00x)     5.28 /  5.30 (0.99x)
+resident      24.14 / 24.95 (0.99x)    13.73 / 13.95 (0.98x)     2.98 /  3.01 (1.00x)     5.57 /  5.91 (0.94x)
+fused         24.62 / 24.82 (0.97x)    13.79 / 13.88 (0.98x)     3.18 /  3.22 (0.93x)     5.55 /  5.64 (0.94x)
+(ratio vs first variant, on min: interpret with the mode assessment above)

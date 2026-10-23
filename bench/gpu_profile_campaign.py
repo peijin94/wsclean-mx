@@ -95,6 +95,14 @@ def run_job(job,folder):
     cmd+=job.get('extra',[])
     cmd+=[str(MS)]
     selected={'MX_METAL_DEBUG_TIMING':'1',**MODES[job['mode']]}
+    overrides=job.get('env_overrides',{})
+    if not isinstance(overrides,dict):raise ValueError('feature overrides must be a dictionary')
+    reserved={'MX_METAL_PROFILE','MX_METAL_DEBUG_TIMING'}
+    for key,value in overrides.items():
+        if (not isinstance(key,str) or not re.fullmatch(r'MX_METAL_[A-Z0-9_]+',key)
+                or key in reserved or not isinstance(value,str) or '\0' in value):
+            raise ValueError('invalid or reserved feature override')
+    selected.update(overrides)
     if job['profile']:selected['MX_METAL_PROFILE']='1'
     if auxiliary_logs:selected['MX_WGRIDDER_VERBOSE']='1'
     env={k:v for k,v in os.environ.items() if not k.startswith(('MX_METAL_','MX_WGRIDDER_'))};env.update(selected)

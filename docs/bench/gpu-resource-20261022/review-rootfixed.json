@@ -1,0 +1,14 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    {
+      "priority": "P2",
+      "location": "bench/plot_gpu_resources.py:41-44",
+      "issue": "Missing copy receipts silently become zero-byte measurements. The analyzer accepts incomplete traces containing convolution.gpu without copy spans; the plot then reports zero uploads/readbacks. Missing candidate kernel_bytes likewise becomes zero.",
+      "minimal_fix": "Require case-specific copy stages and candidate kernel_bytes. Permit zero defaults only for structurally absent operations, such as baseline fusion spans and its legacy kernel counter."
+    }
+  ],
+  "suggestions": [],
+  "summary": "All three previous root blockers are fixed; 14 targeted tests passed. Plot fields, seconds/GiB conversions, and sample selection match the declared campaign, apart from the missing-data issue above. Read-only review; no edits, builds, heavy tests, native execution, or plot rendering."
+}

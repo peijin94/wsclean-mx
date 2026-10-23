@@ -28,7 +28,11 @@ class TestGpuStatusFigures(unittest.TestCase):
                 hdr = fits.Header({'BUNIT': 'Jy/beam'})
                 fits.writeto(folder/'img-image.fits', data, hdr)
                 fits.writeto(folder/'img-horizon-mask.fits', mask)
-            result = module.render_comparison(cpu_dir, gpu_dir, out, 'test-version')
+            import inspect
+            self.assertIn('gpu_label',inspect.signature(module.render_comparison).parameters)
+            result = module.render_comparison(cpu_dir, gpu_dir, out, 'test-version',
+                                              gpu_label='Resident convolution + peak')
+            self.assertEqual(result['gpu_label'],'Resident convolution + peak')
             self.assertEqual(result['shape_yx'], [32, 48])
             self.assertEqual(result['crop']['center_xy'], [12, 19])
             self.assertEqual(result['crop']['bounds_xyxy'], [6, 15, 18, 23])

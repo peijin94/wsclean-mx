@@ -1,0 +1,262 @@
+[
+  {
+    "case": "fused",
+    "repeat": 1,
+    "reference": "gpuopt-r1-stress-00-baseline-cpu",
+    "candidate": "gpuopt-r1-stress-01-fused",
+    "tier": "T2",
+    "passed": false,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.000152587890625,
+        "rel_rms": 1.738789223385701e-06,
+        "rel_peak": 2.6477755296398345e-07,
+        "peak_ratio": 1.0000002118220424,
+        "n_diff": 16343456,
+        "max_ulp": 1868101125,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.04097330570220947,
+        "rel_rms": 0.00026603914487584394,
+        "rel_peak": 7.172828962524076e-05,
+        "peak_ratio": 1.0000010684877116,
+        "n_diff": 16774010,
+        "max_ulp": 2007027710,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.5127211567451013,
+        "rel_rms": 0.002566422105463196,
+        "rel_peak": 0.001558661813803433,
+        "peak_ratio": 1.0000000927728123,
+        "n_diff": 16772088,
+        "max_ulp": 2074462564,
+        "T0": false,
+        "T2": false
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 3.5762786865234375e-07,
+        "rel_rms": 1.1951941057471569e-06,
+        "rel_peak": 3.5762786865234375e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 16472144,
+        "max_ulp": 1684548101,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.43587160110473633,
+        "rel_rms": 0.0006088956696668136,
+        "rel_peak": 0.005721457638396221,
+        "peak_ratio": 1.000006509558636,
+        "n_diff": 16774591,
+        "max_ulp": 2052321341,
+        "T0": false,
+        "T2": false
+      }
+    ]
+  },
+  {
+    "case": "budget-refusal",
+    "repeat": 1,
+    "reference": "gpuopt-r1-stress-00-baseline-cpu",
+    "candidate": "gpuopt-r1-stress-02-budget-refusal",
+    "tier": "T2",
+    "passed": true,
+    "products": [
+      {
+        "product": "img-dirty.fits",
+        "name": "img-dirty.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.00018310546875,
+        "rel_rms": 1.686537073316564e-06,
+        "rel_peak": 3.177330635567802e-07,
+        "peak_ratio": 1.0000002118220424,
+        "n_diff": 16330830,
+        "max_ulp": 1864634631,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-horizon-mask.fits",
+        "name": "img-horizon-mask.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": true,
+        "nan_mismatch": 0,
+        "max_abs": 0.0,
+        "rel_rms": 0.0,
+        "rel_peak": 0.0,
+        "peak_ratio": 1.0,
+        "n_diff": 0,
+        "max_ulp": 0,
+        "T0": true,
+        "T2": true
+      },
+      {
+        "product": "img-image.fits",
+        "name": "img-image.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.0001678466796875,
+        "rel_rms": 1.3503494436684967e-06,
+        "rel_peak": 2.9383412070192805e-07,
+        "peak_ratio": 1.0000001068487712,
+        "n_diff": 16362537,
+        "max_ulp": 1843050501,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-model.fits",
+        "name": "img-model.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.0005717277526855469,
+        "rel_rms": 1.7777847587749343e-06,
+        "rel_peak": 1.7380406567572934e-06,
+        "peak_ratio": 1.0000000927728123,
+        "n_diff": 16757247,
+        "max_ulp": 1711635456,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-psf.fits",
+        "name": "img-psf.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 2.980232238769531e-07,
+        "rel_rms": 1.4478183975944472e-06,
+        "rel_peak": 2.980232238769531e-07,
+        "peak_ratio": 1.0,
+        "n_diff": 16501742,
+        "max_ulp": 1687871494,
+        "T0": false,
+        "T2": true
+      },
+      {
+        "product": "img-residual.fits",
+        "name": "img-residual.fits",
+        "shape": [
+          1,
+          1,
+          4096,
+          4096
+        ],
+        "bitwise": false,
+        "nan_mismatch": 0,
+        "max_abs": 0.00036334991455078125,
+        "rel_rms": 1.9202158554058917e-06,
+        "rel_peak": 4.769503538996663e-06,
+        "peak_ratio": 0.9999996995588322,
+        "n_diff": 16416971,
+        "max_ulp": 1842845701,
+        "T0": false,
+        "T2": true
+      }
+    ]
+  }
+]

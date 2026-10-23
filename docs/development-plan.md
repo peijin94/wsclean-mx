@@ -3,7 +3,9 @@
 > This records the CPU-focused initial plan. The current `gpu-dev` audit,
 > implementation and unresolved gates are in
 > [the 2026-10-22 GPU plan](gpu-next-optimization-2026-10-22.md), which supersedes
-> the older Metal roadmap below.
+> the older Metal roadmap below. The follow-on bounded-resource implementation,
+> native gates and unresolved convolution science checks are in
+> [the resource-residency report](gpu-resource-optimization-2026-10-22.md).
 
 **Initial audit:** 2026-10-17 (EDT), starting at `333cea8` on `main`; published as `43c6cae`.
 **Continuation:** [CPU correctness repairs and verification](continuation-2026-10-17.md).
