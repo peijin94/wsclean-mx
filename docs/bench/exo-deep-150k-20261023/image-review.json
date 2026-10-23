@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "tests/test_deep_image_plot.py:24-43: optionally add a nonzero candidate difference fixture and assert the display floor explicitly; the existing identical-image fixture cannot detect subtraction being replaced with zeros."
+  ],
+  "summary": "Read-only inspection found source paths, FITS dimensions, campaign labels, statistics and both PNGs consistent. Rendering uses horizon-masked p99 statistics, actual candidate-minus-reference subtraction and an explicit display floor. Invalid shapes, nonfinite pixels and invalid masks fail closed. Writes are limited to publication outputs. Saved receipts report 229 passing tests, two optimized plotting tests, real rendering and both six-product T0 comparisons; I inspected these receipts without rerunning them. This review covers same-build repeatability visualization only, adds no runtime claim and does not recertify the stack or supersede older scientific failures."
+}

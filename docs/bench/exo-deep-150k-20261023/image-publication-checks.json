@@ -1,0 +1,42 @@
+{
+  "python_tests": 229,
+  "optimized_image_tests": 2,
+  "repeat_comparisons": [
+    {
+      "size": 3072,
+      "tier": "T0",
+      "passed": true,
+      "products": [
+        "img-dirty.fits",
+        "img-horizon-mask.fits",
+        "img-image.fits",
+        "img-model.fits",
+        "img-psf.fits",
+        "img-residual.fits"
+      ]
+    },
+    {
+      "size": 4096,
+      "tier": "T0",
+      "passed": true,
+      "products": [
+        "img-dirty.fits",
+        "img-horizon-mask.fits",
+        "img-image.fits",
+        "img-model.fits",
+        "img-psf.fits",
+        "img-residual.fits"
+      ]
+    }
+  ],
+  "static_scan": {
+    "paths": [
+      "docs/bench/exo-deep-150k-20261023/plot_images.py",
+      "tests/test_deep_image_plot.py"
+    ],
+    "findings": []
+  },
+  "review_passed": true,
+  "scope": "Visualization of existing 150k-budget CPU runs; no new runtime or legacy-equivalence claim",
+  "raw_artifacts": "bench/out/github-update-20261023-0641"
+}

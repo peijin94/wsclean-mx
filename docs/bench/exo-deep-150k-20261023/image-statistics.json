@@ -1,0 +1,30 @@
+[
+  {
+    "restored_p99": 5.3070306968689,
+    "restored_peak": 554.3681030273438,
+    "residual_abs_p99": 2.870273084640503,
+    "repeat_abs_difference_p99": 0.0,
+    "repeat_max_abs_difference": 0.0,
+    "difference_display_limit": 1e-12,
+    "kept_pixels": 4939357,
+    "total_pixels": 9437184,
+    "kept_fraction": 0.5233931011623807,
+    "size": 3072,
+    "reference": "bench/out/exo150k-20261023-3072-r1/mx",
+    "candidate": "bench/out/exo150k-20261023-3072-r2/mx"
+  },
+  {
+    "restored_p99": 5.399348583221436,
+    "restored_peak": 567.4223022460938,
+    "residual_abs_p99": 2.986488170623787,
+    "repeat_abs_difference_p99": 0.0,
+    "repeat_max_abs_difference": 0.0,
+    "difference_display_limit": 1e-12,
+    "kept_pixels": 9001945,
+    "total_pixels": 16777216,
+    "kept_fraction": 0.5365577340126038,
+    "size": 4096,
+    "reference": "bench/out/exo150k-20261023-4096-r1/mx",
+    "candidate": "bench/out/exo150k-20261023-4096-r2/mx"
+  }
+]
