@@ -1,0 +1,4319 @@
+{
+  "schema": 1,
+  "configuration": {
+    "niter_cap": 150000,
+    "threads": 8,
+    "cpu_only": true,
+    "memory_percent": 40,
+    "all_products": [
+      "img-dirty.fits",
+      "img-horizon-mask.fits",
+      "img-image.fits",
+      "img-model.fits",
+      "img-psf.fits",
+      "img-residual.fits"
+    ]
+  },
+  "runs": [
+    {
+      "tag": "cpu-next-v1-20261023-preflight-3072-r0-baseline",
+      "variant": "cpu-next-base-20261023",
+      "size": 3072,
+      "repeat": 0,
+      "role": "baseline",
+      "phase": "preflight",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 93.47,
+        "user_s": 394.29,
+        "system_s": 48.08,
+        "inversion_s": 23.197277,
+        "prediction_s": 9.986303,
+        "deconvolution_s": 58.325609,
+        "other_s": 1.9608109999999996,
+        "cpu_core_equivalent": 4.732748475446668,
+        "rss_bytes": 2703228928,
+        "instructions": 3336285004796,
+        "cycles": 1244196986789
+      },
+      "path": "bench/out/cpu-next-v1-20261023-preflight-3072-r0-baseline/cpu-next-base-20261023",
+      "before": {
+        "unix_s": 1792783140.381886,
+        "load": [
+          2.5791015625,
+          2.50732421875,
+          2.6181640625
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                     3874.\nPages active:                                 225838.\nPages inactive:                               225812.\nPages speculative:                               229.\nPages throttled:                                   0.\nPages wired down:                             183151.\nPages purgeable:                                2836.\n\"Translation faults\":                    13914173642.\nPages copy-on-write:                       389491966.\nPages zero filled:                        5450539763.\nPages reactivated:                        4140994351.\nPages purged:                              331068110.\nFile-backed pages:                            304385.\nAnonymous pages:                              147494.\nPages stored in compressor:                   770745.\nPages occupied by compressor:                 360196.\nDecompressions:                           4243569798.\nCompressions:                             4583856419.\nPageins:                                   647842933.\nPageouts:                                    2112796.\nSwapins:                                    89479788.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783234.01538,
+        "load": [
+          4.9365234375,
+          3.3359375,
+          2.92333984375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   200553.\nPages active:                                 126775.\nPages inactive:                               137378.\nPages speculative:                               453.\nPages throttled:                                   0.\nPages wired down:                             180680.\nPages purgeable:                                2897.\n\"Translation faults\":                    13930873919.\nPages copy-on-write:                       389511422.\nPages zero filled:                        5466907595.\nPages reactivated:                        4141200207.\nPages purged:                              331094206.\nFile-backed pages:                            104618.\nAnonymous pages:                              159988.\nPages stored in compressor:                   758784.\nPages occupied by compressor:                 353261.\nDecompressions:                           4243655482.\nCompressions:                             4583948519.\nPageins:                                   647932382.\nPageouts:                                    2112799.\nSwapins:                                    89479788.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-preflight-3072-r0-candidate",
+      "variant": "cpu-next-candidate-20261023",
+      "size": 3072,
+      "repeat": 0,
+      "role": "candidate",
+      "phase": "preflight",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 86.64,
+        "user_s": 391.29,
+        "system_s": 44.86,
+        "inversion_s": 23.007583,
+        "prediction_s": 9.950737,
+        "deconvolution_s": 51.582574,
+        "other_s": 2.099105999999999,
+        "cpu_core_equivalent": 5.034048938134811,
+        "rss_bytes": 2720940032,
+        "instructions": 3235694462981,
+        "cycles": 1202879169613
+      },
+      "path": "bench/out/cpu-next-v1-20261023-preflight-3072-r0-candidate/cpu-next-candidate-20261023",
+      "before": {
+        "unix_s": 1792783235.454875,
+        "load": [
+          4.9365234375,
+          3.3359375,
+          2.92333984375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   178812.\nPages active:                                 129151.\nPages inactive:                               157858.\nPages speculative:                               559.\nPages throttled:                                   0.\nPages wired down:                             179708.\nPages purgeable:                                2903.\n\"Translation faults\":                    13931497032.\nPages copy-on-write:                       389511973.\nPages zero filled:                        5467527204.\nPages reactivated:                        4141200209.\nPages purged:                              331094206.\nFile-backed pages:                            125518.\nAnonymous pages:                              162050.\nPages stored in compressor:                   758036.\nPages occupied by compressor:                 353010.\nDecompressions:                           4243656235.\nCompressions:                             4583948519.\nPageins:                                   647953104.\nPageouts:                                    2112799.\nSwapins:                                    89479788.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783322.25011,
+        "load": [
+          6.884765625,
+          4.40380859375,
+          3.373046875
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   203882.\nPages active:                                 123624.\nPages inactive:                               128046.\nPages speculative:                               573.\nPages throttled:                                   0.\nPages wired down:                             180592.\nPages purgeable:                                4074.\n\"Translation faults\":                    13946865874.\nPages copy-on-write:                       389531669.\nPages zero filled:                        5482593498.\nPages reactivated:                        4141349355.\nPages purged:                              331108066.\nFile-backed pages:                            106848.\nAnonymous pages:                              145395.\nPages stored in compressor:                   775118.\nPages occupied by compressor:                 362383.\nDecompressions:                           4243691729.\nCompressions:                             4584010227.\nPageins:                                   648091299.\nPageouts:                                    2112810.\nSwapins:                                    89479788.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-preflight-4096-r0-baseline",
+      "variant": "cpu-next-base-20261023",
+      "size": 4096,
+      "repeat": 0,
+      "role": "baseline",
+      "phase": "preflight",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 97873,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 97873,
+        "components_per_scale": [
+          96241,
+          198,
+          194,
+          161,
+          0,
+          15,
+          371,
+          529,
+          164
+        ]
+      },
+      "timing": {
+        "wall_s": 142.66,
+        "user_s": 592.38,
+        "system_s": 80.66,
+        "inversion_s": 23.753976,
+        "prediction_s": 9.88477,
+        "deconvolution_s": 106.791372,
+        "other_s": 2.2298820000000035,
+        "cpu_core_equivalent": 4.717790550960325,
+        "rss_bytes": 4089806848,
+        "instructions": 4520357126541,
+        "cycles": 1846410774457
+      },
+      "path": "bench/out/cpu-next-v1-20261023-preflight-4096-r0-baseline/cpu-next-base-20261023",
+      "before": {
+        "unix_s": 1792783323.730334,
+        "load": [
+          6.884765625,
+          4.40380859375,
+          3.373046875
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   182789.\nPages active:                                 127503.\nPages inactive:                               148660.\nPages speculative:                               574.\nPages throttled:                                   0.\nPages wired down:                             177410.\nPages purgeable:                                4338.\n\"Translation faults\":                    13947488309.\nPages copy-on-write:                       389532390.\nPages zero filled:                        5483212525.\nPages reactivated:                        4141349356.\nPages purged:                              331108066.\nFile-backed pages:                            127598.\nAnonymous pages:                              149139.\nPages stored in compressor:                   774588.\nPages occupied by compressor:                 362164.\nDecompressions:                           4243692268.\nCompressions:                             4584010227.\nPageins:                                   648111896.\nPageouts:                                    2112810.\nSwapins:                                    89479788.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783466.575254,
+        "load": [
+          7.46923828125,
+          5.55615234375,
+          3.99267578125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   228920.\nPages active:                                 108437.\nPages inactive:                               156128.\nPages speculative:                              3383.\nPages throttled:                                   0.\nPages wired down:                             172511.\nPages purgeable:                                4101.\n\"Translation faults\":                    13975219225.\nPages copy-on-write:                       389566479.\nPages zero filled:                        5509892135.\nPages reactivated:                        4141979408.\nPages purged:                              331181951.\nFile-backed pages:                             99134.\nAnonymous pages:                              168814.\nPages stored in compressor:                   702816.\nPages occupied by compressor:                 329721.\nDecompressions:                           4244334184.\nCompressions:                             4584852989.\nPageins:                                   648379168.\nPageouts:                                    2112886.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-preflight-4096-r0-candidate",
+      "variant": "cpu-next-candidate-20261023",
+      "size": 4096,
+      "repeat": 0,
+      "role": "candidate",
+      "phase": "preflight",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 97873,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 97873,
+        "components_per_scale": [
+          96241,
+          198,
+          194,
+          161,
+          0,
+          15,
+          371,
+          529,
+          164
+        ]
+      },
+      "timing": {
+        "wall_s": 131.13,
+        "user_s": 585.53,
+        "system_s": 74.74,
+        "inversion_s": 24.137195,
+        "prediction_s": 10.171958,
+        "deconvolution_s": 94.48557,
+        "other_s": 2.335277000000005,
+        "cpu_core_equivalent": 5.035232212308396,
+        "rss_bytes": 4035444736,
+        "instructions": 4358914841181,
+        "cycles": 1776567839116
+      },
+      "path": "bench/out/cpu-next-v1-20261023-preflight-4096-r0-candidate/cpu-next-candidate-20261023",
+      "before": {
+        "unix_s": 1792783468.9017658,
+        "load": [
+          7.46923828125,
+          5.55615234375,
+          3.99267578125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   176994.\nPages active:                                 122432.\nPages inactive:                               196439.\nPages speculative:                              4038.\nPages throttled:                                   0.\nPages wired down:                             170834.\nPages purgeable:                                3683.\n\"Translation faults\":                    13976378103.\nPages copy-on-write:                       389567851.\nPages zero filled:                        5511026939.\nPages reactivated:                        4141979455.\nPages purged:                              331181951.\nFile-backed pages:                            142653.\nAnonymous pages:                              180256.\nPages stored in compressor:                   699282.\nPages occupied by compressor:                 328357.\nDecompressions:                           4244337722.\nCompressions:                             4584852989.\nPageins:                                   648422161.\nPageouts:                                    2112886.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783600.21199,
+        "load": [
+          8.8720703125,
+          6.6025390625,
+          4.62060546875
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   245908.\nPages active:                                  95071.\nPages inactive:                               128036.\nPages speculative:                               279.\nPages throttled:                                   0.\nPages wired down:                             178073.\nPages purgeable:                                3843.\n\"Translation faults\":                    14000935336.\nPages copy-on-write:                       389593972.\nPages zero filled:                        5534945051.\nPages reactivated:                        4142474349.\nPages purged:                              331244453.\nFile-backed pages:                            103728.\nAnonymous pages:                              119658.\nPages stored in compressor:                   748960.\nPages occupied by compressor:                 351733.\nDecompressions:                           4244679560.\nCompressions:                             4585400046.\nPageins:                                   648657753.\nPageouts:                                    2112891.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r1-baseline",
+      "variant": "cpu-next-base-20261023",
+      "size": 3072,
+      "repeat": 1,
+      "role": "baseline",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 95.22,
+        "user_s": 407.1,
+        "system_s": 46.15,
+        "inversion_s": 23.750936,
+        "prediction_s": 10.126887,
+        "deconvolution_s": 59.047406,
+        "other_s": 2.2947710000000043,
+        "cpu_core_equivalent": 4.760029405587062,
+        "rss_bytes": 2744500224,
+        "instructions": 3331395625101,
+        "cycles": 1227431944752
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r1-baseline/cpu-next-base-20261023",
+      "before": {
+        "unix_s": 1792783602.6693099,
+        "load": [
+          9.8427734375,
+          6.84130859375,
+          4.71630859375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   196002.\nPages active:                                 107155.\nPages inactive:                               165803.\nPages speculative:                               390.\nPages throttled:                                   0.\nPages wired down:                             178885.\nPages purgeable:                                2912.\n\"Translation faults\":                    14002058318.\nPages copy-on-write:                       389595203.\nPages zero filled:                        5536049741.\nPages reactivated:                        4142474349.\nPages purged:                              331244453.\nFile-backed pages:                            148447.\nAnonymous pages:                              124901.\nPages stored in compressor:                   746827.\nPages occupied by compressor:                 350865.\nDecompressions:                           4244681707.\nCompressions:                             4585400046.\nPageins:                                   648702251.\nPageouts:                                    2112891.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783698.0281112,
+        "load": [
+          8.212890625,
+          6.9853515625,
+          4.990234375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   205354.\nPages active:                                 135833.\nPages inactive:                               138534.\nPages speculative:                              1373.\nPages throttled:                                   0.\nPages wired down:                             179159.\nPages purgeable:                                2868.\n\"Translation faults\":                    14018672787.\nPages copy-on-write:                       389617736.\nPages zero filled:                        5552389797.\nPages reactivated:                        4142542998.\nPages purged:                              331270113.\nFile-backed pages:                            115805.\nAnonymous pages:                              159935.\nPages stored in compressor:                   723797.\nPages occupied by compressor:                 338847.\nDecompressions:                           4244712129.\nCompressions:                             4585407449.\nPageins:                                   648828364.\nPageouts:                                    2112891.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r1-candidate",
+      "variant": "cpu-next-candidate-20261023",
+      "size": 3072,
+      "repeat": 1,
+      "role": "candidate",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 92.17,
+        "user_s": 420.81,
+        "system_s": 46.36,
+        "inversion_s": 24.249329,
+        "prediction_s": 10.828978,
+        "deconvolution_s": 54.676128,
+        "other_s": 2.415565000000001,
+        "cpu_core_equivalent": 5.068568948681784,
+        "rss_bytes": 2722889728,
+        "instructions": 3234269743192,
+        "cycles": 1181511603845
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r1-candidate/cpu-next-candidate-20261023",
+      "before": {
+        "unix_s": 1792783699.507303,
+        "load": [
+          8.212890625,
+          6.9853515625,
+          4.990234375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   184008.\nPages active:                                 139226.\nPages inactive:                               157429.\nPages speculative:                              1402.\nPages throttled:                                   0.\nPages wired down:                             178190.\nPages purgeable:                                2896.\n\"Translation faults\":                    14019296741.\nPages copy-on-write:                       389618786.\nPages zero filled:                        5553009559.\nPages reactivated:                        4142543000.\nPages purged:                              331270113.\nFile-backed pages:                            136592.\nAnonymous pages:                              161465.\nPages stored in compressor:                   723769.\nPages occupied by compressor:                 338845.\nDecompressions:                           4244712161.\nCompressions:                             4585407449.\nPageins:                                   648849002.\nPageouts:                                    2112891.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783791.849395,
+        "load": [
+          7.88916015625,
+          7.021484375,
+          5.189453125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   209105.\nPages active:                                 134839.\nPages inactive:                               134029.\nPages speculative:                               593.\nPages throttled:                                   0.\nPages wired down:                             179280.\nPages purgeable:                                4099.\n\"Translation faults\":                    14034563893.\nPages copy-on-write:                       389637933.\nPages zero filled:                        5568018607.\nPages reactivated:                        4142680943.\nPages purged:                              331284234.\nFile-backed pages:                            116128.\nAnonymous pages:                              153333.\nPages stored in compressor:                   724582.\nPages occupied by compressor:                 341254.\nDecompressions:                           4244735687.\nCompressions:                             4585463107.\nPageins:                                   648973704.\nPageouts:                                    2112891.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r1-aa",
+      "variant": "cpu-next-aa-20261023",
+      "size": 3072,
+      "repeat": 1,
+      "role": "aa",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 98.91,
+        "user_s": 427.32,
+        "system_s": 47.58,
+        "inversion_s": 24.577994,
+        "prediction_s": 10.944266,
+        "deconvolution_s": 61.181789,
+        "other_s": 2.205950999999992,
+        "cpu_core_equivalent": 4.801334546557476,
+        "rss_bytes": 2712076288,
+        "instructions": 3330590885346,
+        "cycles": 1213086950382
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r1-aa/cpu-next-aa-20261023",
+      "before": {
+        "unix_s": 1792783793.3366709,
+        "load": [
+          7.33740234375,
+          6.92138671875,
+          5.16455078125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   187786.\nPages active:                                 138976.\nPages inactive:                               154665.\nPages speculative:                               656.\nPages throttled:                                   0.\nPages wired down:                             175813.\nPages purgeable:                                3068.\n\"Translation faults\":                    14035186902.\nPages copy-on-write:                       389638464.\nPages zero filled:                        5568638436.\nPages reactivated:                        4142680944.\nPages purged:                              331284234.\nFile-backed pages:                            136965.\nAnonymous pages:                              157332.\nPages stored in compressor:                   724447.\nPages occupied by compressor:                 341204.\nDecompressions:                           4244735823.\nCompressions:                             4585463107.\nPageins:                                   648994385.\nPageouts:                                    2112891.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783892.400803,
+        "load": [
+          8.61962890625,
+          7.4384765625,
+          5.54541015625
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   206104.\nPages active:                                 137499.\nPages inactive:                               136655.\nPages speculative:                              1659.\nPages throttled:                                   0.\nPages wired down:                             180026.\nPages purgeable:                                2994.\n\"Translation faults\":                    14051753450.\nPages copy-on-write:                       389660769.\nPages zero filled:                        5584953012.\nPages reactivated:                        4142746502.\nPages purged:                              331300537.\nFile-backed pages:                            115791.\nAnonymous pages:                              160022.\nPages stored in compressor:                   717339.\nPages occupied by compressor:                 337157.\nDecompressions:                           4244754624.\nCompressions:                             4585475271.\nPageins:                                   649112963.\nPageouts:                                    2112892.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r2-candidate",
+      "variant": "cpu-next-candidate-20261023",
+      "size": 3072,
+      "repeat": 2,
+      "role": "candidate",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 93.63,
+        "user_s": 423.22,
+        "system_s": 47.77,
+        "inversion_s": 24.781525,
+        "prediction_s": 11.444511,
+        "deconvolution_s": 55.181651,
+        "other_s": 2.2223129999999927,
+        "cpu_core_equivalent": 5.030332158496209,
+        "rss_bytes": 2708766720,
+        "instructions": 3236014048918,
+        "cycles": 1183430787821
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r2-candidate/cpu-next-candidate-20261023",
+      "before": {
+        "unix_s": 1792783893.8985548,
+        "load": [
+          8.08935546875,
+          7.34814453125,
+          5.5244140625
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   185161.\nPages active:                                 138770.\nPages inactive:                               157512.\nPages speculative:                              1667.\nPages throttled:                                   0.\nPages wired down:                             179043.\nPages purgeable:                                2996.\n\"Translation faults\":                    14052376123.\nPages copy-on-write:                       389661475.\nPages zero filled:                        5585572343.\nPages reactivated:                        4142746504.\nPages purged:                              331300537.\nFile-backed pages:                            136551.\nAnonymous pages:                              161398.\nPages stored in compressor:                   716985.\nPages occupied by compressor:                 336947.\nDecompressions:                           4244754981.\nCompressions:                             4585475271.\nPageins:                                   649133568.\nPageouts:                                    2112892.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792783987.690819,
+        "load": [
+          8.17626953125,
+          7.5244140625,
+          5.77001953125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   188686.\nPages active:                                 137757.\nPages inactive:                               146747.\nPages speculative:                              3192.\nPages throttled:                                   0.\nPages wired down:                             180968.\nPages purgeable:                                5200.\n\"Translation faults\":                    14067760627.\nPages copy-on-write:                       389687306.\nPages zero filled:                        5600618357.\nPages reactivated:                        4142907606.\nPages purged:                              331318577.\nFile-backed pages:                            112586.\nAnonymous pages:                              175110.\nPages stored in compressor:                   722634.\nPages occupied by compressor:                 341750.\nDecompressions:                           4244805554.\nCompressions:                             4585569304.\nPageins:                                   649268298.\nPageouts:                                    2112892.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r2-baseline",
+      "variant": "cpu-next-base-20261023",
+      "size": 3072,
+      "repeat": 2,
+      "role": "baseline",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 99.71,
+        "user_s": 429.39,
+        "system_s": 48.57,
+        "inversion_s": 24.61745,
+        "prediction_s": 11.120689,
+        "deconvolution_s": 61.868105,
+        "other_s": 2.10375599999999,
+        "cpu_core_equivalent": 4.7935011533447,
+        "rss_bytes": 2715582464,
+        "instructions": 3332545028029,
+        "cycles": 1215180244001
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r2-baseline/cpu-next-base-20261023",
+      "before": {
+        "unix_s": 1792783989.130646,
+        "load": [
+          7.841796875,
+          7.4658203125,
+          5.75927734375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   166086.\nPages active:                                 141426.\nPages inactive:                               167627.\nPages speculative:                              3313.\nPages throttled:                                   0.\nPages wired down:                             179071.\nPages purgeable:                                4610.\n\"Translation faults\":                    14068383841.\nPages copy-on-write:                       389688046.\nPages zero filled:                        5601240087.\nPages reactivated:                        4142907606.\nPages purged:                              331318577.\nFile-backed pages:                            133575.\nAnonymous pages:                              178791.\nPages stored in compressor:                   721396.\nPages occupied by compressor:                 341577.\nDecompressions:                           4244805676.\nCompressions:                             4585569304.\nPageins:                                   649288912.\nPageouts:                                    2112892.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784088.977749,
+        "load": [
+          7.8515625,
+          7.44775390625,
+          5.9296875
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   201594.\nPages active:                                 136906.\nPages inactive:                               143873.\nPages speculative:                              1825.\nPages throttled:                                   0.\nPages wired down:                             179419.\nPages purgeable:                                3977.\n\"Translation faults\":                    14084974042.\nPages copy-on-write:                       389707737.\nPages zero filled:                        5617588201.\nPages reactivated:                        4143046000.\nPages purged:                              331359810.\nFile-backed pages:                            106771.\nAnonymous pages:                              175833.\nPages stored in compressor:                   712692.\nPages occupied by compressor:                 335483.\nDecompressions:                           4244833355.\nCompressions:                             4585598827.\nPageins:                                   649415187.\nPageouts:                                    2112896.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r2-aa",
+      "variant": "cpu-next-aa-20261023",
+      "size": 3072,
+      "repeat": 2,
+      "role": "aa",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 101.94,
+        "user_s": 429.84,
+        "system_s": 50.26,
+        "inversion_s": 25.769393,
+        "prediction_s": 11.132906,
+        "deconvolution_s": 62.715272999999996,
+        "other_s": 2.322427999999988,
+        "cpu_core_equivalent": 4.709633117520109,
+        "rss_bytes": 2711371776,
+        "instructions": 3335829658383,
+        "cycles": 1222763118205
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r2-aa/cpu-next-aa-20261023",
+      "before": {
+        "unix_s": 1792784090.437566,
+        "load": [
+          7.8515625,
+          7.44775390625,
+          5.9296875
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   177747.\nPages active:                                 139647.\nPages inactive:                               165518.\nPages speculative:                              1840.\nPages throttled:                                   0.\nPages wired down:                             179550.\nPages purgeable:                                2956.\n\"Translation faults\":                    14085621202.\nPages copy-on-write:                       389710947.\nPages zero filled:                        5618211814.\nPages reactivated:                        4143046001.\nPages purged:                              331359814.\nFile-backed pages:                            127551.\nAnonymous pages:                              179454.\nPages stored in compressor:                   711351.\nPages occupied by compressor:                 334798.\nDecompressions:                           4244834621.\nCompressions:                             4585598827.\nPageins:                                   649435825.\nPageouts:                                    2112896.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784192.518829,
+        "load": [
+          7.05322265625,
+          7.0546875,
+          5.9287109375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   180850.\nPages active:                                 146865.\nPages inactive:                               162143.\nPages speculative:                              1275.\nPages throttled:                                   0.\nPages wired down:                             181671.\nPages purgeable:                                4352.\n\"Translation faults\":                    14102424227.\nPages copy-on-write:                       389735975.\nPages zero filled:                        5634663327.\nPages reactivated:                        4143198500.\nPages purged:                              331393350.\nFile-backed pages:                            100754.\nAnonymous pages:                              209529.\nPages stored in compressor:                   692593.\nPages occupied by compressor:                 326296.\nDecompressions:                           4244874453.\nCompressions:                             4585641590.\nPageins:                                   649588382.\nPageouts:                                    2112899.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r3-baseline",
+      "variant": "cpu-next-base-20261023",
+      "size": 3072,
+      "repeat": 3,
+      "role": "baseline",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 102.07,
+        "user_s": 433.31,
+        "system_s": 50.02,
+        "inversion_s": 25.457449,
+        "prediction_s": 11.37495,
+        "deconvolution_s": 62.677599,
+        "other_s": 2.5600019999999972,
+        "cpu_core_equivalent": 4.735279710002939,
+        "rss_bytes": 2724970496,
+        "instructions": 3334077575774,
+        "cycles": 1219248721769
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r3-baseline/cpu-next-base-20261023",
+      "before": {
+        "unix_s": 1792784193.93823,
+        "load": [
+          6.6484375,
+          6.970703125,
+          5.9052734375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   159637.\nPages active:                                 147752.\nPages inactive:                               182871.\nPages speculative:                              1278.\nPages throttled:                                   0.\nPages wired down:                             181643.\nPages purgeable:                                3371.\n\"Translation faults\":                    14103047487.\nPages copy-on-write:                       389736790.\nPages zero filled:                        5635282873.\nPages reactivated:                        4143198501.\nPages purged:                              331393350.\nFile-backed pages:                            121511.\nAnonymous pages:                              210390.\nPages stored in compressor:                   691862.\nPages occupied by compressor:                 325919.\nDecompressions:                           4244875193.\nCompressions:                             4585641590.\nPageins:                                   649608982.\nPageouts:                                    2112899.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784296.1620638,
+        "load": [
+          7.158203125,
+          6.92041015625,
+          5.99267578125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   203600.\nPages active:                                 141022.\nPages inactive:                               149611.\nPages speculative:                               882.\nPages throttled:                                   0.\nPages wired down:                             180585.\nPages purgeable:                                4030.\n\"Translation faults\":                    14119717631.\nPages copy-on-write:                       389758886.\nPages zero filled:                        5651668055.\nPages reactivated:                        4143353886.\nPages purged:                              331422123.\nFile-backed pages:                            103460.\nAnonymous pages:                              188055.\nPages stored in compressor:                   697931.\nPages occupied by compressor:                 323400.\nDecompressions:                           4244903564.\nCompressions:                             4585682961.\nPageins:                                   649742239.\nPageouts:                                    2112916.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-3072-r3-candidate",
+      "variant": "cpu-next-candidate-20261023",
+      "size": 3072,
+      "repeat": 3,
+      "role": "candidate",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 93854,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 93854,
+        "components_per_scale": [
+          91767,
+          156,
+          145,
+          95,
+          0,
+          26,
+          895,
+          581,
+          189
+        ]
+      },
+      "timing": {
+        "wall_s": 94.75,
+        "user_s": 432.48,
+        "system_s": 47.49,
+        "inversion_s": 24.847789,
+        "prediction_s": 11.506479,
+        "deconvolution_s": 56.179674,
+        "other_s": 2.2160579999999968,
+        "cpu_core_equivalent": 5.065646437994723,
+        "rss_bytes": 2749677568,
+        "instructions": 3235679810833,
+        "cycles": 1178388266113
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-3072-r3-candidate/cpu-next-candidate-20261023",
+      "before": {
+        "unix_s": 1792784297.61586,
+        "load": [
+          7.158203125,
+          6.92041015625,
+          5.99267578125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   182163.\nPages active:                                 144777.\nPages inactive:                               170364.\nPages speculative:                               887.\nPages throttled:                                   0.\nPages wired down:                             177881.\nPages purgeable:                                4030.\n\"Translation faults\":                    14120341358.\nPages copy-on-write:                       389759711.\nPages zero filled:                        5652287458.\nPages reactivated:                        4143353887.\nPages purged:                              331422123.\nFile-backed pages:                            124224.\nAnonymous pages:                              191804.\nPages stored in compressor:                   697223.\nPages occupied by compressor:                 323026.\nDecompressions:                           4244904213.\nCompressions:                             4585682961.\nPageins:                                   649762846.\nPageouts:                                    2112916.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784392.5319319,
+        "load": [
+          8.8388671875,
+          7.5224609375,
+          6.31884765625
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   207857.\nPages active:                                 138783.\nPages inactive:                               137961.\nPages speculative:                               625.\nPages throttled:                                   0.\nPages wired down:                             179432.\nPages purgeable:                                3986.\n\"Translation faults\":                    14135637960.\nPages copy-on-write:                       389782096.\nPages zero filled:                        5667307491.\nPages reactivated:                        4143481348.\nPages purged:                              331434465.\nFile-backed pages:                            105089.\nAnonymous pages:                              172280.\nPages stored in compressor:                   717184.\nPages occupied by compressor:                 334442.\nDecompressions:                           4244926019.\nCompressions:                             4585727271.\nPageins:                                   649883850.\nPageouts:                                    2112923.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-4096-r1-baseline",
+      "variant": "cpu-next-base-20261023",
+      "size": 4096,
+      "repeat": 1,
+      "role": "baseline",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 97873,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 97873,
+        "components_per_scale": [
+          96241,
+          198,
+          194,
+          161,
+          0,
+          15,
+          371,
+          529,
+          164
+        ]
+      },
+      "timing": {
+        "wall_s": 158.23,
+        "user_s": 639.92,
+        "system_s": 89.14,
+        "inversion_s": 26.03237,
+        "prediction_s": 12.278646,
+        "deconvolution_s": 117.577143,
+        "other_s": 2.3418410000000023,
+        "cpu_core_equivalent": 4.607596536687101,
+        "rss_bytes": 4036050944,
+        "instructions": 4528763645337,
+        "cycles": 1833333040584
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-4096-r1-baseline/cpu-next-base-20261023",
+      "before": {
+        "unix_s": 1792784394.020324,
+        "load": [
+          8.8388671875,
+          7.5224609375,
+          6.31884765625
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 1942.56M  free = 1129.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   187001.\nPages active:                                 138905.\nPages inactive:                               158702.\nPages speculative:                               628.\nPages throttled:                                   0.\nPages wired down:                             179432.\nPages purgeable:                                3954.\n\"Translation faults\":                    14136258862.\nPages copy-on-write:                       389782520.\nPages zero filled:                        5667926508.\nPages reactivated:                        4143481350.\nPages purged:                              331434465.\nFile-backed pages:                            125847.\nAnonymous pages:                              172388.\nPages stored in compressor:                   717143.\nPages occupied by compressor:                 334432.\nDecompressions:                           4244926060.\nCompressions:                             4585727271.\nPageins:                                   649904449.\nPageouts:                                    2112923.\nSwapins:                                    89479796.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784552.41671,
+        "load": [
+          8.54150390625,
+          7.990234375,
+          6.71728515625
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2085.38M  free = 986.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   228640.\nPages active:                                 124231.\nPages inactive:                               132436.\nPages speculative:                              1967.\nPages throttled:                                   0.\nPages wired down:                             177115.\nPages purgeable:                                3331.\n\"Translation faults\":                    14165000334.\nPages copy-on-write:                       389858063.\nPages zero filled:                        5694847608.\nPages reactivated:                        4144444920.\nPages purged:                              331529923.\nFile-backed pages:                            113602.\nAnonymous pages:                              145032.\nPages stored in compressor:                   677290.\nPages occupied by compressor:                 334711.\nDecompressions:                           4245968633.\nCompressions:                             4587100640.\nPageins:                                   650240237.\nPageouts:                                    2113065.\nSwapins:                                    89480146.\nSwapouts:                                  100441998.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-4096-r1-candidate",
+      "variant": "cpu-next-candidate-20261023",
+      "size": 4096,
+      "repeat": 1,
+      "role": "candidate",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 97873,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 97873,
+        "components_per_scale": [
+          96241,
+          198,
+          194,
+          161,
+          0,
+          15,
+          371,
+          529,
+          164
+        ]
+      },
+      "timing": {
+        "wall_s": 145.6,
+        "user_s": 632.51,
+        "system_s": 81.88,
+        "inversion_s": 25.394272,
+        "prediction_s": 12.526798,
+        "deconvolution_s": 105.25684100000001,
+        "other_s": 2.4220889999999855,
+        "cpu_core_equivalent": 4.906524725274726,
+        "rss_bytes": 4070293504,
+        "instructions": 4365860688660,
+        "cycles": 1758199614606
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-4096-r1-candidate/cpu-next-candidate-20261023",
+      "before": {
+        "unix_s": 1792784555.1308339,
+        "load": [
+          8.09765625,
+          7.9072265625,
+          6.6953125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2085.38M  free = 986.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   184526.\nPages active:                                 133044.\nPages inactive:                               172122.\nPages speculative:                              2539.\nPages throttled:                                   0.\nPages wired down:                             176424.\nPages purgeable:                                3391.\n\"Translation faults\":                    14166125048.\nPages copy-on-write:                       389859649.\nPages zero filled:                        5695953456.\nPages reactivated:                        4144444923.\nPages purged:                              331529923.\nFile-backed pages:                            157408.\nAnonymous pages:                              150297.\nPages stored in compressor:                   669710.\nPages occupied by compressor:                 330445.\nDecompressions:                           4245971390.\nCompressions:                             4587100640.\nPageins:                                   650283699.\nPageouts:                                    2113065.\nSwapins:                                    89480146.\nSwapouts:                                  100441998.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784700.916806,
+        "load": [
+          11.9375,
+          9.90234375,
+          7.6923828125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2796.56M  free = 275.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   200676.\nPages active:                                 128495.\nPages inactive:                               183025.\nPages speculative:                              5051.\nPages throttled:                                   0.\nPages wired down:                             179321.\nPages purgeable:                                3388.\n\"Translation faults\":                    14191404908.\nPages copy-on-write:                       389900240.\nPages zero filled:                        5720060102.\nPages reactivated:                        4145232978.\nPages purged:                              331606349.\nFile-backed pages:                            185556.\nAnonymous pages:                              131015.\nPages stored in compressor:                   619667.\nPages occupied by compressor:                 302532.\nDecompressions:                           4246636353.\nCompressions:                             4588105998.\nPageins:                                   650771788.\nPageouts:                                    2113605.\nSwapins:                                    89480356.\nSwapouts:                                  100488026.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-4096-r1-aa",
+      "variant": "cpu-next-aa-20261023",
+      "size": 4096,
+      "repeat": 1,
+      "role": "aa",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 97873,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 97873,
+        "components_per_scale": [
+          96241,
+          198,
+          194,
+          161,
+          0,
+          15,
+          371,
+          529,
+          164
+        ]
+      },
+      "timing": {
+        "wall_s": 151.96,
+        "user_s": 632.23,
+        "system_s": 81.83,
+        "inversion_s": 25.417864,
+        "prediction_s": 11.247822,
+        "deconvolution_s": 112.737563,
+        "other_s": 2.5567510000000055,
+        "cpu_core_equivalent": 4.698999736772835,
+        "rss_bytes": 4075061248,
+        "instructions": 4515902986531,
+        "cycles": 1812603314308
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-4096-r1-aa/cpu-next-aa-20261023",
+      "before": {
+        "unix_s": 1792784703.2153752,
+        "load": [
+          11.9375,
+          9.90234375,
+          7.6923828125
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2796.56M  free = 275.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   151135.\nPages active:                                 146054.\nPages inactive:                               219982.\nPages speculative:                              5511.\nPages throttled:                                   0.\nPages wired down:                             176139.\nPages purgeable:                                4643.\n\"Translation faults\":                    14192532259.\nPages copy-on-write:                       389901740.\nPages zero filled:                        5721166037.\nPages reactivated:                        4145232980.\nPages purged:                              331606349.\nFile-backed pages:                            227816.\nAnonymous pages:                              143731.\nPages stored in compressor:                   614657.\nPages occupied by compressor:                 300279.\nDecompressions:                           4246641130.\nCompressions:                             4588105998.\nPageins:                                   650813691.\nPageouts:                                    2113605.\nSwapins:                                    89480356.\nSwapouts:                                  100488026.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784855.3553898,
+        "load": [
+          8.52734375,
+          9.22021484375,
+          7.7568359375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2796.56M  free = 275.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   235991.\nPages active:                                 141881.\nPages inactive:                               161637.\nPages speculative:                              4327.\nPages throttled:                                   0.\nPages wired down:                             175376.\nPages purgeable:                                3605.\n\"Translation faults\":                    14220041528.\nPages copy-on-write:                       389939503.\nPages zero filled:                        5747926777.\nPages reactivated:                        4145648863.\nPages purged:                              331644226.\nFile-backed pages:                            139004.\nAnonymous pages:                              168841.\nPages stored in compressor:                   581817.\nPages occupied by compressor:                 279888.\nDecompressions:                           4246931194.\nCompressions:                             4588518965.\nPageins:                                   651081320.\nPageouts:                                    2113917.\nSwapins:                                    89480421.\nSwapouts:                                  100488026.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-4096-r2-candidate",
+      "variant": "cpu-next-candidate-20261023",
+      "size": 4096,
+      "repeat": 2,
+      "role": "candidate",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 97873,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 97873,
+        "components_per_scale": [
+          96241,
+          198,
+          194,
+          161,
+          0,
+          15,
+          371,
+          529,
+          164
+        ]
+      },
+      "timing": {
+        "wall_s": 139.25,
+        "user_s": 631.85,
+        "system_s": 76.83,
+        "inversion_s": 24.665042,
+        "prediction_s": 11.561361,
+        "deconvolution_s": 100.46154200000001,
+        "other_s": 2.5620549999999866,
+        "cpu_core_equivalent": 5.089263913824058,
+        "rss_bytes": 4075601920,
+        "instructions": 4355840504124,
+        "cycles": 1754288922318
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-4096-r2-candidate/cpu-next-candidate-20261023",
+      "before": {
+        "unix_s": 1792784857.761249,
+        "load": [
+          7.92431640625,
+          9.08349609375,
+          7.716796875
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2796.56M  free = 275.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   197719.\nPages active:                                 140235.\nPages inactive:                               198126.\nPages speculative:                              4705.\nPages throttled:                                   0.\nPages wired down:                             178792.\nPages purgeable:                                3663.\n\"Translation faults\":                    14221149418.\nPages copy-on-write:                       389940414.\nPages zero filled:                        5749028779.\nPages reactivated:                        4145648865.\nPages purged:                              331644226.\nFile-backed pages:                            176428.\nAnonymous pages:                              166638.\nPages stored in compressor:                   580922.\nPages occupied by compressor:                 279523.\nDecompressions:                           4246932085.\nCompressions:                             4588518965.\nPageins:                                   651118392.\nPageouts:                                    2113917.\nSwapins:                                    89480421.\nSwapouts:                                  100488026.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792784997.1448598,
+        "load": [
+          9.89453125,
+          9.19775390625,
+          7.94677734375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2796.56M  free = 275.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   247159.\nPages active:                                 125371.\nPages inactive:                               176360.\nPages speculative:                              3698.\nPages throttled:                                   0.\nPages wired down:                             179712.\nPages purgeable:                                3013.\n\"Translation faults\":                    14245735507.\nPages copy-on-write:                       389975636.\nPages zero filled:                        5772950994.\nPages reactivated:                        4145961975.\nPages purged:                              331674993.\nFile-backed pages:                            118977.\nAnonymous pages:                              186452.\nPages stored in compressor:                   558940.\nPages occupied by compressor:                 266800.\nDecompressions:                           4247203659.\nCompressions:                             4588890131.\nPageins:                                   651334536.\nPageouts:                                    2113927.\nSwapins:                                    89480445.\nSwapouts:                                  100488026.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    },
+    {
+      "tag": "cpu-next-v1-20261023-timing-4096-r2-baseline",
+      "variant": "cpu-next-base-20261023",
+      "size": 4096,
+      "repeat": 2,
+      "role": "baseline",
+      "phase": "timing",
+      "threads": 8,
+      "niter": 150000,
+      "work": {
+        "final_iteration": 97873,
+        "major_cycles": 3,
+        "termination": "Cleaning finished because the final threshold was reached.",
+        "component_total": 97873,
+        "components_per_scale": [
+          96241,
+          198,
+          194,
+          161,
+          0,
+          15,
+          371,
+          529,
+          164
+        ]
+      },
+      "timing": {
+        "wall_s": 152.39,
+        "user_s": 638.18,
+        "system_s": 81.12,
+        "inversion_s": 25.748401,
+        "prediction_s": 11.251238,
+        "deconvolution_s": 112.92877200000001,
+        "other_s": 2.461588999999975,
+        "cpu_core_equivalent": 4.720125992519194,
+        "rss_bytes": 4066672640,
+        "instructions": 4514245530301,
+        "cycles": 1812003331215
+      },
+      "path": "bench/out/cpu-next-v1-20261023-timing-4096-r2-baseline/cpu-next-base-20261023",
+      "before": {
+        "unix_s": 1792784999.483758,
+        "load": [
+          9.89453125,
+          9.19775390625,
+          7.94677734375
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2796.56M  free = 275.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   211867.\nPages active:                                 125385.\nPages inactive:                               211988.\nPages speculative:                              3706.\nPages throttled:                                   0.\nPages wired down:                             179673.\nPages purgeable:                                4006.\n\"Translation faults\":                    14246840518.\nPages copy-on-write:                       389976587.\nPages zero filled:                        5774051846.\nPages reactivated:                        4145961978.\nPages purged:                              331674993.\nFile-backed pages:                            155873.\nAnonymous pages:                              185206.\nPages stored in compressor:                   558225.\nPages occupied by compressor:                 266481.\nDecompressions:                           4247204380.\nCompressions:                             4588890131.\nPageins:                                   651371282.\nPageouts:                                    2113927.\nSwapins:                                    89480445.\nSwapouts:                                  100488026.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "after": {
+        "unix_s": 1792785152.01393,
+        "load": [
+          6.59619140625,
+          8.23046875,
+          7.7529296875
+        ],
+        "swap": "vm.swapusage: total = 3072.00M  used = 2796.56M  free = 275.44M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   233985.\nPages active:                                 122823.\nPages inactive:                               194037.\nPages speculative:                              2745.\nPages throttled:                                   0.\nPages wired down:                             175848.\nPages purgeable:                                6924.\n\"Translation faults\":                    14274330340.\nPages copy-on-write:                       390011470.\nPages zero filled:                        5800779513.\nPages reactivated:                        4146385515.\nPages purged:                              331739799.\nFile-backed pages:                            129074.\nAnonymous pages:                              190531.\nPages stored in compressor:                   563731.\nPages occupied by compressor:                 269662.\nDecompressions:                           4247528703.\nCompressions:                             4589410111.\nPageins:                                   651585072.\nPageouts:                                    2113936.\nSwapins:                                    89480521.\nSwapouts:                                  100488026.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      }
+    }
+  ],
+  "statistics": [
+    {
+      "size": 3072,
+      "role": "baseline",
+      "n": 3,
+      "metrics": {
+        "wall_s": {
+          "median": 99.71,
+          "min": 95.22,
+          "max": 102.07
+        },
+        "user_s": {
+          "median": 429.39,
+          "min": 407.1,
+          "max": 433.31
+        },
+        "system_s": {
+          "median": 48.57,
+          "min": 46.15,
+          "max": 50.02
+        },
+        "inversion_s": {
+          "median": 24.61745,
+          "min": 23.750936,
+          "max": 25.457449
+        },
+        "prediction_s": {
+          "median": 11.120689,
+          "min": 10.126887,
+          "max": 11.37495
+        },
+        "deconvolution_s": {
+          "median": 61.868105,
+          "min": 59.047406,
+          "max": 62.677599
+        },
+        "other_s": {
+          "median": 2.2947710000000043,
+          "min": 2.10375599999999,
+          "max": 2.5600019999999972
+        },
+        "cpu_core_equivalent": {
+          "median": 4.760029405587062,
+          "min": 4.735279710002939,
+          "max": 4.7935011533447
+        },
+        "rss_bytes": {
+          "median": 2724970496,
+          "min": 2715582464,
+          "max": 2744500224
+        },
+        "instructions": {
+          "median": 3332545028029,
+          "min": 3331395625101,
+          "max": 3334077575774
+        },
+        "cycles": {
+          "median": 1219248721769,
+          "min": 1215180244001,
+          "max": 1227431944752
+        }
+      }
+    },
+    {
+      "size": 3072,
+      "role": "candidate",
+      "n": 3,
+      "metrics": {
+        "wall_s": {
+          "median": 93.63,
+          "min": 92.17,
+          "max": 94.75
+        },
+        "user_s": {
+          "median": 423.22,
+          "min": 420.81,
+          "max": 432.48
+        },
+        "system_s": {
+          "median": 47.49,
+          "min": 46.36,
+          "max": 47.77
+        },
+        "inversion_s": {
+          "median": 24.781525,
+          "min": 24.249329,
+          "max": 24.847789
+        },
+        "prediction_s": {
+          "median": 11.444511,
+          "min": 10.828978,
+          "max": 11.506479
+        },
+        "deconvolution_s": {
+          "median": 55.181651,
+          "min": 54.676128,
+          "max": 56.179674
+        },
+        "other_s": {
+          "median": 2.2223129999999927,
+          "min": 2.2160579999999968,
+          "max": 2.415565000000001
+        },
+        "cpu_core_equivalent": {
+          "median": 5.065646437994723,
+          "min": 5.030332158496209,
+          "max": 5.068568948681784
+        },
+        "rss_bytes": {
+          "median": 2722889728,
+          "min": 2708766720,
+          "max": 2749677568
+        },
+        "instructions": {
+          "median": 3235679810833,
+          "min": 3234269743192,
+          "max": 3236014048918
+        },
+        "cycles": {
+          "median": 1181511603845,
+          "min": 1178388266113,
+          "max": 1183430787821
+        }
+      }
+    },
+    {
+      "size": 3072,
+      "role": "aa",
+      "n": 2,
+      "metrics": {
+        "wall_s": {
+          "median": 100.425,
+          "min": 98.91,
+          "max": 101.94
+        },
+        "user_s": {
+          "median": 428.58,
+          "min": 427.32,
+          "max": 429.84
+        },
+        "system_s": {
+          "median": 48.92,
+          "min": 47.58,
+          "max": 50.26
+        },
+        "inversion_s": {
+          "median": 25.1736935,
+          "min": 24.577994,
+          "max": 25.769393
+        },
+        "prediction_s": {
+          "median": 11.038586,
+          "min": 10.944266,
+          "max": 11.132906
+        },
+        "deconvolution_s": {
+          "median": 61.948531,
+          "min": 61.181789,
+          "max": 62.715272999999996
+        },
+        "other_s": {
+          "median": 2.26418949999999,
+          "min": 2.205950999999992,
+          "max": 2.322427999999988
+        },
+        "cpu_core_equivalent": {
+          "median": 4.755483832038793,
+          "min": 4.709633117520109,
+          "max": 4.801334546557476
+        },
+        "rss_bytes": {
+          "median": 2711724032.0,
+          "min": 2711371776,
+          "max": 2712076288
+        },
+        "instructions": {
+          "median": 3333210271864.5,
+          "min": 3330590885346,
+          "max": 3335829658383
+        },
+        "cycles": {
+          "median": 1217925034293.5,
+          "min": 1213086950382,
+          "max": 1222763118205
+        }
+      }
+    },
+    {
+      "size": 4096,
+      "role": "baseline",
+      "n": 2,
+      "metrics": {
+        "wall_s": {
+          "median": 155.31,
+          "min": 152.39,
+          "max": 158.23
+        },
+        "user_s": {
+          "median": 639.05,
+          "min": 638.18,
+          "max": 639.92
+        },
+        "system_s": {
+          "median": 85.13,
+          "min": 81.12,
+          "max": 89.14
+        },
+        "inversion_s": {
+          "median": 25.8903855,
+          "min": 25.748401,
+          "max": 26.03237
+        },
+        "prediction_s": {
+          "median": 11.764942000000001,
+          "min": 11.251238,
+          "max": 12.278646
+        },
+        "deconvolution_s": {
+          "median": 115.25295750000001,
+          "min": 112.92877200000001,
+          "max": 117.577143
+        },
+        "other_s": {
+          "median": 2.4017149999999887,
+          "min": 2.3418410000000023,
+          "max": 2.461588999999975
+        },
+        "cpu_core_equivalent": {
+          "median": 4.663861264603147,
+          "min": 4.607596536687101,
+          "max": 4.720125992519194
+        },
+        "rss_bytes": {
+          "median": 4051361792.0,
+          "min": 4036050944,
+          "max": 4066672640
+        },
+        "instructions": {
+          "median": 4521504587819.0,
+          "min": 4514245530301,
+          "max": 4528763645337
+        },
+        "cycles": {
+          "median": 1822668185899.5,
+          "min": 1812003331215,
+          "max": 1833333040584
+        }
+      }
+    },
+    {
+      "size": 4096,
+      "role": "candidate",
+      "n": 2,
+      "metrics": {
+        "wall_s": {
+          "median": 142.425,
+          "min": 139.25,
+          "max": 145.6
+        },
+        "user_s": {
+          "median": 632.1800000000001,
+          "min": 631.85,
+          "max": 632.51
+        },
+        "system_s": {
+          "median": 79.35499999999999,
+          "min": 76.83,
+          "max": 81.88
+        },
+        "inversion_s": {
+          "median": 25.029657,
+          "min": 24.665042,
+          "max": 25.394272
+        },
+        "prediction_s": {
+          "median": 12.044079499999999,
+          "min": 11.561361,
+          "max": 12.526798
+        },
+        "deconvolution_s": {
+          "median": 102.85919150000001,
+          "min": 100.46154200000001,
+          "max": 105.25684100000001
+        },
+        "other_s": {
+          "median": 2.492071999999986,
+          "min": 2.4220889999999855,
+          "max": 2.5620549999999866
+        },
+        "cpu_core_equivalent": {
+          "median": 4.997894319549392,
+          "min": 4.906524725274726,
+          "max": 5.089263913824058
+        },
+        "rss_bytes": {
+          "median": 4072947712.0,
+          "min": 4070293504,
+          "max": 4075601920
+        },
+        "instructions": {
+          "median": 4360850596392.0,
+          "min": 4355840504124,
+          "max": 4365860688660
+        },
+        "cycles": {
+          "median": 1756244268462.0,
+          "min": 1754288922318,
+          "max": 1758199614606
+        }
+      }
+    },
+    {
+      "size": 4096,
+      "role": "aa",
+      "n": 1,
+      "metrics": {
+        "wall_s": {
+          "median": 151.96,
+          "min": 151.96,
+          "max": 151.96
+        },
+        "user_s": {
+          "median": 632.23,
+          "min": 632.23,
+          "max": 632.23
+        },
+        "system_s": {
+          "median": 81.83,
+          "min": 81.83,
+          "max": 81.83
+        },
+        "inversion_s": {
+          "median": 25.417864,
+          "min": 25.417864,
+          "max": 25.417864
+        },
+        "prediction_s": {
+          "median": 11.247822,
+          "min": 11.247822,
+          "max": 11.247822
+        },
+        "deconvolution_s": {
+          "median": 112.737563,
+          "min": 112.737563,
+          "max": 112.737563
+        },
+        "other_s": {
+          "median": 2.5567510000000055,
+          "min": 2.5567510000000055,
+          "max": 2.5567510000000055
+        },
+        "cpu_core_equivalent": {
+          "median": 4.698999736772835,
+          "min": 4.698999736772835,
+          "max": 4.698999736772835
+        },
+        "rss_bytes": {
+          "median": 4075061248,
+          "min": 4075061248,
+          "max": 4075061248
+        },
+        "instructions": {
+          "median": 4515902986531,
+          "min": 4515902986531,
+          "max": 4515902986531
+        },
+        "cycles": {
+          "median": 1812603314308,
+          "min": 1812603314308,
+          "max": 1812603314308
+        }
+      }
+    }
+  ],
+  "pairs": [
+    {
+      "size": 3072,
+      "repeat": 1,
+      "role": "candidate",
+      "baseline": "cpu-next-v1-20261023-timing-3072-r1-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-3072-r1-candidate",
+      "ratios": {
+        "wall_s": 0.9679689140936778,
+        "inversion_s": 1.0209841414249947,
+        "prediction_s": 1.0693294000416909,
+        "deconvolution_s": 0.9259700248305572,
+        "rss_bytes": 0.9921258902400439,
+        "instructions": 0.9708452874293322,
+        "cycles": 0.9625882794534257
+      }
+    },
+    {
+      "size": 3072,
+      "repeat": 1,
+      "role": "aa",
+      "baseline": "cpu-next-v1-20261023-timing-3072-r1-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-3072-r1-aa",
+      "ratios": {
+        "wall_s": 1.0387523629489603,
+        "inversion_s": 1.0348221223786718,
+        "prediction_s": 1.0807137474724464,
+        "deconvolution_s": 1.0361469392914568,
+        "rss_bytes": 0.9881858504814609,
+        "instructions": 0.9997584376502939,
+        "cycles": 0.9883130022553728
+      }
+    },
+    {
+      "size": 3072,
+      "repeat": 2,
+      "role": "candidate",
+      "baseline": "cpu-next-v1-20261023-timing-3072-r2-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-3072-r2-candidate",
+      "ratios": {
+        "wall_s": 0.939023167184836,
+        "inversion_s": 1.0066649876408806,
+        "prediction_s": 1.0291188792349106,
+        "deconvolution_s": 0.8919240535975687,
+        "rss_bytes": 0.9974901355085493,
+        "instructions": 0.9710338560172157,
+        "cycles": 0.9738726363132234
+      }
+    },
+    {
+      "size": 3072,
+      "repeat": 2,
+      "role": "aa",
+      "baseline": "cpu-next-v1-20261023-timing-3072-r2-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-3072-r2-aa",
+      "ratios": {
+        "wall_s": 1.0223648580884566,
+        "inversion_s": 1.0467937580862356,
+        "prediction_s": 1.001098583010459,
+        "deconvolution_s": 1.0136931299253469,
+        "rss_bytes": 0.9984494346771566,
+        "instructions": 1.000985622197562,
+        "cycles": 1.006240123011738
+      }
+    },
+    {
+      "size": 3072,
+      "repeat": 3,
+      "role": "candidate",
+      "baseline": "cpu-next-v1-20261023-timing-3072-r3-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-3072-r3-candidate",
+      "ratios": {
+        "wall_s": 0.9282845106299599,
+        "inversion_s": 0.9760518031480687,
+        "prediction_s": 1.0115630398375377,
+        "deconvolution_s": 0.8963277932838493,
+        "rss_bytes": 1.0090669135817314,
+        "instructions": 0.970487259907815,
+        "cycles": 0.9664871859806292
+      }
+    },
+    {
+      "size": 4096,
+      "repeat": 1,
+      "role": "candidate",
+      "baseline": "cpu-next-v1-20261023-timing-4096-r1-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-4096-r1-candidate",
+      "ratios": {
+        "wall_s": 0.9201794855589964,
+        "inversion_s": 0.975488286314308,
+        "prediction_s": 1.0202100459610937,
+        "deconvolution_s": 0.895215160994344,
+        "rss_bytes": 1.0084841743761697,
+        "instructions": 0.964029265063384,
+        "cycles": 0.9590181247406818
+      }
+    },
+    {
+      "size": 4096,
+      "repeat": 1,
+      "role": "aa",
+      "baseline": "cpu-next-v1-20261023-timing-4096-r1-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-4096-r1-aa",
+      "ratios": {
+        "wall_s": 0.9603741389117109,
+        "inversion_s": 0.9763945426405664,
+        "prediction_s": 0.9160474208638313,
+        "deconvolution_s": 0.9588391087203062,
+        "rss_bytes": 1.00966546372711,
+        "instructions": 0.9971602274233847,
+        "cycles": 0.9886928747711891
+      }
+    },
+    {
+      "size": 4096,
+      "repeat": 2,
+      "role": "candidate",
+      "baseline": "cpu-next-v1-20261023-timing-4096-r2-baseline",
+      "candidate": "cpu-next-v1-20261023-timing-4096-r2-candidate",
+      "ratios": {
+        "wall_s": 0.913773869676488,
+        "inversion_s": 0.9579251931022823,
+        "prediction_s": 1.0275634556837212,
+        "deconvolution_s": 0.889600942441843,
+        "rss_bytes": 1.0021957213649733,
+        "instructions": 0.9649099666569448,
+        "cycles": 0.9681488395176951
+      }
+    }
+  ],
+  "modes": {
+    "3072": {
+      "status": "comparable",
+      "text": "comparable\ncpu-next-base-20261023: wall 95.22-102.07s (span 6.7%) | 3 sample(s), instructions 3331.40-3334.08G, cycles 1215.18-1227.43G (span 1.0%)\ncpu-next-candidate-20261023: wall 92.17-94.75s (span 2.7%) | 3 sample(s), instructions 3234.27-3236.01G, cycles 1178.39-1183.43G (span 0.4%)\ncpu-next-aa-20261023: wall 98.91-101.94s (span 3.0%) | 2 sample(s), instructions 3330.59-3335.83G, cycles 1213.09-1222.76G (span 0.8%)\nresolution: a wall difference smaller than the widest within-variant span above is not resolvable by this run (descriptive heuristic: an observed range is not a computed bound, and a single repeat gives no repeatability estimate)\n",
+      "classifier_source_sha256": "1d4e3c9bb938bd3d00839ba26db49b87100c06b68931863275bca4e2b3055494"
+    },
+    "4096": {
+      "status": "comparable",
+      "text": "comparable\ncpu-next-base-20261023: wall 152.39-158.23s (span 3.7%) | 2 sample(s), instructions 4514.25-4528.76G, cycles 1812.00-1833.33G (span 1.2%)\ncpu-next-candidate-20261023: wall 139.25-145.60s (span 4.4%) | 2 sample(s), instructions 4355.84-4365.86G, cycles 1754.29-1758.20G (span 0.2%)\ncpu-next-aa-20261023: wall 151.96-151.96s (span 0.0%) | 1 sample(s), instructions 4515.90-4515.90G, cycles 1812.60-1812.60G (span 0.0%)\nresolution: a wall difference smaller than the widest within-variant span above is not resolvable by this run (descriptive heuristic: an observed range is not a computed bound, and a single repeat gives no repeatability estimate)\n",
+      "classifier_source_sha256": "1d4e3c9bb938bd3d00839ba26db49b87100c06b68931863275bca4e2b3055494"
+    }
+  },
+  "gates": [
+    {
+      "label": "cpu-next-v1-20261023-preflight-3072-r0-baseline",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-preflight-3072-r0-baseline/cpu-next-base-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-preflight-3072-r0-candidate",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-preflight-3072-r0-candidate/cpu-next-candidate-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-preflight-4096-r0-baseline",
+      "left": "bench/out/cpu-next-profile-20261023-4096/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-preflight-4096-r0-baseline/cpu-next-base-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-preflight-4096-r0-candidate",
+      "left": "bench/out/cpu-next-profile-20261023-4096/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-preflight-4096-r0-candidate/cpu-next-candidate-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r1-baseline",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r1-baseline/cpu-next-base-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r1-candidate",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r1-candidate/cpu-next-candidate-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r1-aa",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r1-aa/cpu-next-aa-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r2-candidate",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r2-candidate/cpu-next-candidate-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r2-baseline",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r2-baseline/cpu-next-base-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r2-aa",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r2-aa/cpu-next-aa-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r3-baseline",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r3-baseline/cpu-next-base-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-3072-r3-candidate",
+      "left": "bench/out/cpu-next-profile-20261023-3072/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-3072-r3-candidate/cpu-next-candidate-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            3072,
+            3072
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-4096-r1-baseline",
+      "left": "bench/out/cpu-next-profile-20261023-4096/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-4096-r1-baseline/cpu-next-base-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-4096-r1-candidate",
+      "left": "bench/out/cpu-next-profile-20261023-4096/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-4096-r1-candidate/cpu-next-candidate-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-4096-r1-aa",
+      "left": "bench/out/cpu-next-profile-20261023-4096/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-4096-r1-aa/cpu-next-aa-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-4096-r2-candidate",
+      "left": "bench/out/cpu-next-profile-20261023-4096/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-4096-r2-candidate/cpu-next-candidate-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    },
+    {
+      "label": "cpu-next-v1-20261023-timing-4096-r2-baseline",
+      "left": "bench/out/cpu-next-profile-20261023-4096/cpu-next-base-20261023",
+      "right": "bench/out/cpu-next-v1-20261023-timing-4096-r2-baseline/cpu-next-base-20261023",
+      "expected": "T0",
+      "passed": true,
+      "products": [
+        {
+          "name": "img-dirty.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-horizon-mask.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-image.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-model.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-psf.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        },
+        {
+          "name": "img-residual.fits",
+          "shape": [
+            1,
+            1,
+            4096,
+            4096
+          ],
+          "bitwise": true,
+          "nan_mismatch": 0,
+          "max_abs": 0.0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "peak_ratio": 1.0,
+          "n_diff": 0,
+          "max_ulp": 0,
+          "T0": true,
+          "T2": true
+        }
+      ]
+    }
+  ],
+  "figure_inputs": {
+    "3072": {
+      "baseline": {
+        "path": "bench/out/cpu-next-v1-20261023-timing-3072-r1-baseline/cpu-next-base-20261023/img-image.fits",
+        "sha256": "02d7ea39360dd7940225162686cdfe7eb88d2ac360e6ed65373238dfed067f78"
+      },
+      "candidate": {
+        "path": "bench/out/cpu-next-v1-20261023-timing-3072-r1-candidate/cpu-next-candidate-20261023/img-image.fits",
+        "sha256": "e8d365fa71df77ab1ebb9135a48caebe67975e4ae23849d59a4dc7224588c2b9"
+      }
+    },
+    "4096": {
+      "baseline": {
+        "path": "bench/out/cpu-next-v1-20261023-timing-4096-r1-baseline/cpu-next-base-20261023/img-image.fits",
+        "sha256": "3a3169e110e9a9770cc078b5b233c6ffdac3047b53a7c51eeb592a1c017bd27f"
+      },
+      "candidate": {
+        "path": "bench/out/cpu-next-v1-20261023-timing-4096-r1-candidate/cpu-next-candidate-20261023/img-image.fits",
+        "sha256": "e70de3eeae1df66c371f26c9268edc4185096cada3c5861c78c522681f56c027"
+      }
+    }
+  },
+  "micro": [
+    {
+      "size": 3072,
+      "mask_stride": 1,
+      "allow_negative": false,
+      "samples_ms": {
+        "before": [
+          2.751958,
+          2.765584,
+          2.777708,
+          2.749667,
+          2.748667,
+          2.745625,
+          2.751959,
+          2.755959
+        ],
+        "final": [
+          1.354416,
+          1.344917,
+          1.341792,
+          1.356666,
+          1.368916,
+          1.447125,
+          1.420167,
+          1.342958
+        ]
+      },
+      "baseline_ms": 2.7519584999999998,
+      "candidate_ms": 1.355541,
+      "speedup": 2.030155118878735
+    },
+    {
+      "size": 3072,
+      "mask_stride": 1,
+      "allow_negative": true,
+      "samples_ms": {
+        "before": [
+          2.747958,
+          2.942417,
+          2.901583,
+          2.754083,
+          2.751042,
+          2.759041,
+          2.74975,
+          2.747
+        ],
+        "final": [
+          1.374083,
+          1.376792,
+          1.370084,
+          1.372791,
+          1.372334,
+          1.372792,
+          1.465667,
+          1.381875
+        ]
+      },
+      "baseline_ms": 2.7525625,
+      "candidate_ms": 1.3734375,
+      "speedup": 2.0041410693970416
+    },
+    {
+      "size": 3072,
+      "mask_stride": 3,
+      "allow_negative": false,
+      "samples_ms": {
+        "before": [
+          2.74925,
+          2.776167,
+          2.7465,
+          2.780208,
+          2.780833,
+          2.749166,
+          2.756834,
+          2.765917
+        ],
+        "final": [
+          1.348375,
+          1.33675,
+          1.337,
+          1.337875,
+          1.338916,
+          1.377208,
+          1.370792,
+          1.348
+        ]
+      },
+      "baseline_ms": 2.7613754999999998,
+      "candidate_ms": 1.343458,
+      "speedup": 2.055423764643182
+    },
+    {
+      "size": 3072,
+      "mask_stride": 3,
+      "allow_negative": true,
+      "samples_ms": {
+        "before": [
+          2.750833,
+          2.759208,
+          2.750458,
+          2.750667,
+          2.750459,
+          2.750625,
+          2.756333,
+          2.749875
+        ],
+        "final": [
+          1.386042,
+          1.391125,
+          1.384667,
+          1.372125,
+          1.370791,
+          1.444792,
+          1.4075,
+          1.442292
+        ]
+      },
+      "baseline_ms": 2.7506459999999997,
+      "candidate_ms": 1.3885835,
+      "speedup": 1.9809006804416154
+    },
+    {
+      "size": 3072,
+      "mask_stride": 16,
+      "allow_negative": false,
+      "samples_ms": {
+        "before": [
+          2.776,
+          2.752791,
+          2.750125,
+          2.770667,
+          2.750416,
+          2.750458,
+          2.764917,
+          2.752667
+        ],
+        "final": [
+          1.340334,
+          1.340125,
+          1.336792,
+          1.336792,
+          1.33825,
+          1.34,
+          1.340125,
+          1.342875
+        ]
+      },
+      "baseline_ms": 2.7527290000000004,
+      "candidate_ms": 1.3400625000000002,
+      "speedup": 2.054179562520405
+    },
+    {
+      "size": 3072,
+      "mask_stride": 16,
+      "allow_negative": true,
+      "samples_ms": {
+        "before": [
+          2.777292,
+          2.752333,
+          2.750834,
+          2.868333,
+          2.765041,
+          2.774,
+          2.755,
+          2.751083
+        ],
+        "final": [
+          1.43475,
+          1.531958,
+          1.404,
+          1.369625,
+          1.410125,
+          1.369791,
+          1.366791,
+          1.366875
+        ]
+      },
+      "baseline_ms": 2.7600205,
+      "candidate_ms": 1.3868955,
+      "speedup": 1.9900709894869513
+    },
+    {
+      "size": 4096,
+      "mask_stride": 1,
+      "allow_negative": false,
+      "samples_ms": {
+        "before": [
+          5.1475,
+          4.900792,
+          4.919958,
+          4.929291,
+          4.90025,
+          4.92725,
+          4.916833,
+          4.929833
+        ],
+        "final": [
+          2.407833,
+          2.412584,
+          2.404417,
+          2.412584,
+          2.410459,
+          2.424792,
+          2.402375,
+          2.404292
+        ]
+      },
+      "baseline_ms": 4.923604,
+      "candidate_ms": 2.409146,
+      "speedup": 2.0437134154592544
+    },
+    {
+      "size": 4096,
+      "mask_stride": 1,
+      "allow_negative": true,
+      "samples_ms": {
+        "before": [
+          4.962583,
+          4.925042,
+          4.913959,
+          4.900208,
+          4.933375,
+          4.900209,
+          5.031459,
+          4.927042
+        ],
+        "final": [
+          2.442792,
+          2.442791,
+          2.443875,
+          2.549416,
+          2.549208,
+          2.600375,
+          2.501625,
+          2.45475
+        ]
+      },
+      "baseline_ms": 4.926042000000001,
+      "candidate_ms": 2.4781875,
+      "speedup": 1.987760006052811
+    },
+    {
+      "size": 4096,
+      "mask_stride": 3,
+      "allow_negative": false,
+      "samples_ms": {
+        "before": [
+          4.914791,
+          4.907375,
+          4.91775,
+          4.917958,
+          4.901125,
+          4.916792,
+          4.9985,
+          5.056792
+        ],
+        "final": [
+          2.40025,
+          2.402083,
+          2.398292,
+          2.397875,
+          2.424458,
+          2.398791,
+          2.395125,
+          2.429208
+        ]
+      },
+      "baseline_ms": 4.9172709999999995,
+      "candidate_ms": 2.3995205000000004,
+      "speedup": 2.0492723442037684
+    },
+    {
+      "size": 4096,
+      "mask_stride": 3,
+      "allow_negative": true,
+      "samples_ms": {
+        "before": [
+          4.981333,
+          4.952,
+          4.930084,
+          4.903042,
+          4.94025,
+          4.957584,
+          4.900417,
+          5.145333
+        ],
+        "final": [
+          2.443958,
+          2.451917,
+          2.47925,
+          2.443375,
+          2.439833,
+          2.4505,
+          2.4405,
+          2.595375
+        ]
+      },
+      "baseline_ms": 4.946125,
+      "candidate_ms": 2.447229,
+      "speedup": 2.0211124500404334
+    },
+    {
+      "size": 4096,
+      "mask_stride": 16,
+      "allow_negative": false,
+      "samples_ms": {
+        "before": [
+          4.904875,
+          4.960833,
+          4.946417,
+          4.937375,
+          4.917791,
+          4.904375,
+          4.911042,
+          4.972666
+        ],
+        "final": [
+          2.441291,
+          2.406667,
+          2.396458,
+          2.409084,
+          2.421625,
+          2.402666,
+          2.398459,
+          2.424334
+        ]
+      },
+      "baseline_ms": 4.927583,
+      "candidate_ms": 2.4078755000000003,
+      "speedup": 2.0464442617568888
+    },
+    {
+      "size": 4096,
+      "mask_stride": 16,
+      "allow_negative": true,
+      "samples_ms": {
+        "before": [
+          4.910959,
+          4.909792,
+          4.905,
+          5.041625,
+          4.906917,
+          4.905583,
+          4.903292,
+          4.907875
+        ],
+        "final": [
+          2.7395,
+          2.442917,
+          2.48775,
+          2.445042,
+          2.438917,
+          2.435333,
+          2.435166,
+          2.438917
+        ]
+      },
+      "baseline_ms": 4.907396,
+      "candidate_ms": 2.440917,
+      "speedup": 2.0104722938141695
+    }
+  ],
+  "baseline_provenance": {
+    "root_head": "9a09d270d9c9d4d74bd3fa5b55aa591fbfc36b90",
+    "components": {
+      "wsclean": {
+        "head": "99bb9fc25d46016721e889f7b1b21820f4aa8c77",
+        "paths": [
+          ".clang-format",
+          "doc/source/continue_deconvolution.rst",
+          "doc/source/deconvolution.rst",
+          "doc/source/images/parallel-deconvolution-example.png",
+          "doc/source/local_rms_thresholding.rst",
+          "doc/source/moresane_deconvolution.rst",
+          "doc/source/multiscale_cleaning.rst",
+          "doc/source/parallel_deconvolution.rst",
+          "doc/source/polarimetric_deconvolution.rst",
+          "doc/source/python_deconvolution.rst",
+          "doc/source/wideband_deconvolution.rst",
+          "math/tophatconvolution.cpp",
+          "math/tophatconvolution.h",
+          "metal/multiscale_batch_probe.cpp",
+          "metal/mxconvolve.cpp",
+          "metal/mxconvolve.h",
+          "msproviders/reordering/reorderms.cpp",
+          "msproviders/reordering/reorderms.h",
+          "scheduling/threadedscheduler.cpp",
+          "scheduling/threadedscheduler.h",
+          "scripts/python-examples/deconvolution-error-test.py",
+          "scripts/python-examples/mf-deconvolution-example.py",
+          "scripts/python-examples/simple-deconvolution-example.py",
+          "tests/math/ttophatconvolution.cpp",
+          "tests/python/aterms_checks.py",
+          "tests/python/test_deconvolution_write_input.py",
+          "tests/python/vela_deconvolution_checks.py",
+          "wgridder/wgridder.h",
+          "wgridder/wgridder_double.cpp",
+          "wgridder/wgridder_float.cpp",
+          "wgridder/wgridder_implementation.h",
+          "wgridder/wgridderbase.h",
+          "wgridder/wgriddingmsgridder.cpp",
+          "wgridder/wgriddingmsgridder.h"
+        ]
+      },
+      "radler": {
+        "head": "172e4a01a72d525d8a515bdae435538b62899a10",
+        "paths": [
+          ".clang-format",
+          "cpp/algorithms/deconvolution_algorithm.cc",
+          "cpp/algorithms/deconvolution_algorithm.h",
+          "cpp/algorithms/iuwt_deconvolution.h",
+          "cpp/algorithms/iuwt_deconvolution_algorithm.cc",
+          "cpp/algorithms/iuwt_deconvolution_algorithm.h",
+          "cpp/algorithms/ls_deconvolution.cc",
+          "cpp/algorithms/ls_deconvolution.h",
+          "cpp/algorithms/multiscale/multiscale_transforms.cc",
+          "cpp/algorithms/multiscale/multiscale_transforms.h",
+          "cpp/algorithms/multiscale_algorithm.cc",
+          "cpp/algorithms/multiscale_algorithm.h",
+          "cpp/algorithms/parallel_deconvolution.cc",
+          "cpp/algorithms/parallel_deconvolution.h",
+          "cpp/algorithms/python_deconvolution.cc",
+          "cpp/algorithms/python_deconvolution.h",
+          "cpp/algorithms/rm_deconvolution.cc",
+          "cpp/algorithms/rm_deconvolution.h",
+          "cpp/algorithms/subminor_loop.cc",
+          "cpp/algorithms/subminor_loop.h",
+          "cpp/algorithms/test/test_rm_deconvolution.cc",
+          "cpp/algorithms/threaded_deconvolution_tools.cc",
+          "cpp/algorithms/threaded_deconvolution_tools.h",
+          "cpp/demo/multiscale_example.cc",
+          "cpp/math/peak_finder.cc",
+          "cpp/math/peak_finder.h",
+          "cpp/math/rms_image.cc",
+          "cpp/math/rms_image.h",
+          "cpp/math/test/test_peak_finder.cc",
+          "cpp/math/test/test_rms_image.cc",
+          "cpp/test/test_python_deconvolution.cc"
+        ]
+      },
+      "schaapcommon": {
+        "head": "5623a6bd27303dca2357997a1353e40b13c86c22",
+        "paths": [
+          ".clang-format",
+          "external/ducc0/infra/threading.cc",
+          "external/ducc0/infra/threading.h",
+          "external/ducc0/wgridder/mx_prediction.h",
+          "external/ducc0/wgridder/wgridder.cc",
+          "external/ducc0/wgridder/wgridder.h",
+          "external/ducc0/wgridder/wgridder_impl.h",
+          "include/schaapcommon/math/convolution.h",
+          "include/schaapcommon/math/paddedconvolution.h",
+          "include/schaapcommon/threading/dynamicfor.h",
+          "include/schaapcommon/threading/recursivefor.h",
+          "include/schaapcommon/threading/staticfor.h",
+          "include/schaapcommon/threading/threadpool.h",
+          "src/math/convolution.cc",
+          "src/math/test/tconvolution.cc",
+          "src/math/test/tpaddedconvolution.cc",
+          "src/threading/CMakeLists.txt",
+          "src/threading/recursivefor.cc",
+          "src/threading/test/tdynamicfor.cpp",
+          "src/threading/test/trecursivefor.cpp",
+          "src/threading/test/tstaticfor.cpp",
+          "src/threading/test/tthreadpool.cpp",
+          "src/threading/threadpool.cc"
+        ]
+      },
+      "aocommon": {
+        "head": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+        "paths": [
+          ".clang-format"
+        ]
+      }
+    },
+    "baseline": {
+      "wsclean": "ddc55bf0f8ac31019e14748c49422391b7c8bcdd5c71a83033f40393f7475dd2",
+      "libschaapthreading.dylib": "8ef3f61dce77761381a696a8d8cbf9f248361610796cc0f6d5aee87850122b04"
+    },
+    "default_binary_sha256": "af07b46ed32b0aee4fa7bf3bb4f98f78859e635a4616fb1db6bf3313dfd3994e",
+    "loaded_non_system_libraries": {
+      "/Users/peijinz/dev/wsclean-mx/bench/bin/cpu-next-base-20261023/libschaapthreading.dylib": "8ef3f61dce77761381a696a8d8cbf9f248361610796cc0f6d5aee87850122b04",
+      "/Users/peijinz/dev/wsclean-mx/bench/bin/cpu-next-base-20261023/wsclean": "ddc55bf0f8ac31019e14748c49422391b7c8bcdd5c71a83033f40393f7475dd2",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib": "0c1136b66ee4a94adaeca285315f2ccf640c317b47ff541839bfc4ab71848b18",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib": "78b3bf69d7648c33e45988f74ca6f5a05746ea7a681927d8e44b2f26d2faff39",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib": "7523ee5f3eb0e0bd8907682f4bec8bb4e3fbd3945f8eed7e0aa215cea3ad8c42",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib": "71936b1d8c9526d3786e97e609fed6852bfb110fd2d695addd0b04439c58fc57",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib": "ec49169b5143fb5607604c04023b252713f0b7511427f0741938f8d3829a3715",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib": "c468ef4e46f3de1bd8f2da9c8252eddf80c93590e0b97d6fb1cd7f829fe0e3c9",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_atomic.dylib": "cbb0ca3f0906999bfef951f408149bf581d1e3b0e184caf2f4f45696e5b2b6b0",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_container.dylib": "8c83fa51d3d1cf9a173c021afe70910b9023cecdb5a8a5ead06a129a81e0ceab",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_filesystem.dylib": "fccc70ad53b3d1fd89a8cc11997024b4798dbfa4480acd5d3532df973fbf447c",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_program_options.dylib": "05431f6d7c770f2811fb859815b2227702b47fdb980999290842c54345ca3db0",
+      "/opt/homebrew/Cellar/cfitsio/4.7.0/lib/libcfitsio.4.7.0.dylib": "2c69ca314d2f7b0834a5dfb988dd932b157f5a8e992da7c241f1f7d600376064",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3.3.dylib": "903d7b6b749085a41cf5577f6042a73f38eb5ca902f081f233b957a66c45efaf",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3_threads.3.dylib": "7df53ceeefdee72f6e8038ae73e98c5f0d5da93dc88e3c7b6c0670d83a10c42f",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3f.3.dylib": "7b8bcb1a401d87e10b71271d5ee99a867cb3090bb74b67d01c7698f440249f1b",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3f_threads.3.dylib": "2256ff621579680330d177513c4dd18ee516eadc54e801e08e54dcc7454153ab",
+      "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgcc_s.1.1.dylib": "52a2ca8bb35b47a827a875c40958a36f290491ae39833c8c3bf0399f8471a5f3",
+      "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgfortran.5.dylib": "c1d601a75d8c1780ee2d3f0b42651a079b0b418138afb2552c0ec0e1639dffd0",
+      "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libquadmath.0.dylib": "3b8a5b4e9f095d6e237d9f7f4562ff8cb077a04084e74968e5c052f370370d9b",
+      "/opt/homebrew/Cellar/gsl/2.8/lib/libgsl.28.dylib": "1f1ae3ebec4bf3e708f978d3e83c2dd196d970ec0d8ecc2718b2dab297e797a2",
+      "/opt/homebrew/Cellar/gsl/2.8/lib/libgslcblas.0.dylib": "905d984da13941d37bf4da3b6a462e05d048e1bd271f60a29109008c0a54b12b",
+      "/opt/homebrew/Cellar/hdf5/2.2.0/lib/libhdf5.320.2.0.dylib": "b96f5a824802e985198fb58fc336da80fc6a4990249f4038656b433231c7da51",
+      "/opt/homebrew/Cellar/hdf5/2.2.0/lib/libhdf5_cpp.320.2.0.dylib": "28bef6e1ecbe0fad628207792248476b6774f174a4e59d41e3b03ef70be99458",
+      "/opt/homebrew/Cellar/hwloc/2.15.0/lib/libhwloc.15.dylib": "90b2d8d5263da4f3749ac71a5824f4bab4776c501167e32521b93542ad5c2fc9",
+      "/opt/homebrew/Cellar/libaec/1.1.7/lib/libaec.0.1.7.dylib": "f4f63f2c00b9bd31d174a9a7c1b98e0822ee4fab5d8bdb614025e486af9421ac",
+      "/opt/homebrew/Cellar/libaec/1.1.7/lib/libsz.2.0.1.dylib": "0e45efb5572148f0bdae065ec628649daf37b98f2dea4ee084d9c692a26dcade",
+      "/opt/homebrew/Cellar/libdeflate/1.26/lib/libdeflate.0.dylib": "9d9dbada77f94f88e856d42731b1dc9f0004e922aa4c441557f383b2cdf5fcb0",
+      "/opt/homebrew/Cellar/libevent/2.1.13_1/lib/libevent_core-2.1.7.dylib": "e73aad27f6206c0c9f6a35fafbd0dc8714715111fed7a178fff2d01df4eeac3f",
+      "/opt/homebrew/Cellar/libevent/2.1.13_1/lib/libevent_pthreads-2.1.7.dylib": "6427a8d7fc7897217e1a2fd51b358f149608093b03df4fa80f483276178598e7",
+      "/opt/homebrew/Cellar/open-mpi/5.0.11/lib/libmpi.40.dylib": "a2c61a3988ca1606fc21b8ba232531926d157211fbe34e28c3b28f800df5fd0d",
+      "/opt/homebrew/Cellar/open-mpi/5.0.11/lib/libopen-pal.80.dylib": "38385fd56c17965d6f8f007123f6129148bd1a81562cd6bba05978b10ac6a215",
+      "/opt/homebrew/Cellar/pmix/6.1.0/lib/libpmix.2.dylib": "2f82e8c2b330a42a34fd38c46e84323af38387040a720dbaba91e34e2e432e63",
+      "/opt/homebrew/Cellar/python@3.15/3.15.0/Frameworks/Python.framework/Versions/3.15/Python": "4c20b911500d08d262ecb628e37a59bac81dc1e61366e0f9bc32cddff8f2879c"
+    },
+    "snapshot_limit": "Executable/threading library frozen; other installed dynamic dependencies are hash-recorded, not privately copied."
+  },
+  "candidate_provenance": {
+    "root_head": "9a09d270d9c9d4d74bd3fa5b55aa591fbfc36b90",
+    "radler_base": "172e4a01a72d525d8a515bdae435538b62899a10",
+    "radler_working_diff_sha256": "cbb8ef672561bd212fdc4a97ce101dcb49d69ae0f098267730b69ec452437e40",
+    "reviewed_source_sha256": {
+      "work/radler/cpp/algorithms/multiscale/multiscale_transforms.cc": "4d39dec5ba3608b811ae1fe4b303520d4c86f46ee9cfc3151590d1efb5d0103e",
+      "work/radler/cpp/algorithms/multiscale/multiscale_transforms.h": "05fef54df43a45a03ed93fb135a3737a3b8d9e8c5829e0ab537c322ea8a3232e",
+      "work/radler/cpp/algorithms/multiscale_algorithm.cc": "b69d764037a2c87b88a2ad7e16d660a36d5c70c05a575c0fe1fc7f0c31e67914",
+      "work/radler/cpp/math/peak_finder.cc": "61791b0a1b6ccad8b8c1723cc7714bcbb33f29a666d429f7d1c3e291081f52d6",
+      "work/radler/cpp/math/peak_finder.h": "ad2b6130d19ae30b1209e3f5e40e15cc7aa04dea72316cf3db7214979d083529"
+    },
+    "final_review": {
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "suggestions": [
+        "campaign.py:60-79: Retain a candidate snapshot receipt linking its hashes to the final reviewed source and build; before/after hashing establishes stability, not that source linkage.",
+        "campaign.py:46-57 and test_campaign_driver.py:17-28: Consider cross-checking the final iteration against the completed-component summary and testing inconsistent summaries."
+      ],
+      "summary": "Static review found no blocking defects in the complete scoped diff, relevant callers/aliasing, or campaign files. Peak semantics, oversized masked borders, transform ownership/tails, FFT behavior and inverse-hook exception contracts are preserved. Stored masked native/ASan logs report 213321 checks with zero failures; I executed no tests. The rebuilt suite and full 150k campaign remain pending. This is not scientific/performance acceptance; existing legacy-reference failures remain limitations."
+    },
+    "build_inputs": {
+      "build-mx/CMakeCache.txt": "04e123c194b7be73cd38b90cfec32d11ea656cecac8f3ced98af4a50a682f648",
+      "build-mx/compile_commands.json": "ae690c6c7b9b4e158a042220902ed6f313fbe8dd62ffe04fd673ea6a34d003e8",
+      "build-mx/_deps/radler-build/cpp/libradler.a": "65c6374d1e2b9974e05727ff7c0ce2a31166f91571f3cb2a51f523f6ca32e57a",
+      "build-mx/wsclean": "f5e07843c929206a5c3e27ba2fba177396d907923c75967ccd9d8690673f9760"
+    },
+    "build_and_review_evidence": {
+      "final-configure.log": "b6e02b340d4253bf42bb7a2513e1c17a8e1ba55f313b9dd92a93bd524ff549f7",
+      "final-suite.log": "1ae90dd0fb2650842d78b9cac06aff354b9615d2e88943ffa28d57c180961fca",
+      "final-native-wsclean.log": "fe31c8af24a87bba35d0c0b4d2bf2371c167e2ad3b8434cd7f862ada5deeaa63",
+      "final-native-radler.log": "d37cbfc0cdeb62fc7913a9ee97aa15348f4f3d3b3ed0785a13ea44171af1c5eb",
+      "review-final-scope.md": "2f16a18f78915cc18d6f6ab46eb31c2fc132d5db0db7c342ff16834e49960b25",
+      "review-final.json": "8bbbcfdaca032c7c9f109dd54dde041c963660f89fe9fb03febde90294003b2f"
+    },
+    "snapshot": {
+      "wsclean": "9c92740f73bc85ef9c72da1d7339795fd07d7382696a01608660e6e920270aaa",
+      "libschaapthreading.dylib": "8ef3f61dce77761381a696a8d8cbf9f248361610796cc0f6d5aee87850122b04"
+    },
+    "loaded_non_system_libraries": {
+      "/Users/peijinz/dev/wsclean-mx/bench/bin/cpu-next-candidate-20261023/wsclean": "9c92740f73bc85ef9c72da1d7339795fd07d7382696a01608660e6e920270aaa",
+      "/opt/homebrew/Cellar/hdf5/2.2.0/lib/libhdf5_cpp.320.2.0.dylib": "28bef6e1ecbe0fad628207792248476b6774f174a4e59d41e3b03ef70be99458",
+      "/opt/homebrew/Cellar/hdf5/2.2.0/lib/libhdf5.320.2.0.dylib": "b96f5a824802e985198fb58fc336da80fc6a4990249f4038656b433231c7da51",
+      "/opt/homebrew/Cellar/python@3.15/3.15.0/Frameworks/Python.framework/Versions/3.15/Python": "4c20b911500d08d262ecb628e37a59bac81dc1e61366e0f9bc32cddff8f2879c",
+      "/opt/homebrew/Cellar/gsl/2.8/lib/libgsl.28.dylib": "1f1ae3ebec4bf3e708f978d3e83c2dd196d970ec0d8ecc2718b2dab297e797a2",
+      "/opt/homebrew/Cellar/gsl/2.8/lib/libgslcblas.0.dylib": "905d984da13941d37bf4da3b6a462e05d048e1bd271f60a29109008c0a54b12b",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib": "7523ee5f3eb0e0bd8907682f4bec8bb4e3fbd3945f8eed7e0aa215cea3ad8c42",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib": "78b3bf69d7648c33e45988f74ca6f5a05746ea7a681927d8e44b2f26d2faff39",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib": "71936b1d8c9526d3786e97e609fed6852bfb110fd2d695addd0b04439c58fc57",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib": "c468ef4e46f3de1bd8f2da9c8252eddf80c93590e0b97d6fb1cd7f829fe0e3c9",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib": "ec49169b5143fb5607604c04023b252713f0b7511427f0741938f8d3829a3715",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3.3.dylib": "903d7b6b749085a41cf5577f6042a73f38eb5ca902f081f233b957a66c45efaf",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3_threads.3.dylib": "7df53ceeefdee72f6e8038ae73e98c5f0d5da93dc88e3c7b6c0670d83a10c42f",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_filesystem.dylib": "fccc70ad53b3d1fd89a8cc11997024b4798dbfa4480acd5d3532df973fbf447c",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_atomic.dylib": "cbb0ca3f0906999bfef951f408149bf581d1e3b0e184caf2f4f45696e5b2b6b0",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_program_options.dylib": "05431f6d7c770f2811fb859815b2227702b47fdb980999290842c54345ca3db0",
+      "/opt/homebrew/Cellar/boost/1.92.0/lib/libboost_container.dylib": "8c83fa51d3d1cf9a173c021afe70910b9023cecdb5a8a5ead06a129a81e0ceab",
+      "/opt/homebrew/Cellar/cfitsio/4.7.0/lib/libcfitsio.4.7.0.dylib": "2c69ca314d2f7b0834a5dfb988dd932b157f5a8e992da7c241f1f7d600376064",
+      "/opt/homebrew/Cellar/open-mpi/5.0.11/lib/libmpi.40.dylib": "a2c61a3988ca1606fc21b8ba232531926d157211fbe34e28c3b28f800df5fd0d",
+      "/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib": "0c1136b66ee4a94adaeca285315f2ccf640c317b47ff541839bfc4ab71848b18",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3f.3.dylib": "7b8bcb1a401d87e10b71271d5ee99a867cb3090bb74b67d01c7698f440249f1b",
+      "/opt/homebrew/Cellar/fftw/3.3.11/lib/libfftw3f_threads.3.dylib": "2256ff621579680330d177513c4dd18ee516eadc54e801e08e54dcc7454153ab",
+      "/Users/peijinz/dev/wsclean-mx/bench/bin/cpu-next-candidate-20261023/libschaapthreading.dylib": "8ef3f61dce77761381a696a8d8cbf9f248361610796cc0f6d5aee87850122b04",
+      "/opt/homebrew/Cellar/libaec/1.1.7/lib/libsz.2.0.1.dylib": "0e45efb5572148f0bdae065ec628649daf37b98f2dea4ee084d9c692a26dcade",
+      "/opt/homebrew/Cellar/libaec/1.1.7/lib/libaec.0.1.7.dylib": "f4f63f2c00b9bd31d174a9a7c1b98e0822ee4fab5d8bdb614025e486af9421ac",
+      "/opt/homebrew/Cellar/libdeflate/1.26/lib/libdeflate.0.dylib": "9d9dbada77f94f88e856d42731b1dc9f0004e922aa4c441557f383b2cdf5fcb0",
+      "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgfortran.5.dylib": "c1d601a75d8c1780ee2d3f0b42651a079b0b418138afb2552c0ec0e1639dffd0",
+      "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libquadmath.0.dylib": "3b8a5b4e9f095d6e237d9f7f4562ff8cb077a04084e74968e5c052f370370d9b",
+      "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgcc_s.1.1.dylib": "52a2ca8bb35b47a827a875c40958a36f290491ae39833c8c3bf0399f8471a5f3",
+      "/opt/homebrew/Cellar/open-mpi/5.0.11/lib/libopen-pal.80.dylib": "38385fd56c17965d6f8f007123f6129148bd1a81562cd6bba05978b10ac6a215",
+      "/opt/homebrew/Cellar/libevent/2.1.13_1/lib/libevent_core-2.1.7.dylib": "e73aad27f6206c0c9f6a35fafbd0dc8714715111fed7a178fff2d01df4eeac3f",
+      "/opt/homebrew/Cellar/libevent/2.1.13_1/lib/libevent_pthreads-2.1.7.dylib": "6427a8d7fc7897217e1a2fd51b358f149608093b03df4fa80f483276178598e7",
+      "/opt/homebrew/Cellar/hwloc/2.15.0/lib/libhwloc.15.dylib": "90b2d8d5263da4f3749ac71a5824f4bab4776c501167e32521b93542ad5c2fc9",
+      "/opt/homebrew/Cellar/pmix/6.1.0/lib/libpmix.2.dylib": "2f82e8c2b330a42a34fd38c46e84323af38387040a720dbaba91e34e2e432e63"
+    }
+  },
+  "protected_input": {
+    "unchanged": true,
+    "manifest_sha256": "2af01129e69c16d43374904b3463d2af75afcf8613165667622696630b809c67"
+  }
+}

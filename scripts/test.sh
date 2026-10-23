@@ -66,6 +66,17 @@ COMMON=(-std=c++20 -O2 -I"$DEPS_PREFIX/include" -I"$BREW/include"
   "$BUILD/_deps/radler-build/cpp/libradler.a" \
   -o "$OUT/weighted_peak_regression"
 "$OUT/weighted_peak_regression"
+"$CXX" "${COMMON[@]}" tests/masked_peak_regression.cpp \
+  "$BUILD/_deps/radler-build/cpp/libradler.a" \
+  -o "$OUT/masked_peak_regression"
+"$OUT/masked_peak_regression"
+"$CXX" "${COMMON[@]}" -I"$ROOT/work/schaapcommon/external" \
+  tests/multiscale_transform_regression.cpp \
+  "$BUILD/_deps/radler-build/cpp/libradler.a" \
+  "$BUILD/_deps/schaapcommon-build/libschaapcommon.a" \
+  -L"$BUILD" -lschaapthreading -L"$BREW/lib" -lfftw3f_threads -lfftw3f \
+  -Wl,-rpath,"$BUILD" -o "$OUT/multiscale_transform_regression"
+"$OUT/multiscale_transform_regression"
 "$CXX" "${COMMON[@]}" tests/multiarray_regression.cpp -o "$OUT/multiarray_regression"
 "$OUT/multiarray_regression"
 "$CXX" "${COMMON[@]}" tests/median_edge_regression.cpp -o "$OUT/median_edge_regression"

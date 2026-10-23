@@ -11,6 +11,10 @@
 > image-gate failures. The [CPU correctness repair report](cpu-correctness-repairs-2026-10-22.md)
 > records the subsequent provider/RMS/Dijkstra and threaded-ordering repairs;
 > strict old/new scientific acceptance remains separate from repeatability.
+> The [2026-10-23 copy-removal and masked-peak report](cpu-copy-and-masked-peak-2026-10-23.md)
+> adds the subsequent full-depth CPU optimization: 19 runs / 114 bitwise product
+> comparisons, measured CLEAN improvement, A/A timing caveats and bounded next
+> candidates. It does not waive the earlier legacy-reference failures.
 
 **Initial audit:** 2026-10-17 (EDT), starting at `333cea8` on `main`; published as `43c6cae`.
 **Continuation:** [CPU correctness repairs and verification](continuation-2026-10-17.md).

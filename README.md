@@ -43,10 +43,16 @@ log: [issue #1](https://github.com/peijin94/wsclean-mx/issues/1).
 The current development plan is [docs/development-plan.md](docs/development-plan.md).
 Deep exo-pipe / 15-slot benchmarks now default to **150,000 maximum CLEAN
 iterations**; smaller caps require an explicit `--niter` or job-field override.
-The [150k-budget measurements](docs/exo-deep-150k-2026-10-23.md) reach the configured
+The initial [150k-budget measurements](docs/exo-deep-150k-2026-10-23.md) reach the configured
 threshold at 93,854 / 97,873 iterations: **101.8 s at 3K, 147.2 s at 4K** on
 M2 / eight CPU threads. Earlier 20k timings are capped runs, not these converged
 measurements. WSClean's general-purpose CLI default is unchanged.
+The subsequent [copy-removal and masked-peak pass](docs/cpu-copy-and-masked-peak-2026-10-23.md)
+preserves all six arrays bitwise in 19 full-depth runs, including the rebuilt
+default executable. CLEAN medians improve about 10.8% at both sizes; observed
+whole-run medians are 93.63 / 142.43 s. Read the paired/A–A spread caveats before
+treating those small-sample wall differences as a general speedup. Peak RSS is
+essentially unchanged, and older legacy-reference gaps are not waived.
 The [2026-10-22 CPU audit](docs/cpu-audit-2026-10-22.md) adds an allocation-free
 RMS-weighted peak scan (4.1–4.5× kernel microbenchmark speedup), with fresh
 thread scaling, native tests and retained threaded image-gate failures.
@@ -88,6 +94,7 @@ The patch set lives in `patches/mx/<repo>/`, one directory per library:
 | radler/0004 | Peak finder: vectorized row maximum skips rows | peak search 8×, deconvolution 1.12× |
 | radler/0005 | Allocate multiscale peak scratch only for RMS-weighted searches | removes one unused full-image allocation per unweighted scale search; no promised wall-time gain |
 | radler/0009 (`gpu-dev`) | Fuse CPU RMS weighting and peak selection, including masks | removes a touched full-image temporary per weighted scale search; exact one-thread imaging; whole-run benefit unestablished |
+| radler/0011 (`gpu-dev`) | Remove accidental transform/model copies; share vectorized masked peak scan; simplify PSF setup | full-depth current-baseline T0; about 10.8% lower CLEAN medians at 3K/4K in the measured campaign |
 | wsclean/0004 | Preserve selected-row reads; validate full data/flag/weight shapes | avoids speculative-read failures and unsafe malformed-array extraction |
 | aocommon/0002 | Portable fundamental-alignment allocation in MultiArray | fixes invalid-alignment `std::bad_alloc` on macOS; retains over-aligned allocation |
 | wsclean/0005 | Convert in-memory provider start time from seconds to MJD days | correct FITS observation dates; row metadata remains seconds |

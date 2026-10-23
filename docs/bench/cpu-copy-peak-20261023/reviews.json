@@ -1,0 +1,163 @@
+{
+  "review-correctness.json": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [
+      "tests/masked_peak_regression.cpp:90: Add explicit lowest-float cases for masked and weighted scans, asserting the OptionalNumber sentinel collision while retaining the selected pixel coordinates."
+    ],
+    "summary": "No blocking findings in the live scoped changes, callers, assertions, or build/link wiring. Peak semantics and unchanged unmasked float/double/AVX paths are preserved. Transform adapters retain FFT arithmetic, logical prefixes, padded tails, dimensions, storage ownership, immutable kernels, and hook behavior under the documented exception contract. I executed no builds or tests; recorded results are evidence only. Transform sanitizer dependencies were uninstrumented. Full 150k old/new gates remain pending; existing legacy science failures are not waived."
+  },
+  "review-final.json": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [
+      "campaign.py:60-79: Retain a candidate snapshot receipt linking its hashes to the final reviewed source and build; before/after hashing establishes stability, not that source linkage.",
+      "campaign.py:46-57 and test_campaign_driver.py:17-28: Consider cross-checking the final iteration against the completed-component summary and testing inconsistent summaries."
+    ],
+    "summary": "Static review found no blocking defects in the complete scoped diff, relevant callers/aliasing, or campaign files. Peak semantics, oversized masked borders, transform ownership/tails, FFT behavior and inverse-hook exception contracts are preserved. Stored masked native/ASan logs report 213321 checks with zero failures; I executed no tests. The rebuilt suite and full 150k campaign remain pending. This is not scientific/performance acceptance; existing legacy-reference failures remain limitations."
+  },
+  "review-evidence.json": {
+    "passed": false,
+    "security_concerns": [],
+    "logic_errors": [
+      {
+        "location": "bench/out/cpu-next-20261023-1106/summarize.py:33-39",
+        "trigger": "A gate retains its label and six truthy T0 entries but has incorrect left/right paths or duplicated product names.",
+        "finding": "The summary accepts it without verifying gate directory identities, expected tier, or the six product names. Checking the actual directory inventory does not bind those files to the recorded gate."
+      },
+      {
+        "location": "docs/bench/cpu-copy-peak-20261023/plot_results.py:37-43",
+        "trigger": "results.json contains duplicated timing identities or duplicated/unrelated passing gates while preserving aggregate counts.",
+        "finding": "The plot accepts these records. It checks neither unique run identities nor gate-to-run correspondence, and does not require six named T0 products before printing 'All six products pass T0'."
+      },
+      {
+        "location": "docs/bench/cpu-copy-peak-20261023/plot_results.py:110-128",
+        "trigger": "Images agree on finite pixels and NaN masks but contain infinity at another pixel.",
+        "finding": "Infinity is excluded from the difference check, allowing an invalid comparison to receive the exact-zero/T0 annotation. Explicitly reject infinity, as compare_fits.compare does."
+      },
+      {
+        "location": "bench/out/cpu-next-20261023-1106/summarize.py:40-45",
+        "trigger": "The final printed iteration differs from the stored receipt while component total and per-scale sum match the receipt.",
+        "finding": "The summary accepts the inconsistency because it never parses the log's final printed iteration. The receipt is derived from max(iterations), rather than necessarily the last printed iteration."
+      }
+    ],
+    "suggestions": [
+      "summarize.py:119 and plot_results.py:74-93: Validate unique microbenchmark settings, eight finite positive samples per implementation, and medians against samples before plotting the stored aggregates.",
+      "plot_results.py:68-70: Include the classifier's resolution caveat and explicitly identify the single-sample 4096 A/A limitation. The full classifier text is retained in results.json, but absent from the figure.",
+      "summarize.py:110-121: Cross-check candidate snapshot hashes against candidate-provenance.json; equal before/after manifests establish stability without establishing the reviewed candidate's identity."
+    ],
+    "summary": "Static read-only review only; tests, analysis/plot programs, builds and benchmarks were not executed. No files changed. Both ROOT derivations and helper schemas are correct. The current plan excludes four warmups and retains all 13 measured runs; timing metrics come from real logs/counters and classification reuses existing thresholds. Source-image hashes are checked and p99 affects rendering only. Existing documentation preserves legacy-reference limitations. Expected partial campaign files were not treated as defects."
+  },
+  "review-evidence-v2.json": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [],
+    "summary": "Static re-review confirms all four original blockers are fixed, including caller wiring. Microbenchmark settings, eight-sample medians, snapshot provenance, resolution caveats, and the single-sample 4096 A/A caption are covered. Synthetic tests use the canonical summarizer without requiring raw campaign data. No substantive original-scope defects remain. Tests and project programs were not executed."
+  },
+  "review-evidence-v3.json": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [],
+    "summary": "No blockers found in the narrow review. The validator permits repeated earlier-cycle thresholds without a fixed message limit, enforces final ordering and unique global records, rejects duplicate final reasons, and preserves receipt/component consistency. Both added tests and canonical summarize.py wiring match the contract. Saved parent normal, -O, portability, and summary evidence were reviewed; sandbox-blocked worker tests were excluded. Test execution: none."
+  },
+  "cleanup-reuse.json": {
+    "findings": [
+      {
+        "location": "work/radler/cpp/algorithms/multiscale_algorithm.cc:815-840",
+        "problem": "FindPeakDirect still materializes RMS-weighted pixels before scanning, duplicating functionality already provided by SimpleWeighted.",
+        "concrete_cost": "Every weighted call writes a full scratch image and then scans it. At 4096\u00d74096, the scratch write alone is 64 MiB, followed by scratch reads. This occurs in scale-zero searches, squared-channel searches, and the nonoptimized minor loop.",
+        "proposal": "Reuse SimpleWeighted at work/radler/cpp/math/peak_finder.cc:190, passing the existing borders and selected mask. Preserve per-scale mask precedence, float-rounded products, signed values, first ties, sentinels, and the subsequent normalization division. Retain materialization for unmasked AVX searches because their public semantics differ; the existing dispatch at work/radler/cpp/algorithms/threaded_deconvolution_tools.cc:194-203 demonstrates that boundary.",
+        "history": "Blame traces materialization to the older RMS path; commit 1f1452ea introduced the reusable fused scan in the threaded caller.",
+        "confidence": "high",
+        "risk": "CAREFUL"
+      },
+      {
+        "location": "work/radler/cpp/algorithms/multiscale_algorithm.cc:38-82 and 962-966",
+        "problem": "ConvolvePsfs and RunComponentOptimization repeatedly forward-transform the same PSF for different scales despite an existing API for reusing its FFT.",
+        "concrete_cost": "For K transformed scales, each loop performs K forward image FFTs where one suffices: K\u22121 redundant two-dimensional FFTs per PSF.",
+        "proposal": "Compute the PSF spectrum once per invocation with schaapcommon::math::ConvolutionFft, then reuse MultiScaleTransforms::Transform(const std::complex<float>*, Image&, float) at work/radler/cpp/algorithms/multiscale/multiscale_transforms.cc:143-147. The existing caller at work/radler/cpp/algorithms/threaded_deconvolution_tools.cc:91-95,148 demonstrates this reuse. Preserve destination ownership, logical transform dimensions, tail bytes, and each loop's current scale-zero behavior.",
+        "history": "Blame places these loops before b053bedc, which introduced the pretransformed overload specifically to avoid repeated image FFTs.",
+        "confidence": "high",
+        "risk": "CAREFUL"
+      },
+      {
+        "location": "work/radler/cpp/algorithms/multiscale/multiscale_transforms.cc:132-139",
+        "problem": "The owning-image transform passes its disposable FFT workspace through the const-spectrum convolution API, which allocates a second spectrum. An existing internal helper already supports consuming the first buffer.",
+        "concrete_cost": "ConvolveTransformed allocates and frees another spectrum per image: approximately 64 MiB of additional live storage at 4096\u00d74096. Its initialization copies the original spectrum while multiplying.",
+        "proposal": "Follow-up only: expose a consuming convolution overload backed by MultiplyAndInverse at work/schaapcommon/src/math/convolution.cc:131-150, using the existing nullptr image_fft mode demonstrated at lines 160-161. Consume only the local image_fft workspace. Preserve the const API for shared spectra, immutable published kernels, exact multiplication order, inverse hooks, logical prefixes, and the documented in-place exception contract.",
+        "history": "Blame attributes both consuming and copying modes to 6ae8c4c; the separate const-input route deliberately supports spectrum reuse.",
+        "confidence": "high",
+        "risk": "RISKY"
+      }
+    ],
+    "summary": "Read the complete bundle and checked scoped callers, adjacent utilities, and blame history. Two existing-helper reuse opportunities are local; the dependency API change is follow-up only. No edits, builds, tests, benchmarks, or external model calls were performed. Performance benefits remain unmeasured."
+  },
+  "cleanup-quality.json": {
+    "findings": [
+      {
+        "location": "work/radler/cpp/algorithms/multiscale_algorithm.cc:952",
+        "problem": "RunComponentOptimization allocates an image-sized scratch buffer used exclusively as an ignored Transform argument.",
+        "cost": "One unnecessary 4*width*height-byte heap allocation per image optimization call: 64 MiB at 4096\u00b2.",
+        "proposal": "Default-construct scratch instead. Keep the existing Transform interface and ownership/exception behavior.",
+        "history": "Blame traces the allocation to 09a9435e; b053bedc subsequently made the Transform scratch parameter unused.",
+        "confidence": "high",
+        "risk": "SAFE"
+      },
+      {
+        "location": "work/radler/cpp/algorithms/multiscale_algorithm.cc:41-84",
+        "problem": "ConvolvePsfs duplicates the same nonzero-scale transform across both branches and copies the zero-scale PSF again at line 71, although the initial copy remains unchanged.",
+        "cost": "An unnecessary full-image copy for each integrated zero-scale entry: 64 MiB copied at 4096\u00b2, plus duplicated control flow.",
+        "proposal": "Perform the guarded nonzero-scale transform immediately after the initial copy. Retain the integrated metadata/logging branch and remove its redundant zero-scale assignment.",
+        "history": "Blame and e15a38e1 show both variations were carried through the ASP helper extraction.",
+        "confidence": "high",
+        "risk": "SAFE"
+      },
+      {
+        "location": "work/radler/cpp/algorithms/multiscale_algorithm.cc:815-840",
+        "problem": "FindPeakDirect still materializes RMS-weighted pixels and duplicates masked dispatch despite the existing SimpleWeighted utility.",
+        "cost": "Every weighted search writes a full temporary image before scanning it: 64 MiB of scratch writes at 4096\u00b2, including pixels excluded by borders.",
+        "proposal": "Follow-up optimization: select the effective mask once and use SimpleWeighted for weighted masked searches and non-AVX unmasked searches. Preserve the existing unmasked AVX fallback, binary32 products, signed peaks, first ties, sentinels, and normalization division. Verify through independent caller-level oracles before adopting; speedup needs measurement.",
+        "history": "Blame traces materialization to the original implementation; 1f1452ea added this optimization only to the threaded caller and explicitly preserved AVX behavior.",
+        "confidence": "medium",
+        "risk": "CAREFUL"
+      }
+    ],
+    "summary": "Reviewed the complete bundle and scoped live callers, utilities, and history. Two safe simplifications and one CPU optimization follow-up. Costs are static estimates. No edits, builds, tests, or benchmarks performed."
+  },
+  "cleanup-efficiency.json": {
+    "findings": [
+      {
+        "location": "work/radler/cpp/math/peak_finder.cc:104-118",
+        "problem": "FindWithMask now inherits a full scalar rescan of every improving row, continuing after the already-computed row maximum has been found. Blame traces this behavior to the weighted implementation in 1f1452e; this diff newly extends it to unweighted masked scans.",
+        "concrete_cost": "With an all-true mask and increasing row maxima in the first column, the new path visits every pixel twice. Stopping position recovery at that first maximum would reduce second-pass visits from width*height to height.",
+        "proposal": "For the new unweighted specialization, locate the first allowed pixel equal to row_peak, record its coordinates, and stop scanning that row. Retain the outer strict-improvement guard and signed return value, preserving ties, NaNs, infinities and sentinels. Keep the independent test oracle unchanged.",
+        "confidence": "high",
+        "risk": "SAFE"
+      }
+    ],
+    "summary": "Reviewed the complete bundle, relevant live callers/utilities and blame history. One material redundant scan found; no additional allocation or lifetime regression identified. No edits, builds, tests or benchmarks performed; runtime benefit is unmeasured."
+  },
+  "cleanup-altitude.json": {
+    "findings": [],
+    "summary": "No material abstraction-depth issues found in the complete scoped bundle, relevant callers, utilities, or history. Both fixes operate through shared mechanisms. Image borrowing remains synchronous; logical prefixes, ownership, kernel identities, arithmetic, peak semantics, and the documented in-place exception contract appear preserved. Test oracles remain independent. Broader convolution/workspace changes remain separate follow-ups. Static review only; no edits, builds, tests, or benchmarks performed."
+  },
+  "cleanup-dispatch-failure.json": {
+    "delegation_id": "deleg_374da609",
+    "confirmed_failed_task": 4,
+    "reported_duration_s": 1.74,
+    "error": "HTTP 400: muse-spark-1.3-contributor is not supported when using Codex with a ChatGPT account",
+    "all_four_tasks_failed_same_error": true,
+    "reported_task_durations_s": [
+      2.44,
+      1.74,
+      1.74,
+      1.74
+    ],
+    "replacement_status": "all four local Codex reviews completed, inspected and incorporated",
+    "replacement": "four local Codex gpt-6.1-sol read-only reviewers; no provider/auth changes"
+  }
+}

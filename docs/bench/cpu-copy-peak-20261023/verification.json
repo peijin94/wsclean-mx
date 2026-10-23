@@ -1,0 +1,72 @@
+{
+  "source_commit": "bc85f147e30990e3831e85121076843bb8837e63",
+  "python": {
+    "passed": 246,
+    "exit": 0
+  },
+  "report_targeted": {
+    "normal_passed": 17,
+    "optimized_passed": 17,
+    "clean_checkout_without_bench_out": "passed"
+  },
+  "masked_scan": {
+    "checks": 213321,
+    "failures": 0,
+    "native_and_asan_ubsan": true
+  },
+  "transforms": {
+    "scenarios": 720,
+    "checks": 15332,
+    "failures": 0,
+    "native_and_asan_ubsan": true,
+    "sanitizer_dependencies_all_instrumented": false
+  },
+  "native_wsclean": {
+    "passed": 160,
+    "skipped": 4,
+    "assertions": 869917,
+    "failed": 0
+  },
+  "native_radler": {
+    "executable_suites_passed": 4,
+    "build_entries_passed": 4
+  },
+  "performance_campaign": {
+    "runs": 17,
+    "six_product_gates": 17,
+    "bound_exact_products": 102
+  },
+  "default_confirmation": {
+    "runs": 2,
+    "six_product_gates": 2,
+    "bound_exact_products": 12
+  },
+  "input": {
+    "files": 108,
+    "bytes": 4428203949,
+    "contents_and_modes_unchanged": true
+  },
+  "limitations": [
+    "Four existing native skips",
+    "Active Metal hardware gates not rerun",
+    "Earlier legacy-reference failures remain unresolved",
+    "3K wall estimate is range-limited; 4K A/A has one sample",
+    "No established peak-RSS reduction"
+  ],
+  "evidence_logs": {
+    "final-python-suite.log": "ac9bf522b0429be9f8138180857b38bcdeed927f97e8813bd5bf86ca21a73995",
+    "delivery-suite.log": "df27ebc3c6648e7eac34ef5cfad8b2ec37d4d45edc2bf0fcd3407b6d5ced55d8",
+    "final-native-wsclean.log": "fe31c8af24a87bba35d0c0b4d2bf2371c167e2ad3b8434cd7f862ada5deeaa63",
+    "final-native-radler.log": "d37cbfc0cdeb62fc7913a9ee97aa15348f4f3d3b3ed0785a13ea44171af1c5eb",
+    "masked-final.log": "5c2a88a6944f7fd7aa0fe583af5334d0ce0a41e26ad348aee3a9e03d8957af38",
+    "masked-final-asan.log": "5c2a88a6944f7fd7aa0fe583af5334d0ce0a41e26ad348aee3a9e03d8957af38",
+    "transform-parent.log": "cdd4babdee5367a4877239fe9d3bd45e271579b6c8a6c8ef0909afd45c6519de",
+    "transform-parent-asan.log": "3ce24268fdd53ff88d540e3e0f688880b4b8b86a781500ce2b4ed1c3c39e2101",
+    "report-final-normal.log": "51b5a69d3ac258fe1e307c77e0dcb3117c23402f8e0541b820eda9b749a62d0d",
+    "report-final-optimized-v2.log": "a73d32bfec8cc998d35d4d601783f14391561c144952c0174778db07a555c40d",
+    "report-portability-final-receipt.log": "56f753a72321002f0373551e30f84ba6ef9aa319a0af7b6c951276ac0eb41f72",
+    "campaign.log": "df9a0a9b72b8c8b2886b8d9f6d69da75da539f512038c1d933d70fc77e7dc95b",
+    "default-confirmation.log": "f2cfd0746a0c9db0727dffcab906c7b124753c35fbb973b9009ac19d3547666e",
+    "parent-campaign-readback.json": "23a315605980e18d79b749f04398ce129cafbdca566927dc5230cd31bab49445"
+  }
+}

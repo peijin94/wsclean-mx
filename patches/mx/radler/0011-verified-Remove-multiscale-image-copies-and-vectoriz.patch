@@ -1,0 +1,285 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Fri, 23 Oct 2026 12:56:43 -0700
+Subject: [PATCH] [verified] Remove multiscale image copies and vectorize
+ masked peaks
+
+
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.cc b/cpp/algorithms/multiscale/multiscale_transforms.cc
+index 1b9379e..631ecf6 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.cc
++++ b/cpp/algorithms/multiscale/multiscale_transforms.cc
+@@ -123,10 +123,16 @@ std::shared_ptr<const KernelFftCache::Fft> MultiScaleTransforms::kernelFft(
+ 
+ void MultiScaleTransforms::Transform(std::vector<Image>& images,
+                                      Image& /*scratch*/, float scale) {
++  Transform(images.data(), images.size(), scale);
++}
++
++void MultiScaleTransforms::Transform(Image* images, size_t image_count,
++                                     float scale) {
+   const std::shared_ptr<const KernelFftCache::Fft> kernel = kernelFft(scale);
+   KernelFftCache::Fft image_fft(
+       schaapcommon::math::ConvolutionFftSize(_width, _height));
+-  for (Image& image : images) {
++  for (size_t i = 0; i != image_count; ++i) {
++    Image& image = images[i];
+     schaapcommon::math::ConvolutionFft(image_fft.data(), image.Data(), _width,
+                                        _height);
+     schaapcommon::math::ConvolveTransformed(image.Data(), image_fft.data(),
+diff --git a/cpp/algorithms/multiscale/multiscale_transforms.h b/cpp/algorithms/multiscale/multiscale_transforms.h
+index b2936c8..5aed6c0 100644
+--- a/cpp/algorithms/multiscale/multiscale_transforms.h
++++ b/cpp/algorithms/multiscale/multiscale_transforms.h
+@@ -91,11 +91,11 @@ class MultiScaleTransforms {
+   void PrepareTransform(float* kernel, float scale);
+   void FinishTransform(float* image, const float* kernel);
+ 
+-  void Transform(aocommon::Image& image, aocommon::Image& scratch,
++  // Transform in place without replacing Image storage. If a transform throws,
++  // owning Images remain valid, but processed pixels are not rolled back.
++  void Transform(aocommon::Image& image, aocommon::Image& /*scratch*/,
+                  float scale) {
+-    std::vector<aocommon::Image> images(1, std::move(image));
+-    Transform(images, scratch, scale);
+-    image = std::move(images[0]);
++    Transform(&image, 1, scale);
+   }
+ 
+   void Transform(std::vector<aocommon::Image>& images, aocommon::Image& scratch,
+@@ -204,6 +204,9 @@ class MultiScaleTransforms {
+   }
+ 
+  private:
++  // Borrow the owning Images so they remain valid even if a transform throws.
++  void Transform(aocommon::Image* images, size_t image_count, float scale);
++
+   std::shared_ptr<const KernelFftCache::Fft> kernelFft(float scale);
+ 
+   size_t _width, _height;
+diff --git a/cpp/algorithms/multiscale_algorithm.cc b/cpp/algorithms/multiscale_algorithm.cc
+index f0c8c6f..c5add86 100644
+--- a/cpp/algorithms/multiscale_algorithm.cc
++++ b/cpp/algorithms/multiscale_algorithm.cc
+@@ -39,13 +39,12 @@ void ConvolvePsfs(std::vector<Image>& convolved_psfs, const Image& psf,
+     MultiScaleAlgorithm::ScaleInfo& scale_entry = scales[scale_index];
+ 
+     convolved_psfs[scale_index] = psf;
++    if (scale_entry.scale != 0.0) {
++      ms_transforms.Transform(convolved_psfs[scale_index], scratch,
++                              scale_entry.scale);
++    }
+ 
+     if (is_integrated) {
+-      if (scale_entry.scale != 0.0) {
+-        ms_transforms.Transform(convolved_psfs[scale_index], scratch,
+-                                scale_entry.scale);
+-      }
+-
+       scale_entry.psf_peak =
+           convolved_psfs[scale_index]
+                         [psf.Width() / 2 + (psf.Height() / 2) * psf.Width()];
+@@ -67,20 +66,11 @@ void ConvolvePsfs(std::vector<Image>& convolved_psfs, const Image& psf,
+ 
+       scale_entry.is_active = true;
+ 
+-      if (scale_entry.scale == 0.0) {
+-        convolved_psfs[scale_index] = psf;
+-      }
+-
+       log.Info << "- Scale " << round(scale_entry.scale) << ", bias factor="
+                << round(scale_entry.bias_factor * 10.0) / 10.0
+                << ", psfpeak=" << scale_entry.psf_peak
+                << ", gain=" << scale_entry.gain
+                << ", kernel peak=" << scale_entry.kernel_peak << '\n';
+-    } else {
+-      if (scale_entry.scale != 0.0) {
+-        ms_transforms.Transform(convolved_psfs[scale_index], scratch,
+-                                scale_entry.scale);
+-      }
+     }
+   }
+ }
+@@ -500,10 +490,8 @@ DeconvolutionResult MultiScaleAlgorithm::ExecuteMajorIteration(
+           }
+         }
+         if (scale_infos_[scaleWithPeak].scale != 0.0) {
+-          std::vector<Image> transformList{std::move(scratch)};
+-          msTransforms.Transform(transformList, integratedScratch,
++          msTransforms.Transform(scratch, integratedScratch,
+                                  scale_infos_[scaleWithPeak].scale);
+-          scratch = std::move(transformList[0]);
+         }
+         float* model = model_image.Data(imageIndex);
+         for (size_t i = 0; i != width * height; ++i) {
+@@ -951,7 +939,7 @@ void MultiScaleAlgorithm::RunComponentOptimization(
+     const std::vector<aocommon::Image>& psfs, size_t image_index) const {
+   const size_t width = residual_set.Width();
+   const size_t height = residual_set.Height();
+-  Image scratch(width, height);
++  Image scratch;
+ 
+   // Create convolved PSF
+   LogReceiver().Info << "Making convolved psfs...\n";
+diff --git a/cpp/math/peak_finder.cc b/cpp/math/peak_finder.cc
+index b219ecd..af1f51c 100644
+--- a/cpp/math/peak_finder.cc
++++ b/cpp/math/peak_finder.cc
+@@ -53,8 +53,8 @@ T RowMax(const T* row, size_t n, bool use_abs, T start) {
+   return result;
+ }
+ 
+-template <bool Negative, bool Masked>
+-aocommon::OptionalNumber<float> WeightedImpl(
++template <bool Negative, bool Masked, bool Weighted>
++aocommon::OptionalNumber<float> FindPeakImpl(
+     const float* image, const float* weights, size_t width, size_t height,
+     size_t& x, size_t& y, size_t start_y, size_t end_y, const bool* mask,
+     size_t horizontal_border, size_t vertical_border) {
+@@ -66,6 +66,12 @@ aocommon::OptionalNumber<float> WeightedImpl(
+   const size_t y_end = std::min(end_y, height - vertical_border);
+   if (x_begin >= x_end || y_begin >= y_end) return {};
+ 
++  const auto pixel_value = [image, weights](size_t index) {
++    if constexpr (Weighted)
++      return image[index] * weights[index];
++    else
++      return image[index];
++  };
+   float peak = std::numeric_limits<float>::min();
+   constexpr size_t kLanes = 8;
+   for (size_t row = y_begin; row != y_end; ++row) {
+@@ -78,8 +84,8 @@ aocommon::OptionalNumber<float> WeightedImpl(
+     for (; x_end - col >= kLanes; col += kLanes) {
+       for (size_t lane = 0; lane != kLanes; ++lane) {
+         const size_t index = offset + col + lane;
+-        const float product = image[index] * weights[index];
+-        float value = Negative ? std::fabs(product) : product;
++        const float pixel = pixel_value(index);
++        float value = Negative ? std::fabs(pixel) : pixel;
+         if constexpr (Masked) value = mask[index] ? value : peak;
+         lanes[lane] = value > lanes[lane] ? value : lanes[lane];
+       }
+@@ -87,8 +93,8 @@ aocommon::OptionalNumber<float> WeightedImpl(
+     float row_peak = peak;
+     for (; col != x_end; ++col) {
+       const size_t index = offset + col;
+-      const float product = image[index] * weights[index];
+-      float value = Negative ? std::fabs(product) : product;
++      const float pixel = pixel_value(index);
++      float value = Negative ? std::fabs(pixel) : pixel;
+       if constexpr (Masked) value = mask[index] ? value : peak;
+       row_peak = value > row_peak ? value : row_peak;
+     }
+@@ -99,8 +105,8 @@ aocommon::OptionalNumber<float> WeightedImpl(
+     // the original first-pixel tie, NaN/infinity and signed-value semantics.
+     for (size_t column = x_begin; column != x_end; ++column) {
+       const size_t index = offset + column;
+-      const float product = image[index] * weights[index];
+-      const float value = Negative ? std::fabs(product) : product;
++      const float pixel = pixel_value(index);
++      const float value = Negative ? std::fabs(pixel) : pixel;
+       if constexpr (Masked) {
+         if (!mask[index]) continue;
+       }
+@@ -108,11 +114,13 @@ aocommon::OptionalNumber<float> WeightedImpl(
+         peak = std::fabs(value);
+         x = column;
+         y = row;
++        // Unweighted recovery can stop at the first known row maximum.
++        if (!Weighted && peak == row_peak) break;
+       }
+     }
+   }
+   if (y == height) return {};
+-  return aocommon::OptionalNumber<float>(image[y * width + x] * weights[y * width + x]);
++  return aocommon::OptionalNumber<float>(pixel_value(y * width + x));
+ }
+ 
+ template <typename T>
+@@ -188,52 +196,34 @@ aocommon::OptionalNumber<float> SimpleWeighted(
+     size_t vertical_border) {
+   if (allow_negative_components) {
+     if (clean_mask)
+-      return WeightedImpl<true, true>(image, weights, width, height, x, y,
+-          start_y, end_y, clean_mask, horizontal_border, vertical_border);
+-    return WeightedImpl<true, false>(image, weights, width, height, x, y,
+-        start_y, end_y, nullptr, horizontal_border, vertical_border);
++      return FindPeakImpl<true, true, true>(image, weights, width, height, x, y,
++                                            start_y, end_y, clean_mask,
++                                            horizontal_border, vertical_border);
++    return FindPeakImpl<true, false, true>(image, weights, width, height, x, y,
++                                           start_y, end_y, nullptr,
++                                           horizontal_border, vertical_border);
+   }
+   if (clean_mask)
+-    return WeightedImpl<false, true>(image, weights, width, height, x, y,
+-        start_y, end_y, clean_mask, horizontal_border, vertical_border);
+-  return WeightedImpl<false, false>(image, weights, width, height, x, y,
+-      start_y, end_y, nullptr, horizontal_border, vertical_border);
++    return FindPeakImpl<false, true, true>(image, weights, width, height, x, y,
++                                           start_y, end_y, clean_mask,
++                                           horizontal_border, vertical_border);
++  return FindPeakImpl<false, false, true>(image, weights, width, height, x, y,
++                                          start_y, end_y, nullptr,
++                                          horizontal_border, vertical_border);
+ }
+ 
+ aocommon::OptionalNumber<float> FindWithMask(
+     const float* image, size_t width, size_t height, size_t& x, size_t& y,
+     bool allow_negative_components, size_t start_y, size_t end_y,
+     const bool* clean_mask, size_t horizontal_border, size_t vertical_border) {
+-  float peakMax = std::numeric_limits<float>::min();
+-  x = width;
+-  y = height;
+-
+-  size_t xiStart = horizontal_border, xiEnd = width - horizontal_border;
+-  size_t yiStart = std::max(start_y, vertical_border),
+-         yiEnd = std::min(end_y, height - vertical_border);
+-  if (xiEnd < xiStart) xiEnd = xiStart;
+-  if (yiEnd < yiStart) yiEnd = yiStart;
+-
+-  for (size_t yi = yiStart; yi != yiEnd; ++yi) {
+-    const float* imgIter = &image[yi * width + xiStart];
+-    const bool* cleanMaskPtr = &clean_mask[yi * width + xiStart];
+-    for (size_t xi = xiStart; xi != xiEnd; ++xi) {
+-      float value = *imgIter;
+-      if (allow_negative_components) value = std::fabs(value);
+-      if (value > peakMax && *cleanMaskPtr) {
+-        x = xi;
+-        y = yi;
+-        peakMax = std::fabs(value);
+-      }
+-      ++imgIter;
+-      ++cleanMaskPtr;
+-    }
+-  }
+-  if (y == height) {
+-    return {};
+-  } else {
+-    return aocommon::OptionalNumber<float>(image[x + y * width]);
++  if (allow_negative_components) {
++    return FindPeakImpl<true, true, false>(image, nullptr, width, height, x, y,
++                                           start_y, end_y, clean_mask,
++                                           horizontal_border, vertical_border);
+   }
++  return FindPeakImpl<false, true, false>(image, nullptr, width, height, x, y,
++                                          start_y, end_y, clean_mask,
++                                          horizontal_border, vertical_border);
+ }
+ 
+ #if defined __AVX__ && defined USE_INTRINSICS && !defined FORCE_NON_AVX
+diff --git a/cpp/math/peak_finder.h b/cpp/math/peak_finder.h
+index 4403608..8b61d61 100644
+--- a/cpp/math/peak_finder.h
++++ b/cpp/math/peak_finder.h
+@@ -122,6 +122,8 @@ aocommon::OptionalNumber<float> SimpleWeighted(
+     size_t end_y, const bool* clean_mask, size_t horizontal_border,
+     size_t vertical_border);
+ 
++// Empty masked regions, including borders outside the image, return no value
++// and the no-peak coordinates (width, height). Inputs remain unchanged.
+ aocommon::OptionalNumber<float> FindWithMask(
+     const float* image, size_t width, size_t height, size_t& x, size_t& y,
+     bool allow_negative_components, size_t start_y, size_t end_y,

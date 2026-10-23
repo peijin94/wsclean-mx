@@ -5,6 +5,15 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- CPU copy/masked-peak follow-up: `docs/cpu-copy-and-masked-peak-2026-10-23.md`;
+  Radler `bc85f14`, patch0011. Borrowed-image transform adapters remove accidental
+  copies; masked row reduction is ~2x faster in isolation. All 19 full-depth runs
+  and 114 product-array comparisons are T0 against the repaired current baseline.
+  CLEAN medians fall ~10.8% at 3K/4K; observed wall medians 99.71→93.63 s and
+  155.31→142.43 s. The 3K wall estimate is range-limited; 4K has only two pairs and
+  one AA sample. No RSS reduction or legacy-equivalence waiver. All 77 patches
+  replay; final default binary was rebuilt and verified on both sizes.
+
 - Deep exo-pipe / 15-slot benchmark default is now `-niter 150000`, including
   laptop runs; smaller caps are explicit, labeled overrides. Shared runners
   record the effective budget; general WSClean CLI behavior is unchanged.
