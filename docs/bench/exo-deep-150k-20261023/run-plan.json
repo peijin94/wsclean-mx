@@ -1,0 +1,58 @@
+[
+  {
+    "tag": "exo150k-20261023-3072-r1",
+    "variant": "mx",
+    "mode": "cpu",
+    "size": 3072,
+    "repeat": 1,
+    "threads": 8,
+    "niter": 150000,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  },
+  {
+    "tag": "exo150k-20261023-4096-r1",
+    "variant": "mx",
+    "mode": "cpu",
+    "size": 4096,
+    "repeat": 1,
+    "threads": 8,
+    "niter": 150000,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  },
+  {
+    "tag": "exo150k-20261023-4096-r2",
+    "variant": "mx",
+    "mode": "cpu",
+    "size": 4096,
+    "repeat": 2,
+    "threads": 8,
+    "niter": 150000,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  },
+  {
+    "tag": "exo150k-20261023-3072-r2",
+    "variant": "mx",
+    "mode": "cpu",
+    "size": 3072,
+    "repeat": 2,
+    "threads": 8,
+    "niter": 150000,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  }
+]

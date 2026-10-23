@@ -16,14 +16,23 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 ART=ROOT/'bench/out/gpu-profile-20261022-1147'
 MS=ROOT/'bench/out/gpu-audit-20261022-0715/input-15.ms'
+DEFAULT_NITER=150000
+RUN_TIMEOUT_S=1800
 MODES={'cpu':{},'prediction':{},'convolution':{'MX_METAL_CONVOLVE':'1'},
        'peak':{'MX_METAL_PEAK':'1'},'all':{'MX_METAL_CONVOLVE':'1','MX_METAL_PEAK':'1'}}
 
 
-def make_plan(phase):
+def validate_niter(niter):
+    if type(niter) is not int or niter<0:
+        raise ValueError('niter must be a non-negative integer')
+    return niter
+
+
+def make_plan(phase,*,niter=DEFAULT_NITER):
+    niter=validate_niter(niter)
     jobs=[]
     def add(mode,repeat=1,*,size=3072,threads=8,profile=False,monitor=False,sample=False,warmup=False,common=False,variant=None):
-        jobs.append(dict(mode=mode,repeat=repeat,size=size,threads=threads,profile=profile,
+        jobs.append(dict(mode=mode,repeat=repeat,size=size,threads=threads,profile=profile,niter=niter,
                          monitor=monitor,sample=sample,warmup=warmup,common=common,
                          variant=variant or ('gpu-profile-v1' if phase!='timing' else 'gpu-followup-delivered')))
     if phase=='pilot':add('prediction',profile=True,monitor=True)
@@ -83,16 +92,22 @@ def find_target(process,needle,executable):
 
 def run_job(job,folder):
     variant,tag=job['variant'],job['tag']
+    niter=validate_niter(job.get('niter',DEFAULT_NITER))
+    extra=job.get('extra',[])
+    if not isinstance(extra,(list,tuple)) or not all(isinstance(x,str) for x in extra):
+        raise ValueError('extra arguments must be a sequence of strings')
+    if any(x.startswith('-') and x.lstrip('-').split('=',1)[0]=='niter' for x in extra):
+        raise ValueError('set the niter job field, not an extra niter argument')
     size=job['size'];scale='2.7amin' if size==3072 else '2amin'
     cmd=['bash','bench/run.sh',variant,tag]
     if job['mode']!='cpu':cmd+=['-mgpu']
-    cmd+=['-j',str(job['threads']),'-size',str(size),str(size),'-scale',scale,'-weight','briggs','0','-pol','I','-multiscale','-multiscale-scale-bias','0.8','-niter','20000','-mgain','0.95','-auto-threshold','0.5','-auto-mask','3','-local-rms','-horizon-mask','10deg','-mem','40','-reorder']
+    cmd+=['-j',str(job['threads']),'-size',str(size),str(size),'-scale',scale,'-weight','briggs','0','-pol','I','-multiscale','-multiscale-scale-bias','0.8','-niter',str(niter),'-mgain','0.95','-auto-threshold','0.5','-auto-mask','3','-local-rms','-horizon-mask','10deg','-mem','40','-reorder']
     if job['common']:
         prefix=ROOT/'bench/out/gpu-followup-20261022-0945/beam-controls/common/img'
         cmd+=['-reuse-psf',str(prefix),'-reuse-dirty',str(prefix)]
     auxiliary_logs=job['sample'] or (job['profile'] and not job['common'])
     if auxiliary_logs:cmd+=['-log-time']
-    cmd+=job.get('extra',[])
+    cmd+=extra
     cmd+=[str(MS)]
     selected={'MX_METAL_DEBUG_TIMING':'1',**MODES[job['mode']]}
     overrides=job.get('env_overrides',{})
@@ -106,7 +121,7 @@ def run_job(job,folder):
     if job['profile']:selected['MX_METAL_PROFILE']='1'
     if auxiliary_logs:selected['MX_WGRIDDER_VERBOSE']='1'
     env={k:v for k,v in os.environ.items() if not k.startswith(('MX_METAL_','MX_WGRIDDER_'))};env.update(selected)
-    result={**job,'command':cmd,'env':selected,'start_unix_s':time.time()}
+    result={**job,'niter':niter,'command':cmd,'env':selected,'start_unix_s':time.time()}
     process=monitor=sampler=None;monitor_file=None
     original_error=None;finalization_errors=[]
     def error_info(error):
@@ -141,10 +156,10 @@ def run_job(job,folder):
                 pid=find_target(process,f'/{tag}/{variant}/img',ROOT/'bench/bin'/variant/'wsclean');result['target_pid']=pid
                 if job['monitor']:
                     monitor_file=(folder/(tag+'.monitor.jsonl')).open('x')
-                    monitor=subprocess.Popen([str(ART/'gpu-monitor'),'100','300000',str(pid)],stdin=subprocess.PIPE,stdout=monitor_file,stderr=f)
+                    monitor=subprocess.Popen([str(ART/'gpu-monitor'),'100',str(RUN_TIMEOUT_S*1000),str(pid)],stdin=subprocess.PIPE,stdout=monitor_file,stderr=f)
                 if job['sample']:
-                    sampler=subprocess.Popen(['/usr/bin/sample',str(pid),'120','1','-mayDie','-file',str(folder/(tag+'.sample.txt'))],stdout=f,stderr=subprocess.STDOUT)
-            result['exit']=process.wait(timeout=240)
+                    sampler=subprocess.Popen(['/usr/bin/sample',str(pid),str(RUN_TIMEOUT_S),'1','-mayDie','-file',str(folder/(tag+'.sample.txt'))],stdout=f,stderr=subprocess.STDOUT)
+            result['exit']=process.wait(timeout=RUN_TIMEOUT_S)
     except BaseException as error:
         original_error=error
         result['exception']=error_info(error)
@@ -175,7 +190,9 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('phase',choices=['pilot','timing','trace','threads','4k','sample','overhead','fullgrid'])
     parser.add_argument('--label',help='fresh output label; never overwrites an earlier phase')
-    args=parser.parse_args();plan=make_plan(args.phase)
+    parser.add_argument('--niter',type=int,default=DEFAULT_NITER,
+                        help='CLEAN iteration budget (default: %(default)s)')
+    args=parser.parse_args();plan=make_plan(args.phase,niter=args.niter)
     label=args.label or args.phase
     if not re.fullmatch(r'[a-zA-Z0-9_-]+',label):raise ValueError('invalid label')
     for job in plan:job['tag']=job['tag'].replace('gpuprof-'+args.phase+'-','gpuprof-'+label+'-',1)

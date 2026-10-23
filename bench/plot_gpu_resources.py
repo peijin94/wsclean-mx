@@ -58,9 +58,20 @@ def sampled_bars(ax,summary,cases,metric,title,ylabel):
     ax.margins(y=.2)
 
 
+def iteration_label(runs):
+    values=[run.get('niter') for run in runs]
+    if not values:raise ValueError('empty iteration metadata')
+    if all(value is None for value in values):return 'iteration budget not recorded'
+    if any(type(value) is not int or value<0 for value in values):
+        raise ValueError('missing or invalid iteration metadata')
+    if len(set(values))!=1:raise ValueError('mixed iteration budgets')
+    return f'niter {values[0]}'
+
+
 def render(data,output):
     phases={p['phase']:p for p in data}
     timing=phases['timing'];trace=phases['trace'];overlap=phases['overlap']
+    budget_label=iteration_label([run for phase in (timing,trace,overlap) for run in phase['runs']])
     cases=['baseline-default','baseline-convolution','candidate-default','resident','fused']
     plt.rcParams.update({'font.size':10,'axes.spines.top':False,'axes.spines.right':False})
     fig,axes=plt.subplots(2,2,figsize=(13,9),layout='constrained')
@@ -88,7 +99,8 @@ def render(data,output):
     axes[1,1].axhline(1,color='#dc2626',linestyle='--',label='Owned-buffer cap: 1 GiB')
     axes[1,1].set_xticks(x,[LABELS[c] for c in memory_cases],rotation=15,ha='right')
     axes[1,1].set_ylabel('GiB');axes[1,1].set_title('Buffer budget is not a process RSS cap');axes[1,1].legend(fontsize=8)
-    fig.suptitle('3072 x 3072 deep imaging: bounded reuse and resident peak processing\n15 integrations; -j 8; niter 20000; warmups excluded',fontsize=14)
+    fig.suptitle('3072 x 3072 deep imaging: bounded reuse and resident peak processing\n'
+                 f'15 integrations; -j 8; {budget_label}; warmups excluded',fontsize=14)
     fig.supxlabel('Dots: all four timing trials. Copy accounting excludes CPU CLEAN internals and driver traffic. Deconvolution remains opt-in.',fontsize=9)
     output.mkdir(parents=True,exist_ok=True)
     fig.savefig(output/'resources.png',dpi=160);plt.close(fig)

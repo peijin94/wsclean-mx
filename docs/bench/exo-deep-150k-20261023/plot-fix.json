@@ -1,0 +1,13 @@
+{
+  "changes": "Validated timing, trace, and overlap budgets before figure allocation/output. Preserved label validation, uniform budget labels, and explicit unknown legacy labels; added no fallback.",
+  "tests": {
+    "RED": "Trace and overlap each failed both mismatch and legacy-mixture cases as expected.",
+    "GREEN": "All 8 target-module tests passed with plotting mocked, including uniform known and unknown metadata.",
+    "diff_check": "Passed"
+  },
+  "logs": "bench/out/exo-deep-150k-20261023-0555/plot-fix-*.{command,log}",
+  "gaps": [
+    "No real rendering or full-suite run.",
+    "Initial dependency and mock-harness errors are retained in logs."
+  ]
+}

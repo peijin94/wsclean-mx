@@ -1,6 +1,7 @@
 """Harness tests; simulated process rows are not profiling measurements."""
 import unittest
 import json
+import inspect
 import signal
 import tempfile
 from pathlib import Path
@@ -9,6 +10,63 @@ from bench import gpu_profile_campaign as campaign
 from bench.gpu_profile_campaign import matching_pids,make_plan
 
 class GpuCampaignTest(unittest.TestCase):
+    def test_deep_default_is_150k_and_recorded(self):
+        job=make_plan('timing')[0]
+        process=Mock(returncode=0)
+        process.poll.return_value=0
+        process.wait.return_value=0
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(campaign,'health',return_value={}), \
+                 patch.object(campaign.subprocess,'Popen',return_value=process), \
+                 patch('builtins.print'):
+                result=campaign.run_job(job,Path(directory))
+            command=result['command']
+            self.assertEqual(command[command.index('-niter')+1],'150000')
+            self.assertEqual(job['niter'],150000)
+            self.assertEqual(result['niter'],150000)
+            receipt=json.loads((Path(directory)/(job['tag']+'.receipt.json')).read_text())
+            self.assertEqual(receipt['niter'],150000)
+            process.wait.assert_any_call(timeout=1800)
+
+    def test_explicit_iteration_override_and_invalid_budgets(self):
+        self.assertIn('niter',inspect.signature(make_plan).parameters)
+        for niter in (0,20000):
+            job=make_plan('timing',niter=niter)[0]
+            process=Mock(returncode=0)
+            process.poll.return_value=0;process.wait.return_value=0
+            with tempfile.TemporaryDirectory() as directory:
+                with patch.object(campaign,'health',return_value={}), \
+                     patch.object(campaign.subprocess,'Popen',return_value=process), \
+                     patch('builtins.print'):
+                    result=campaign.run_job(job,Path(directory))
+            self.assertEqual(result['niter'],niter)
+            self.assertEqual(result['command'][result['command'].index('-niter')+1],str(niter))
+        for bad in (-1,True,1.5,'150000',None):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):make_plan('timing',niter=bad)
+                job=make_plan('timing')[0];job['niter']=bad
+                process=Mock(returncode=0)
+                process.poll.return_value=0;process.wait.return_value=0
+                with tempfile.TemporaryDirectory() as directory, \
+                     patch.object(campaign,'health',return_value={}), \
+                     patch.object(campaign.subprocess,'Popen',return_value=process) as popen:
+                    with self.assertRaises(ValueError):campaign.run_job(job,Path(directory))
+                    popen.assert_not_called()
+                    self.assertEqual(list(Path(directory).iterdir()),[])
+
+    def test_extra_cannot_hide_an_iteration_override(self):
+        for option in ('-niter','--niter','--niter=20000'):
+            job=make_plan('timing')[0];job['extra']=[option,'20000']
+            process=Mock(returncode=0)
+            process.poll.return_value=0;process.wait.return_value=0
+            with tempfile.TemporaryDirectory() as directory, \
+                 patch.object(campaign,'health',return_value={}), \
+                 patch.object(campaign.subprocess,'Popen',return_value=process) as popen:
+                with self.assertRaisesRegex(ValueError,'niter'):
+                    campaign.run_job(job,Path(directory))
+                popen.assert_not_called()
+                self.assertEqual(list(Path(directory).iterdir()),[])
+
     def test_feature_environment_overrides_are_recorded_and_passed(self):
         job=make_plan('timing')[2]
         job['env_overrides']={'MX_METAL_FUSE':'1','MX_METAL_MEMORY_MB':'512'}

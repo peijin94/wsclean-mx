@@ -5,6 +5,14 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- Deep exo-pipe / 15-slot benchmark default is now `-niter 150000`, including
+  laptop runs; smaller caps are explicit, labeled overrides. Shared runners
+  record the effective budget; general WSClean CLI behavior is unchanged.
+  `docs/exo-deep-150k-2026-10-23.md`: M2/8 CPU threads, median 101.8 s at 3K,
+  147.2 s at 4K; final threshold reached at 93,854/97,873 iterations and three
+  major cycles. Both repetitions are bitwise in all six arrays. Historical
+  20k results are not converged timings; legacy-equivalence gaps remain separate.
+
 - CPU correctness follow-up: `docs/cpu-correctness-repairs-2026-10-22.md`.
   WSClean `99bb9fc2` / patch 0055, Radler `172e4a0` / 0010, Schaapcommon
   `5623a6b` / 0009 repair provider/UV/loader, mask/RMS, ordered gridding and

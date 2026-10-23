@@ -12,7 +12,8 @@ RESIDENT={**BUDGET,'MX_METAL_FUSE':'0'}
 FUSED={**BUDGET,'MX_METAL_FUSE':'1'}
 
 
-def make_plan(phase,candidate,label):
+def make_plan(phase,candidate,label,*,niter=runner.DEFAULT_NITER):
+    niter=runner.validate_niter(niter)
     for value in (candidate,label):
         if not re.fullmatch(r'[A-Za-z0-9_-]+',value):raise ValueError('invalid experiment identifier')
     cases={
@@ -47,7 +48,7 @@ def make_plan(phase,candidate,label):
         mode,variant,env=cases[name]
         size=1024 if phase=='deterministic' else 4096 if phase=='stress' else 3072
         plan.append(dict(case=name,mode=mode,variant=variant,env_overrides=dict(env),repeat=repeat,
-                         size=size,threads=1 if phase=='deterministic' else 8,
+                         size=size,threads=1 if phase=='deterministic' else 8,niter=niter,
                          profile=phase=='trace',monitor=phase=='trace',sample=False,
                          warmup=warmup,common=phase in ('common','ablation'),
                          extra=['-scale','8.1amin'] if phase=='deterministic' else [],
@@ -67,8 +68,10 @@ def main():
     p.add_argument('--label',required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--plan-only',action='store_true')
+    p.add_argument('--niter',type=int,default=runner.DEFAULT_NITER,
+                   help='CLEAN iteration budget (default: %(default)s)')
     args=p.parse_args()
-    plan=make_plan(args.phase,args.candidate,args.label)
+    plan=make_plan(args.phase,args.candidate,args.label,niter=args.niter)
     args.output.mkdir(parents=True,exist_ok=False)
     (args.output/'plan.json').write_text(json.dumps(plan,indent=2))
     if args.plan_only:return 0

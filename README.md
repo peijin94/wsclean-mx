@@ -41,6 +41,12 @@ Full results, plots and methodology: [benchmark.md](benchmark.md). Progress
 log: [issue #1](https://github.com/peijin94/wsclean-mx/issues/1).
 
 The current development plan is [docs/development-plan.md](docs/development-plan.md).
+Deep exo-pipe / 15-slot benchmarks now default to **150,000 maximum CLEAN
+iterations**; smaller caps require an explicit `--niter` or job-field override.
+The [150k-budget measurements](docs/exo-deep-150k-2026-10-23.md) reach the configured
+threshold at 93,854 / 97,873 iterations: **101.8 s at 3K, 147.2 s at 4K** on
+M2 / eight CPU threads. Earlier 20k timings are capped runs, not these converged
+measurements. WSClean's general-purpose CLI default is unchanged.
 The [2026-10-22 CPU audit](docs/cpu-audit-2026-10-22.md) adds an allocation-free
 RMS-weighted peak scan (4.1–4.5× kernel microbenchmark speedup), with fresh
 thread scaling, native tests and retained threaded image-gate failures.

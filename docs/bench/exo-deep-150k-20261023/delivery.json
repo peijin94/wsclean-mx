@@ -1,0 +1,30 @@
+{
+  "default_niter": 150000,
+  "run_timeout_s": 1800,
+  "scope": "Deep benchmark runners; general WSClean CLI default unchanged",
+  "python_tests": 227,
+  "optimized_mode_tests": 23,
+  "successful_real_runs": 4,
+  "repeat_t0_passed": 2,
+  "expected_products": [
+    "img-dirty.fits",
+    "img-horizon-mask.fits",
+    "img-image.fits",
+    "img-model.fits",
+    "img-psf.fits",
+    "img-residual.fits"
+  ],
+  "all_runs_converged_before_cap": true,
+  "binary_sha256": "af07b46ed32b0aee4fa7bf3bb4f98f78859e635a4616fb1db6bf3313dfd3994e",
+  "runner_sha256": "fe8e2d9b1b028cf077584aab72eaa9ff2905b9dc3f27889f196dc0efb3569556",
+  "input": {
+    "unchanged": true,
+    "files": 108,
+    "bytes": 4428203949
+  },
+  "review_passed": true,
+  "source_root_before_changes": "0ca7330f6890052084a120b5fa6c4fcb9f3a26f9",
+  "raw_artifacts": "/Users/peijinz/dev/wsclean-mx/bench/out/exo-deep-150k-20261023-0555",
+  "pushed": false,
+  "released": false
+}

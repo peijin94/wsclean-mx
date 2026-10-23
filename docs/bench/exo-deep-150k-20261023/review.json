@@ -1,0 +1,17 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    {
+      "path": "bench/plot_gpu_resources.py",
+      "line": 102,
+      "trigger": "Render timing runs at niter=150000 together with legacy or niter=20000 trace runs.",
+      "issue": "The figure-wide iteration label validates only timing['runs'], although the copy-accounting panel uses trace['runs']. Mixed-budget data therefore renders successfully under a misleading single-budget title. Overlap runs also bypass iteration validation.",
+      "fix": "Validate iteration metadata for every plotted phase before producing output. Reject incompatible budgets or explicitly label each panel's budget, including unknown legacy metadata."
+    }
+  ],
+  "suggestions": [
+    "Add lightweight mocked-render coverage for cross-phase budget mismatches and legacy/current mixtures; current tests exercise iteration_label only in isolation."
+  ],
+  "summary": "Inspected all requested diffs, both test files, the launcher and plan, plus supporting runner/analyzer code. The 150000 default, explicit overrides, pre-write iteration validation, receipts, and bounded monitoring windows are consistent; the core CLI is unchanged. No tests, rendering, builds, or benchmarks were executed; the reported 223 passing tests were not independently verified."
+}
