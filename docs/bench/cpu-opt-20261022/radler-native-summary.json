@@ -1,0 +1,30 @@
+[
+  {
+    "name": "radler_main",
+    "tests": 62,
+    "skipped": 0,
+    "errors": 0,
+    "failures": 0
+  },
+  {
+    "name": "radler_math",
+    "tests": 24,
+    "skipped": 0,
+    "errors": 0,
+    "failures": 1
+  },
+  {
+    "name": "radler_utils",
+    "tests": 34,
+    "skipped": 0,
+    "errors": 0,
+    "failures": 0
+  },
+  {
+    "name": "radler_algorithms",
+    "tests": 5,
+    "skipped": 0,
+    "errors": 0,
+    "failures": 0
+  }
+]

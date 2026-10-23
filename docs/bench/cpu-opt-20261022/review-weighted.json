@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    {
+      "file": "tests/weighted_peak_regression.cpp:51",
+      "suggestion": "Add deterministic cases for distinct exact products that round to the same binary32 value, same-row ties across lane boundaries, and products exactly at the minimum-normal floor. These would strengthen the existing differential coverage."
+    }
+  ],
+  "summary": "No newly introduced correctness or security defect found in the complete scoped change. work/radler/cpp/math/peak_finder.cc:61-115 preserves float multiplication before comparison, signed results, first row-major ties, masks/borders, NaN/infinity handling, the subnormal floor, and no-peak coordinates. threaded_deconvolution_tools.cc:194-222 removes the weighted allocation only for non-AVX CPU scans without a registered hook; AVX and registered GPU paths retain their original behavior. Input images and sequential RMS arithmetic remain unchanged. The red log confirms four weighted allocation failures at peak-scratch-red.log:5-9. The completed candidate-suite.log reports eight allocation scenarios passing at lines 251-259, 10080 differential checks with zero failures at line 260, and suite completion at line 326. Imaging results are not asserted. Review was read-only; no builds, tests, benchmarks, edits, or commits were performed. Existing reader and other baseline defects were excluded from introduced-defect findings."
+}

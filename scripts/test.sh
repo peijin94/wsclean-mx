@@ -62,6 +62,10 @@ COMMON=(-std=c++20 -O2 -I"$DEPS_PREFIX/include" -I"$BREW/include"
   -L"$BUILD" -lschaapthreading -L"$BREW/lib" -lfftw3f_threads -lfftw3f \
   -Wl,-rpath,"$BUILD" -o "$OUT/peak_scratch_regression"
 "$OUT/peak_scratch_regression"
+"$CXX" "${COMMON[@]}" tests/weighted_peak_regression.cpp \
+  "$BUILD/_deps/radler-build/cpp/libradler.a" \
+  -o "$OUT/weighted_peak_regression"
+"$OUT/weighted_peak_regression"
 "$CXX" "${COMMON[@]}" tests/multiarray_regression.cpp -o "$OUT/multiarray_regression"
 "$OUT/multiarray_regression"
 "$CXX" "${COMMON[@]}" tests/median_edge_regression.cpp -o "$OUT/median_edge_regression"

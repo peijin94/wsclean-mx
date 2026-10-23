@@ -1,0 +1,72 @@
+Test project /Users/peijinz/dev/wsclean-mx/build-test/_deps/radler-build
+    Start 1: build_unittests_radler_main
+1/8 Test #1: build_unittests_radler_main .........   Passed    0.03 sec
+    Start 2: unittests_radler_main
+2/8 Test #2: unittests_radler_main ...............   Passed    1.84 sec
+    Start 3: build_unittests_radler_algorithms
+3/8 Test #3: build_unittests_radler_algorithms ...   Passed    0.03 sec
+    Start 4: unittests_radler_algorithms
+4/8 Test #4: unittests_radler_algorithms .........   Passed    0.30 sec
+    Start 5: build_unittests_radler_math
+5/8 Test #5: build_unittests_radler_math .........   Passed    0.03 sec
+    Start 6: unittests_radler_math
+6/8 Test #6: unittests_radler_math ...............***Failed    2.39 sec
+Residual rms: 2.30868
+Residual rms: 0.233601
+Residual rms: 0.220273
+Residual rms: 0.219827
+Residual rms: 0.219796
+Residual rms: 0.219792
+Residual rms: 0.219792
+Residual rms: 0.219792
+Residual rms: 0.219792
+Residual rms: 0.219792
+Residual rms: 2.30868
+Residual rms: 0.277181
+Residual rms: 0.233639
+Residual rms: 0.228177
+Residual rms: 0.226454
+Residual rms: 0.226454
+Residual rms: 0.226454
+Residual rms: 0.226454
+Residual rms: 0.226454
+Residual rms: 0.226454
+Residual rms: 4.74342
+Residual rms: 1.16783
+Residual rms: 0.314659
+Residual rms: 0.0942467
+Residual rms: 0.0336181
+Residual rms: 0.0123476
+Residual rms: 0.00463468
+Residual rms: 0.00174074
+Residual rms: 0.000654123
+Residual rms: 0.000245847
+Residual rms: 4.74342
+Residual rms: 1.16783
+Residual rms: 0.314659
+Residual rms: 0.0942466
+Residual rms: 0.0336182
+Residual rms: 0.0123478
+Residual rms: 0.00463486
+Residual rms: 0.00174082
+Residual rms: 0.000654207
+Residual rms: 0.000245876
+
+[1;31;49m*** 14 failures are detected in the test module "radler_math"
+[0;39;49m
+
+    Start 7: build_unittests_radler_utils
+7/8 Test #7: build_unittests_radler_utils ........   Passed    0.03 sec
+    Start 8: unittests_radler_utils
+8/8 Test #8: unittests_radler_utils ..............   Passed    0.04 sec
+
+88% tests passed, 1 tests failed out of 8
+
+Label Time Summary:
+unit    =   4.56 sec*proc (4 tests)
+
+Total Test time (real) =   4.68 sec
+
+The following tests FAILED:
+	  6 - unittests_radler_math (Failed)                    unit
+Errors while running CTest

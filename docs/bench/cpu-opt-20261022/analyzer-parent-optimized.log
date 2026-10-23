@@ -1,0 +1,13 @@
+test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) ... ok
+test_empty_directories_rejected_under_python_optimized (test_cpu_campaign_analyzer.AnalyzerTests.test_empty_directories_rejected_under_python_optimized) ... ok
+test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) ... ok
+test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) ... ok
+test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) ... ok
+test_valid_synthetic_gate_and_original_threshold_failures (test_cpu_campaign_analyzer.AnalyzerTests.test_valid_synthetic_gate_and_original_threshold_failures) ... ok
+test_valid_synthetic_micro_accepts_original_and_latest_check_counts (test_cpu_campaign_analyzer.AnalyzerTests.test_valid_synthetic_micro_accepts_original_and_latest_check_counts) ... ok
+test_valid_synthetic_runs (test_cpu_campaign_analyzer.AnalyzerTests.test_valid_synthetic_runs) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.403s
+
+OK

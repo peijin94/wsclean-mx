@@ -9,12 +9,19 @@
 #include <vector>
 #include <schaapcommon/threading/threadpool.h>
 #include "algorithms/threaded_deconvolution_tools.h"
+#include "math/peak_finder.h"
 
 namespace {
 std::atomic<bool> counting{false};
 std::atomic<size_t> image_allocations{0};
 constexpr size_t kWidth = 64, kHeight = 48;
 constexpr size_t kImageBytes = kWidth * kHeight * sizeof(float);
+size_t hook_calls = 0;
+int RefusingHook(const float*, size_t, size_t, const unsigned char*, int,
+                 size_t, size_t, float*, size_t*, size_t*) {
+  ++hook_calls;
+  return 0;
+}
 }
 void* operator new[](std::size_t bytes) {
   if (void* memory = std::malloc(bytes ? bytes : 1)) {
@@ -48,36 +55,48 @@ int main() {
   for (bool weighted : {false, true}) {
     for (bool masked : {false, true}) {
       for (bool calculate_rms : {false, true}) {
-        const auto search = [&] {
-          tools.FindMultiScalePeak(&transforms, image, scales, results, true,
-                                   masked ? mask.data() : nullptr, scale_masks,
-                                   0.0f, weighted ? rms : empty, calculate_rms);
-        };
-        search();  // Warm FFT/cache and result storage outside measurement.
-        image_allocations = 0;
-        counting = true;
-        search();
-        counting = false;
-        const size_t allocations = image_allocations.load();
-        // One transformed image, plus scratch only for RMS-weighted searches.
-        const size_t expected_allocations = weighted ? 2 : 1;
-        const size_t expected_x = weighted || masked ? 10 : 20;
-        const float expected_raw = weighted ? 8.0f : (masked ? 4.0f : -6.0f);
-        const float expected_normalized = weighted || masked ? 4.0f : -6.0f;
-        const bool good = allocations == expected_allocations && results.size() == 1 &&
-            results[0].x == expected_x && results[0].y == expected_x &&
-            results[0].unnormalized_value && results[0].normalized_value &&
-            std::fabs(*results[0].unnormalized_value - expected_raw) < 1e-5f &&
-            std::fabs(*results[0].normalized_value - expected_normalized) < 1e-5f &&
-            (calculate_rms ? results[0].rms > 0.0f : results[0].rms == -1.0f);
-        ++scenarios;
-        failures += !good;
-        std::cout << "weighted=" << weighted << " mask=" << masked
-                  << " rms=" << calculate_rms << " image_allocations=" << allocations
-                  << " expected=" << expected_allocations << ' ' << (good ? "PASS" : "FAIL") << '\n';
+        for (bool hooked : {false, true}) {
+          radler::algorithms::SetPeakScanHook(hooked ? RefusingHook : nullptr);
+          const auto search = [&] {
+            tools.FindMultiScalePeak(&transforms, image, scales, results, true,
+                                     masked ? mask.data() : nullptr, scale_masks,
+                                     0.0f, weighted ? rms : empty, calculate_rms);
+          };
+          search();  // Warm FFT/cache and result storage outside measurement.
+          image_allocations = 0;
+          hook_calls = 0;
+          counting = true;
+          search();
+          counting = false;
+          const size_t allocations = image_allocations.load();
+          // CPU weighted search must not materialize a full weighted plane.
+          // Retain the existing AVX path's allocation/empty-image semantics.
+#if defined(__AVX__) && defined(USE_INTRINSICS) && !defined(FORCE_NON_AVX)
+          const size_t expected_allocations = weighted ? 2 : 1;
+#else
+          const size_t expected_allocations = weighted && hooked ? 2 : 1;
+#endif
+          const size_t expected_x = weighted || masked ? 10 : 20;
+          const float expected_raw = weighted ? 8.0f : (masked ? 4.0f : -6.0f);
+          const float expected_normalized = weighted || masked ? 4.0f : -6.0f;
+          const bool good = hook_calls == (hooked ? 1u : 0u) &&
+              allocations == expected_allocations && results.size() == 1 &&
+              results[0].x == expected_x && results[0].y == expected_x &&
+              results[0].unnormalized_value && results[0].normalized_value &&
+              std::fabs(*results[0].unnormalized_value - expected_raw) < 1e-5f &&
+              std::fabs(*results[0].normalized_value - expected_normalized) < 1e-5f &&
+              (calculate_rms ? results[0].rms > 0.0f : results[0].rms == -1.0f);
+          ++scenarios;
+          failures += !good;
+          std::cout << "weighted=" << weighted << " mask=" << masked
+                    << " hooked=" << hooked
+                    << " rms=" << calculate_rms << " image_allocations=" << allocations
+                    << " expected=" << expected_allocations << ' ' << (good ? "PASS" : "FAIL") << '\n';
+        }
       }
     }
   }
+  radler::algorithms::SetPeakScanHook(nullptr);
   std::cout << scenarios << " scenarios, " << failures << " failures\n";
   return failures ? 1 : 0;
 }

@@ -1,0 +1,23 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    {
+      "file": "bench/analyze_cpu_campaign.py:43-53",
+      "error": "FITS gates require matching nonempty sets but never require the six expected products. Removing failing restored/residual products from both directories can turn a failed gate into a pass.",
+      "fix": "Validate each directory against the explicit expected product names before comparing."
+    },
+    {
+      "file": "bench/analyze_cpu_campaign.py:78-90",
+      "error": "Microbenchmark validation ignores the recorded image size and does not enforce unique repetition identities. Copying the 3K log over the 4K log, or duplicating measured repetitions while preserving counts, is accepted and produces misleading statistics.",
+      "fix": "Require exactly one row for each expected size/mask/repetition/role tuple, finite positive durations, and a successful differential-check summary."
+    },
+    {
+      "file": "bench/analyze_cpu_campaign.py:27-46",
+      "error": "Required validation uses assert, which Python optimization disables. With PYTHONOPTIMIZE=1, empty FITS directories yield an empty product list and all([]) marks the gate passed; run identity and exit checks also disappear.",
+      "fix": "Use explicit exceptions for mandatory validation."
+    }
+  ],
+  "suggestions": [],
+  "summary": "Fully inspected the requested changes read-only. No production correctness defect or test-wiring defect found: float32 products, ordered ties, signed results, masks/borders/nonfinite/no-peak semantics, immutable inputs, and existing GPU/AVX paths are preserved. Saved logs confirm 208 Python tests, 16 allocation/hook scenarios, 10084 differential checks, and 160 native passes with 4 skips. Saved results retain six products per gate and the stated T0/T2 failures; the analyzer returns 1 for those failures. Review fails closed on the new analyzer validation defects, not on a claim that the existing image failures were waived. No builds, tests, benchmarks, edits, merges, or pushes performed."
+}

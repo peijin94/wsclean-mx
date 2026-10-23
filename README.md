@@ -41,6 +41,10 @@ Full results, plots and methodology: [benchmark.md](benchmark.md). Progress
 log: [issue #1](https://github.com/peijin94/wsclean-mx/issues/1).
 
 The current development plan is [docs/development-plan.md](docs/development-plan.md).
+The [2026-10-22 CPU audit](docs/cpu-audit-2026-10-22.md) adds an allocation-free
+RMS-weighted peak scan (4.1–4.5× kernel microbenchmark speedup), with fresh
+thread scaling, native tests and retained threaded image-gate failures.
+It does **not** establish an end-to-end speedup or a new scientific release.
 The [2026-10-17 audit](docs/audit-2026-10-17.md) records fresh benchmarks,
 regression coverage, and initial correctness/test gaps. The
 [CPU correctness continuation](docs/continuation-2026-10-17.md) covers selection-safe
@@ -69,6 +73,7 @@ The patch set lives in `patches/mx/<repo>/`, one directory per library:
 | wsclean/0003 | Same, during reordering (cleaning runs) | reordering 2.3× |
 | radler/0004 | Peak finder: vectorized row maximum skips rows | peak search 8×, deconvolution 1.12× |
 | radler/0005 | Allocate multiscale peak scratch only for RMS-weighted searches | removes one unused full-image allocation per unweighted scale search; no promised wall-time gain |
+| radler/0009 (`gpu-dev`) | Fuse CPU RMS weighting and peak selection, including masks | removes a touched full-image temporary per weighted scale search; exact one-thread imaging; whole-run benefit unestablished |
 | wsclean/0004 | Preserve selected-row reads; validate full data/flag/weight shapes | avoids speculative-read failures and unsafe malformed-array extraction |
 | aocommon/0002 | Portable fundamental-alignment allocation in MultiArray | fixes invalid-alignment `std::bad_alloc` on macOS; retains over-aligned allocation |
 | wsclean/0005 | Convert in-memory provider start time from seconds to MJD days | correct FITS observation dates; row metadata remains seconds |

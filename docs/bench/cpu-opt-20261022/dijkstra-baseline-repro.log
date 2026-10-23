@@ -1,0 +1,128 @@
+Running 1 test case...
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:370: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check PathStr(maskL, subWidthL) == "XXXX\n" "XXXX\n" "XXXX\n" "XXXX\n" "XXX \n" "XXXX\n" "XXXX\n" "XXXX\n" has failed [XXXX
+XXXX
+XXXX
+XXXX
+XXXX
+XXXX
+XXXX
+XXXX
+ != XXXX
+XXXX
+XXXX
+XXXX
+XXX 
+XXXX
+XXXX
+XXXX
+][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:374: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check subXR == 3u has failed [4 != 3][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:375: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check subWidthR == 7u has failed [6 != 7][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:387: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check PathStr(maskR, subWidthR) == " XXXXXX\n" " XXXXXX\n" " XXXXXX\n" " XXXXXX\n" "XXXXXXX\n" " XXXXXX\n" " XXXXXX\n" " XXXXXX\n" has failed [XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+ !=  XXXXXX
+ XXXXXX
+ XXXXXX
+ XXXXXX
+XXXXXXX
+ XXXXXX
+ XXXXXX
+ XXXXXX
+][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:404: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check PathStr(mask, width) == "XXXXXXXXXX\n" "XXXXXXXXXX\n" "XXXXXXXXXX\n" "XXXX XXXXX\n" "          \n" "          \n" "          \n" "          \n" has failed [XXXXXXXXXX
+XXXXXXXXXX
+XXXXXXXXXX
+XXXXXXXXXX
+          
+          
+          
+          
+ != XXXXXXXXXX
+XXXXXXXXXX
+XXXXXXXXXX
+XXXX XXXXX
+          
+          
+          
+          
+][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:440: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check PathStr(output, width) == "    XXXXXX\n" "    XXXXXX\n" "    XXXXXX\n" "     XXXXX\n" "          \n" "          \n" "          \n" "          \n" has failed [    XXXXXX
+    XXXXXX
+    XXXXXX
+    XXXXXX
+          
+          
+          
+          
+ !=     XXXXXX
+    XXXXXX
+    XXXXXX
+     XXXXX
+          
+          
+          
+          
+][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:444: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check subY == 3u has failed [4 != 3][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:445: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check subHeight == 5u has failed [4 != 5][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:462: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check PathStr(output, width) == "          \n" "          \n" "          \n" "          \n" "XXX       \n" "XXXX      \n" "XXXX      \n" "XXXX      \n" has failed [          
+          
+          
+          
+XXXX      
+XXXX      
+XXXX      
+XXXX      
+ !=           
+          
+          
+          
+XXX       
+XXXX      
+XXXX      
+XXXX      
+][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:471: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check maskX == 2u has failed [4 != 2][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:472: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check maskY == 2u has failed [4 != 2][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:473: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check maskWidth == 8u has failed [6 != 8][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:474: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check maskHeight == 6u has failed [4 != 6][0;39;49m
+bench/out/cpu-opt-20261022-2035/baseline-dijkstra/cpp/math/test/test_dijkstra_splitter.cc:488: [1;31;49merror: in "dijkstra_splitter/get_bounding_mask": check PathStr(output, width) == "XXX       \n" "XXX       \n" "XX        \n" "XX  X     \n" "XX XXXXXXX\n" "XX  XXXXXX\n" "XX  XXXXXX\n" "XX  XXXXXX\n" has failed [XXXX      
+XXXX      
+XXXX      
+XXXX      
+XXXXXXXXXX
+XXXXXXXXXX
+XXXXXXXXXX
+XXXXXXXXXX
+ != XXX       
+XXX       
+XX        
+XX  X     
+XX XXXXXXX
+XX  XXXXXX
+XX  XXXXXX
+XX  XXXXXX
+][0;39;49m
+
+Test module "radler_math" has failed with:
+  1 test case out of 8 failed
+  7 test cases out of 8 skipped
+  25 assertions out of 39 passed
+  14 assertions out of 39 failed
+
+  Test suite "dijkstra_splitter" has failed with:
+    1 test case out of 8 failed
+    7 test cases out of 8 skipped
+    25 assertions out of 39 passed
+    14 assertions out of 39 failed
+
+    Test case "dijkstra_splitter/get_bounding_mask" has failed with:
+      25 assertions out of 39 passed
+      14 assertions out of 39 failed
+

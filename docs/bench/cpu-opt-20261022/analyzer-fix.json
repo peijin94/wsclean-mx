@@ -1,0 +1,22 @@
+{
+  "status": "fixed",
+  "changes": {
+    "bench/analyze_cpu_campaign.py": [
+      "Replaced mandatory assertions with explicit ValueError validation for run plans, receipts, exits, counts and timings.",
+      "Required exactly six specified FITS products on both sides before comparisons.",
+      "Validated complete, unique micro tuples, expected sizes, finite positive durations and successful differential summaries without hardcoding check counts."
+    ],
+    "tests/test_cpu_campaign_analyzer.py": "Added 8 focused unittest tests with labeled synthetic fixtures and threshold-preservation coverage."
+  },
+  "verification": {
+    "red_exit_code": 1,
+    "red_log": "bench/out/cpu-opt-20261022-2035/analyzer-red.log",
+    "green_exit_code": 0,
+    "green_python_O_exit_code": 0,
+    "green_log": "bench/out/cpu-opt-20261022-2035/analyzer-green.log"
+  },
+  "thresholds_preserved": true,
+  "full_analyzer_or_imaging_run": false,
+  "git_state_modified": false,
+  "commits": 0
+}

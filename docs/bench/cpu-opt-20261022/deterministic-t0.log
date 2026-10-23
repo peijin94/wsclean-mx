@@ -1,0 +1,12 @@
+ref:  /Users/peijinz/dev/wsclean-mx/bench/out/cpuaudit-20261022-threads-r1-j1/cpu-audit-base-20261022
+test: /Users/peijinz/dev/wsclean-mx/bench/out/cpuopt-20261022-deterministic/cpu-weighted-v1-20261022
+tier: T0
+
+product                      bitwise    n_diff     max_ulp     max_abs    rel_rms   rel_peak  peak_ratio  result
+----------------------------------------------------------------------------------------------------------------
+img-dirty.fits                  True         0           0   0.000e+00   0.00e+00   0.00e+00  1.00000000  PASS
+img-horizon-mask.fits           True         0           0   0.000e+00   0.00e+00   0.00e+00  1.00000000  PASS
+img-image.fits                  True         0           0   0.000e+00   0.00e+00   0.00e+00  1.00000000  PASS
+img-model.fits                  True         0           0   0.000e+00   0.00e+00   0.00e+00  1.00000000  PASS
+img-psf.fits                    True         0           0   0.000e+00   0.00e+00   0.00e+00  1.00000000  PASS
+img-residual.fits               True         0           0   0.000e+00   0.00e+00   0.00e+00  1.00000000  PASS

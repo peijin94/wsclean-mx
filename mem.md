@@ -5,6 +5,15 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- CPU follow-up: `docs/cpu-audit-2026-10-22.md`; Radler `1f1452e`, patch 0009.
+  Direct weighted scans remove one full-image temporary (36/64 MiB at 3K/4K)
+  and are 4.1–4.5x faster in the linked microbenchmark. Six one-thread FITS
+  products match bitwise; matched-input threaded models also match. Strict
+  full-image checks retain failures in candidate AND identical-baseline controls.
+  No reliable whole-run speedup or RSS reduction is claimed. Source audit found
+  reordered payload-position, UV-limit-coordinate and sliding-minimum boundary
+  risks needing independent synthetic reproductions; no reader repair is included.
+
 - Resource/residency implementation: `docs/gpu-resource-optimization-2026-10-22.md`;
   WSClean `ff01a434`, Radler `ea55b61`, frozen `gpu-resource-v1`. Bounded plans and
   immutable kernels, aggregate owned-buffer cap (default1GiB), opt-in fused peaks,

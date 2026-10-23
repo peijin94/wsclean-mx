@@ -1,0 +1,26 @@
+{
+  "wsclean": {
+    "patches": 54,
+    "tree": "637f70972e07f1e720de69e17cfcca5289c7a186",
+    "head": "ff01a434abf53ef03a02f406abe24214c87b78b6",
+    "passed": true
+  },
+  "radler": {
+    "patches": 9,
+    "tree": "34e3e3d322fe834cf5b39a5f520922e1c83d29bb",
+    "head": "1f1452ea9774d6c2b6c2344ebda59c3c69dbf953",
+    "passed": true
+  },
+  "schaapcommon": {
+    "patches": 8,
+    "tree": "e5490e48aa382a72c5b4c379dc680af560d474d9",
+    "head": "d6e5eee1dd1b06fa3e01a92f2eb9ab84d83498e7",
+    "passed": true
+  },
+  "aocommon": {
+    "patches": 2,
+    "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+    "head": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+    "passed": true
+  }
+}

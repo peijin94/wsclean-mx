@@ -1,0 +1,179 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 21:14:42 -0700
+Subject: [PATCH] peak_finder: fuse CPU RMS-weighted peak scans
+
+
+diff --git a/cpp/algorithms/threaded_deconvolution_tools.cc b/cpp/algorithms/threaded_deconvolution_tools.cc
+index d8be4d7..5d4e2e6 100644
+--- a/cpp/algorithms/threaded_deconvolution_tools.cc
++++ b/cpp/algorithms/threaded_deconvolution_tools.cc
+@@ -191,21 +191,33 @@ ThreadedDeconvolutionTools::FindSingleScalePeak(
+ 
+     result.normalized_value = result.unnormalized_value;
+   } else {
+-    Image scratch(width, height);
+-    for (size_t i = 0; i != rms_factor_image.Size(); ++i) {
+-      scratch[i] = image[i] * rms_factor_image[i];
+-    }
++#if !defined(__AVX__) || !defined(USE_INTRINSICS) || defined(FORCE_NON_AVX)
++    // Preserve the registered GPU adapter and the separate AVX oracle. Without
++    // either, scan float products directly: no full weighted-image allocation.
++    if (g_peak_scan_hook == nullptr) {
++      result.unnormalized_value = math::peak_finder::SimpleWeighted(
++          image.Data(), rms_factor_image.Data(), width, height, result.x,
++          result.y, allow_negative_components, 0, height, mask, x_border,
++          y_border);
++    } else
++#endif
++    {
++      Image scratch(width, height);
++      for (size_t i = 0; i != rms_factor_image.Size(); ++i) {
++        scratch[i] = image[i] * rms_factor_image[i];
++      }
+ 
+-    if (!TryGpuPeak(scratch, mask, allow_negative_components, x_border, y_border,
+-                    result)) {
+-      if (mask == nullptr) {
+-        result.unnormalized_value = math::peak_finder::Find(
+-            scratch.Data(), width, height, result.x, result.y,
+-            allow_negative_components, 0, height, x_border, y_border);
+-      } else {
+-        result.unnormalized_value = math::peak_finder::FindWithMask(
+-            scratch.Data(), width, height, result.x, result.y,
+-            allow_negative_components, 0, height, mask, x_border, y_border);
++      if (!TryGpuPeak(scratch, mask, allow_negative_components, x_border, y_border,
++                      result)) {
++        if (mask == nullptr) {
++          result.unnormalized_value = math::peak_finder::Find(
++              scratch.Data(), width, height, result.x, result.y,
++              allow_negative_components, 0, height, x_border, y_border);
++        } else {
++          result.unnormalized_value = math::peak_finder::FindWithMask(
++              scratch.Data(), width, height, result.x, result.y,
++              allow_negative_components, 0, height, mask, x_border, y_border);
++        }
+       }
+     }
+ 
+diff --git a/cpp/math/peak_finder.cc b/cpp/math/peak_finder.cc
+index 8f409df..b219ecd 100644
+--- a/cpp/math/peak_finder.cc
++++ b/cpp/math/peak_finder.cc
+@@ -53,6 +53,68 @@ T RowMax(const T* row, size_t n, bool use_abs, T start) {
+   return result;
+ }
+ 
++template <bool Negative, bool Masked>
++aocommon::OptionalNumber<float> WeightedImpl(
++    const float* image, const float* weights, size_t width, size_t height,
++    size_t& x, size_t& y, size_t start_y, size_t end_y, const bool* mask,
++    size_t horizontal_border, size_t vertical_border) {
++  x = width;
++  y = height;
++  if (horizontal_border >= width || vertical_border >= height) return {};
++  const size_t x_begin = horizontal_border, x_end = width - horizontal_border;
++  const size_t y_begin = std::max(start_y, vertical_border);
++  const size_t y_end = std::min(end_y, height - vertical_border);
++  if (x_begin >= x_end || y_begin >= y_end) return {};
++
++  float peak = std::numeric_limits<float>::min();
++  constexpr size_t kLanes = 8;
++  for (size_t row = y_begin; row != y_end; ++row) {
++    const size_t offset = row * width;
++    float lanes[kLanes];
++    std::fill_n(lanes, kLanes, peak);
++    size_t col = x_begin;
++    // Independent maxima vectorize without changing multiplication precision
++    // or reassociating sums. Mask/negative modes are specialized outside loops.
++    for (; x_end - col >= kLanes; col += kLanes) {
++      for (size_t lane = 0; lane != kLanes; ++lane) {
++        const size_t index = offset + col + lane;
++        const float product = image[index] * weights[index];
++        float value = Negative ? std::fabs(product) : product;
++        if constexpr (Masked) value = mask[index] ? value : peak;
++        lanes[lane] = value > lanes[lane] ? value : lanes[lane];
++      }
++    }
++    float row_peak = peak;
++    for (; col != x_end; ++col) {
++      const size_t index = offset + col;
++      const float product = image[index] * weights[index];
++      float value = Negative ? std::fabs(product) : product;
++      if constexpr (Masked) value = mask[index] ? value : peak;
++      row_peak = value > row_peak ? value : row_peak;
++    }
++    for (float value : lanes) row_peak = value > row_peak ? value : row_peak;
++    if (!(row_peak > peak)) continue;
++
++    // Locate only a row that raises the peak. Ordered strict comparisons retain
++    // the original first-pixel tie, NaN/infinity and signed-value semantics.
++    for (size_t column = x_begin; column != x_end; ++column) {
++      const size_t index = offset + column;
++      const float product = image[index] * weights[index];
++      const float value = Negative ? std::fabs(product) : product;
++      if constexpr (Masked) {
++        if (!mask[index]) continue;
++      }
++      if (value > peak) {
++        peak = std::fabs(value);
++        x = column;
++        y = row;
++      }
++    }
++  }
++  if (y == height) return {};
++  return aocommon::OptionalNumber<float>(image[y * width + x] * weights[y * width + x]);
++}
++
+ template <typename T>
+ aocommon::OptionalNumber<T> SimpleImpl(const T* image, size_t width,
+                                        size_t height, size_t& x, size_t& y,
+@@ -119,6 +181,25 @@ aocommon::OptionalNumber<double> Simple(const double* image, size_t width,
+                     start_y, end_y, horizontal_border, vertical_border);
+ }
+ 
++aocommon::OptionalNumber<float> SimpleWeighted(
++    const float* image, const float* weights, size_t width, size_t height,
++    size_t& x, size_t& y, bool allow_negative_components, size_t start_y,
++    size_t end_y, const bool* clean_mask, size_t horizontal_border,
++    size_t vertical_border) {
++  if (allow_negative_components) {
++    if (clean_mask)
++      return WeightedImpl<true, true>(image, weights, width, height, x, y,
++          start_y, end_y, clean_mask, horizontal_border, vertical_border);
++    return WeightedImpl<true, false>(image, weights, width, height, x, y,
++        start_y, end_y, nullptr, horizontal_border, vertical_border);
++  }
++  if (clean_mask)
++    return WeightedImpl<false, true>(image, weights, width, height, x, y,
++        start_y, end_y, clean_mask, horizontal_border, vertical_border);
++  return WeightedImpl<false, false>(image, weights, width, height, x, y,
++      start_y, end_y, nullptr, horizontal_border, vertical_border);
++}
++
+ aocommon::OptionalNumber<float> FindWithMask(
+     const float* image, size_t width, size_t height, size_t& x, size_t& y,
+     bool allow_negative_components, size_t start_y, size_t end_y,
+diff --git a/cpp/math/peak_finder.h b/cpp/math/peak_finder.h
+index feaed53..4403608 100644
+--- a/cpp/math/peak_finder.h
++++ b/cpp/math/peak_finder.h
+@@ -112,6 +112,16 @@ aocommon::OptionalNumber<float> FindWithMask(const float* image, size_t width,
+                                              bool allow_negative_components,
+                                              const bool* clean_mask);
+ 
++// Weighted counterpart of Simple/FindWithMask. Products are rounded to float
++// before comparison; first row-major ties and the Simple no-peak sentinel are
++// preserved. Unlike Avx, an empty/no-candidate search returns no value. Weights
++// and optional mask must cover width*height elements and remain immutable.
++aocommon::OptionalNumber<float> SimpleWeighted(
++    const float* image, const float* weights, size_t width, size_t height,
++    size_t& x, size_t& y, bool allow_negative_components, size_t start_y,
++    size_t end_y, const bool* clean_mask, size_t horizontal_border,
++    size_t vertical_border);
++
+ aocommon::OptionalNumber<float> FindWithMask(
+     const float* image, size_t width, size_t height, size_t& x, size_t& y,
+     bool allow_negative_components, size_t start_y, size_t end_y,

@@ -1,0 +1,821 @@
+test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) ... 
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-horizon-mask.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-image.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-residual.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-dirty.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-model.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-psf.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-horizon-mask.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-image.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-residual.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-dirty.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-model.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-psf.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-horizon-mask.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-image.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-residual.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-dirty.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-model.fits') ... FAIL
+  test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-psf.fits') ... FAIL
+test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) ... FAIL
+test_empty_directories_rejected_under_python_optimized (test_cpu_campaign_analyzer.AnalyzerTests.test_empty_directories_rejected_under_python_optimized) ... ok
+test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) ... 
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-size') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duplicate-repetition') ... FAIL
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-mask') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-role') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-repetition') ... FAIL
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='missing-row') ... FAIL
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='extra-row') ... FAIL
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='truncated-row') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='missing-summary') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='failed-summary') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='zero-checks') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='malformed-summary') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duplicate-summary') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration-NaN') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration-inf') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration--1') ... ERROR
+  test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration-0') ... ERROR
+test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) ... 
+  test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 0\nuser 8\nsys 1\n1024 maximum resident set size\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n') ... ERROR
+  test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n1024 maximum resident set size\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:00\n') ... FAIL
+  test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n0 maximum resident set size\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n') ... FAIL
+  test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n') ... ERROR
+  test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n1024 maximum resident set size\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n') ... FAIL
+  test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n1024 maximum resident set size\n100 instructions retired\n0 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n') ... FAIL
+test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) ... 
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[], runs=[]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}, {'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}, {'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan={'tag': 'wrong-container'}, runs=[]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[None], runs=[None]) ... ERROR
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{}], runs=[{'exit': 0}]) ... ERROR
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[None]) ... ERROR
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'wrong', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'wrong', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 4096, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 1}]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': None}]) ... FAIL
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}]) ... ERROR
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}]) ... ERROR
+  test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}]) ... ERROR
+test_valid_synthetic_gate_and_original_threshold_failures (test_cpu_campaign_analyzer.AnalyzerTests.test_valid_synthetic_gate_and_original_threshold_failures) ... ok
+test_valid_synthetic_micro_accepts_original_and_latest_check_counts (test_cpu_campaign_analyzer.AnalyzerTests.test_valid_synthetic_micro_accepts_original_and_latest_check_counts) ... ok
+test_valid_synthetic_runs (test_cpu_campaign_analyzer.AnalyzerTests.test_valid_synthetic_runs) ... ok
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-size')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-mask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-role')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='truncated-row')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 84, in main
+    if int(a[2]) == masked and int(a[4]) == role and int(a[3]) != 0]
+           ~^^^
+IndexError: list index out of range
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='missing-summary')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='failed-summary')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='zero-checks')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='malformed-summary')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duplicate-summary')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration-NaN')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration-inf')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration--1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duration-0')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 102, in main
+    gates=gates, profiles=load(args.art / 'sample-summary.json'),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+test_cpu_campaign_analyzer.MicroComplete
+
+======================================================================
+ERROR: test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 0\nuser 8\nsys 1\n1024 maximum resident set size\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 94, in test_invalid_run_times_and_counters_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 33, in validated_runs
+    actual['timing'] = parse_times(time, (d / 'wsclean.log').read_text())
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_gpu_profile.py", line 64, in parse_times
+    deconvolution_s=deconv,other_s=wall-inv-pred-deconv,cpu_core_equivalent=(user+system)/wall,
+                                                                            ~~~~~~~~~~~~~^^~~~
+ZeroDivisionError: float division by zero
+
+======================================================================
+ERROR: test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 94, in test_invalid_run_times_and_counters_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 35, in validated_runs
+    assert actual['timing'][name] > 0, (actual['tag'], name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>' not supported between instances of 'NoneType' and 'int'
+
+======================================================================
+ERROR: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[None], runs=[None])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 27, in validated_runs
+    assert len(plan) == len(runs) and len({p['tag'] for p in plan}) == len(plan)
+                                           ~^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+======================================================================
+ERROR: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{}], runs=[{'exit': 0}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 27, in validated_runs
+    assert len(plan) == len(runs) and len({p['tag'] for p in plan}) == len(plan)
+                                           ~^^^^^^^
+KeyError: 'tag'
+
+======================================================================
+ERROR: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[None])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in validated_runs
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in <genexpr>
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+               ~~~~~~^^^
+TypeError: 'NoneType' object is not subscriptable
+
+======================================================================
+ERROR: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in validated_runs
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in <genexpr>
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+               ~~~~~~^^^
+KeyError: 'tag'
+
+======================================================================
+ERROR: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in validated_runs
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in <genexpr>
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+               ~~~~~~^^^
+KeyError: 'variant'
+
+======================================================================
+ERROR: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 30, in validated_runs
+    assert actual['exit'] == 0, actual
+           ~~~~~~^^^^^^^^
+KeyError: 'exit'
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-horizon-mask.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-image.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-residual.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-dirty.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-model.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'),), missing='img-psf.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-horizon-mask.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-image.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-residual.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-dirty.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-model.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'),), missing='img-psf.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 105, in test_each_side_requires_exact_products_before_comparing
+    analyzer.gate(self.left, self.right, 'synthetic', 'T0')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 46, in gate
+    assert a and a.keys() == b.keys(), (left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right'))
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-horizon-mask.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 104, in test_each_side_requires_exact_products_before_comparing
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-image.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 104, in test_each_side_requires_exact_products_before_comparing
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-residual.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 104, in test_each_side_requires_exact_products_before_comparing
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-dirty.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 104, in test_each_side_requires_exact_products_before_comparing
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-model.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 104, in test_each_side_requires_exact_products_before_comparing
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing) (sides=(PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/left'), PosixPath('/var/folders/_n/43z0fbyn46q1k1xlj16134980000gn/T/synthetic-cpu-analyzer-z3pm_6jg/right')), missing='img-psf.fits')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 104, in test_each_side_requires_exact_products_before_comparing
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_each_side_requires_exact_products_before_comparing (test_cpu_campaign_analyzer.AnalyzerTests.test_each_side_requires_exact_products_before_comparing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 110, in test_each_side_requires_exact_products_before_comparing
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='duplicate-repetition')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 86, in main
+    assert all(len(v) == 8 for v in values.values())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='wrong-repetition')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 86, in main
+    assert all(len(v) == 8 for v in values.values())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='missing-row')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 81, in main
+    assert len(rows) == 36
+           ^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_invalid_micro_records_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_micro_records_raise_valueerror) (case='extra-row')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 183, in test_invalid_micro_records_raise_valueerror
+    self.run_micro({3072: self.micro_lines(3072), 4096: mutate(self.micro_lines(4096))})
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 155, in run_micro
+    analyzer.main()
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 81, in main
+    assert len(rows) == 36
+           ^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n1024 maximum resident set size\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:00\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 94, in test_invalid_run_times_and_counters_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 35, in validated_runs
+    assert actual['timing'][name] > 0, (actual['tag'], name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('synthetic-run', 'deconvolution_s')
+
+======================================================================
+FAIL: test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n0 maximum resident set size\n100 instructions retired\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 94, in test_invalid_run_times_and_counters_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 35, in validated_runs
+    assert actual['timing'][name] > 0, (actual['tag'], name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('synthetic-run', 'rss_bytes')
+
+======================================================================
+FAIL: test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n1024 maximum resident set size\n200 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 94, in test_invalid_run_times_and_counters_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 38, in validated_runs
+    assert m, (actual['tag'], key)
+           ^
+AssertionError: ('synthetic-run', 'instructions')
+
+======================================================================
+FAIL: test_invalid_run_times_and_counters_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_invalid_run_times_and_counters_raise_valueerror) (time='real 10\nuser 8\nsys 1\n1024 maximum resident set size\n100 instructions retired\n0 cycles elapsed\n', stages='Inversion: 00:00:01, prediction: 00:00:02, deconvolution: 00:00:03\n')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 93, in test_invalid_run_times_and_counters_raise_valueerror
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[], runs=[])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 80, in test_malformed_or_mismatched_runs_raise_valueerror
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 27, in validated_runs
+    assert len(plan) == len(runs) and len({p['tag'] for p in plan}) == len(plan)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}, {'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}, {'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 27, in validated_runs
+    assert len(plan) == len(runs) and len({p['tag'] for p in plan}) == len(plan)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan={'tag': 'wrong-container'}, runs=[])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 27, in validated_runs
+    assert len(plan) == len(runs) and len({p['tag'] for p in plan}) == len(plan)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'wrong', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in validated_runs
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ({'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}, {'tag': 'wrong', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0})
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'wrong', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in validated_runs
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ({'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}, {'tag': 'synthetic-run', 'variant': 'wrong', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0})
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 4096, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 29, in validated_runs
+    assert all(actual[k] == v for k, v in planned.items()), (planned, actual)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ({'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}, {'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 4096, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 0})
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 1}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 30, in validated_runs
+    assert actual['exit'] == 0, actual
+           ^^^^^^^^^^^^^^^^^^^
+AssertionError: {'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': 1}
+
+======================================================================
+FAIL: test_malformed_or_mismatched_runs_raise_valueerror (test_cpu_campaign_analyzer.AnalyzerTests.test_malformed_or_mismatched_runs_raise_valueerror) (plan=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False}], runs=[{'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': None}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/peijinz/dev/wsclean-mx/tests/test_cpu_campaign_analyzer.py", line 81, in test_malformed_or_mismatched_runs_raise_valueerror
+    analyzer.validated_runs(self.art, 'synthetic')
+  File "/Users/peijinz/dev/wsclean-mx/bench/analyze_cpu_campaign.py", line 30, in validated_runs
+    assert actual['exit'] == 0, actual
+           ^^^^^^^^^^^^^^^^^^^
+AssertionError: {'tag': 'synthetic-run', 'variant': 'synthetic-variant', 'mode': 'cpu', 'repeat': 1, 'size': 3072, 'threads': 1, 'profile': False, 'monitor': False, 'sample': False, 'warmup': False, 'common': False, 'exit': None}
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.984s
+
+FAILED (failures=36, errors=21)

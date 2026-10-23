@@ -1,0 +1,2 @@
+# Preserve verbatim test transcripts, including space-padded mask output.
+*.log -whitespace

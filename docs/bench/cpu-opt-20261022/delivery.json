@@ -1,0 +1,123 @@
+{
+  "scope": "CPU weighted-peak scan only; no release, merge to main, push or issue publication",
+  "radler_commit": "1f1452ea9774d6c2b6c2344ebda59c3c69dbf953",
+  "root_parent": "757e36aa7b247a8626d3d53327c97246c7930a73",
+  "patch_replay": {
+    "wsclean": {
+      "patches": 54,
+      "tree": "637f70972e07f1e720de69e17cfcca5289c7a186",
+      "head": "ff01a434abf53ef03a02f406abe24214c87b78b6",
+      "passed": true
+    },
+    "radler": {
+      "patches": 9,
+      "tree": "34e3e3d322fe834cf5b39a5f520922e1c83d29bb",
+      "head": "1f1452ea9774d6c2b6c2344ebda59c3c69dbf953",
+      "passed": true
+    },
+    "schaapcommon": {
+      "patches": 8,
+      "tree": "e5490e48aa382a72c5b4c379dc680af560d474d9",
+      "head": "d6e5eee1dd1b06fa3e01a92f2eb9ab84d83498e7",
+      "passed": true
+    },
+    "aocommon": {
+      "patches": 2,
+      "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+      "head": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+      "passed": true
+    }
+  },
+  "input": {
+    "files": 108,
+    "bytes": 4428203949,
+    "unchanged_sha256_and_modes": true
+  },
+  "science_run_counts": {
+    "baseline_profile": 9,
+    "candidate": 19,
+    "confirmation": 6,
+    "live_default": 1
+  },
+  "project_suite": {
+    "python_tests": 216,
+    "resource_hook_scenarios": 16,
+    "weighted_checks": 10084,
+    "exit": 0,
+    "log": "bench/out/cpu-opt-20261022-2035/delivery-suite.log"
+  },
+  "analyzer_optimized_mode_tests": {
+    "tests": 8,
+    "exit": 0
+  },
+  "wsclean_native": {
+    "passed": 160,
+    "skipped": 4,
+    "failed": 0,
+    "assertions_passed": 869917
+  },
+  "radler_native": [
+    {
+      "name": "radler_main",
+      "tests": 62,
+      "skipped": 0,
+      "errors": 0,
+      "failures": 0
+    },
+    {
+      "name": "radler_math",
+      "tests": 24,
+      "skipped": 0,
+      "errors": 0,
+      "failures": 1
+    },
+    {
+      "name": "radler_utils",
+      "tests": 34,
+      "skipped": 0,
+      "errors": 0,
+      "failures": 0
+    },
+    {
+      "name": "radler_algorithms",
+      "tests": 5,
+      "skipped": 0,
+      "errors": 0,
+      "failures": 0
+    }
+  ],
+  "radler_baseline_failure": {
+    "case": "dijkstra_splitter/get_bounding_mask",
+    "assertion_failures": 14,
+    "baseline_revision": "ea55b61",
+    "reproducer_exit": 201
+  },
+  "strict_image_gates": {
+    "initial_passed": 6,
+    "initial_total": 11,
+    "confirmation_passed": 2,
+    "confirmation_total": 4,
+    "analyzer_exit": 1,
+    "thresholds_changed": false
+  },
+  "deterministic_default_binary": {
+    "path": "build-mx/wsclean",
+    "sha256": "88a5625b431da23691dec06ce5ad57e57db13f9ab364fd382eb7cfb689729d71",
+    "all_six_data_arrays_bitwise": true
+  },
+  "independent_review": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [],
+    "summary": "Fully inspected both requested files independently of analyzer-fix.json. All three blockers are fixed: exact six-product inventories on both sides; complete unique size/mask/repetition/role tuples with finite positive durations and one successful differential summary; explicit mandatory validation preserved under -O. No new defect found. Recorded T0/T2 failures remain visible and force exit 1. Saved delivery log now ends successfully with 216 Python tests; analysis log retains failed gates. The baseline-reproduced Dijkstra failure remains recorded. No edits, commits, builds, benchmarks, or tests performed."
+  },
+  "initial_results_identical_after_analyzer_repair": true,
+  "claims": {
+    "kernel_speedup_verified": true,
+    "weighted_full_image_temporary_removed": true,
+    "end_to_end_speedup_established": false,
+    "RSS_reduction_established": false,
+    "all_science_gates_pass": false
+  }
+}
