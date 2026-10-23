@@ -5,6 +5,15 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- CPU correctness follow-up: `docs/cpu-correctness-repairs-2026-10-22.md`.
+  WSClean `99bb9fc2` / patch 0055, Radler `172e4a0` / 0010, Schaapcommon
+  `5623a6b` / 0009 repair provider/UV/loader, mask/RMS, ordered gridding and
+  callback/submission exception lifetimes. Full linked/native suites pass;
+  four native WSClean skips remain. Fixed-eight-thread 3K/4K arrays repeat
+  bitwise, but 4K old/new T2 and one-thread legacy T0 fail: no scientific waiver.
+  Original failed logs remain; final provenance and gate receipts belong in
+  `docs/bench/cpu-fixes-20261022/`. Prior CPU audit findings below are historical.
+
 - CPU follow-up: `docs/cpu-audit-2026-10-22.md`; Radler `1f1452e`, patch 0009.
   Direct weighted scans remove one full-image temporary (36/64 MiB at 3K/4K)
   and are 4.1–4.5x faster in the linked microbenchmark. Six one-thread FITS

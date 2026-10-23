@@ -1,0 +1,19 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    {
+      "path": "work/wsclean/msproviders/operations.cpp:40",
+      "trigger": "On a nonempty MS, select an empty/reversed interval or an interval starting beyond the final timestep.",
+      "justification": "GetRowRange now returns [nrow,nrow), but its production callers still dereference the beginning. MSRowProvider::Initialize reads TIME(BeginRow()) at msproviders/rowproviders/msrowprovider.cpp:75, so normal reordering throws an out-of-range exception. The contiguous path likewise dereferences _startRow in contiguousms.cpp:160 when msprovidercollection.cpp:79 calls StartTime(). The new loader guard handles only ReadMsInMemory; the shared-range tests check indices without exercising these callers.",
+      "recommendation": "Handle empty ranges in the row-provider initialization and start-time consumers, and add regressions through the actual reordering and contiguous-provider workflows."
+    }
+  ],
+  "suggestions": [
+    {
+      "path": "tests/reader_position_regression.cpp:173",
+      "suggestion": "Add skipped MODEL reads followed by a later MODEL read. Run currently requests MODEL on every row, leaving that part of the independent-stream acceptance without direct skip coverage."
+    }
+  ],
+  "summary": "Independently inspected the requested diffs, full regression files, acceptance criteria and relevant callers. Found one blocking empty-range caller defect. No files changed or tests run; threaded gridder header excluded."
+}

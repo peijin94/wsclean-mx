@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    {
+      "location": "tests/threaded_gridder_regression.cpp:204",
+      "suggestion": "Assert adjust_nthreads(8)==8 for fixed-eight-thread acceptance; participation>1 permits reduced concurrency."
+    },
+    {
+      "location": "tests/threaded_gridder_regression.cpp:283",
+      "suggestion": "Extend independent numerical coverage to mixed precision, shifted centres, coordinate flips and omitted weights/masks."
+    },
+    {
+      "location": "tests/thread_exception_regression.cpp:138",
+      "suggestion": "Add an end-to-end gridder exception test after scanning while deferred tile helpers are active."
+    },
+    {
+      "location": "work/schaapcommon/external/ducc0/wgridder/wgridder_impl.h:1304",
+      "suggestion": "Complete idle-host performance/RSS measurements for channel scanning, per-block allocation and batch barriers."
+    }
+  ],
+  "summary": "Inspected the entire two-file Schaapcommon diff, both complete regression tests, scripts/test.sh integration, requirements, prior review-threaded-v2.json and surrounding production paths. No blocking defect found. Under reject-before-accept semantics, callback-construction and submission failures count down unaccepted jobs, drain accepted workers and bare-rethrow the original exception, including when draining workers throw. Shared callback, scheduler and partial-helper lifetimes remain valid; exception publication is synchronized and reuse is covered. Canonical bucket sorting precedes subdivision, channel scanning establishes tile/minplane containment, and caller-ordered merging limits live tile helpers to 32. Nonfinite guards and uninstrumented repeats remain. Inspected saved passing normal/ASan/UBSan/TSan scheduler logs and the 597-check gridder log; did not execute regression or heavy tests. Executed shell-syntax and diff-whitespace checks successfully. This is code approval only: full suites remain with the parent, and the initial 4K old/new T2 failure remains recorded and unwaived."
+}

@@ -31,8 +31,8 @@ installed separately and are not part of this repository.
 - `patches/<kind>/<repo>/*.patch` are modifications of the upstream files
   they change, and are licensed under the license of those files: the radler
   patches under LGPL-3.0-only, the others under GPL-3.0 (aocommon,
-  schaapcommon: GPL-3.0-or-later). `patches/mx/schaapcommon/0004` changes
-  the ducc0 sources bundled in schaapcommon and is GPL-2.0-or-later, like
+  schaapcommon: GPL-3.0-or-later). `patches/mx/schaapcommon/0004` and `0009` change
+  the ducc0 sources bundled in schaapcommon and are GPL-2.0-or-later, like
   ducc0.
 - All other files (build scripts, benchmark tools, documentation, figures)
   are Copyright (C) 2026 Peijin Zhang, licensed under GPL-3.0-or-later.
@@ -69,6 +69,9 @@ its author and date in its header.
 | 2026-10-17 | `patches/mx/wsclean/0004-ColumnBlock-...patch` | wsclean `msproviders/columnblock.h`, `msproviders/msreaders/contiguousmsreader.cpp`, `msproviders/rowproviders/msrowprovider.{h,cpp}`, `tests/CMakeLists.txt`, `tests/msproviders/tcolumnblockselection.cpp` (new) | selection-safe block fallback, complete selected-cell shape validation and production-reader regression fixtures |
 | 2026-10-17 | `patches/mx/aocommon/0002-MultiArray-...patch` | aocommon `include/aocommon/multiarray.h` | use malloc for fundamental alignment and retain aligned_alloc for extended alignment |
 | 2026-10-17 | `patches/mx/wsclean/0005-InMemoryProvider-...patch` | wsclean `msproviders/{inmemoryprovider,msprovider}.h`, `tests/msproviders/tinmemoryprovider.cpp`, `tests/interface/twsclean.cpp` | return MJD days at the provider boundary; assert provider units and FITS observation date |
+| 2026-10-22 | `patches/mx/wsclean/0055-providers-...patch` | wsclean `gridding/msprovidercollection.cpp`, `io/readinmemory.{cpp,h}`, `msproviders/{contiguousms,operations}.{cpp,h}`, `msproviders/msreaders/reorderedmsreader.{cpp,h}`, `msproviders/rowproviders/{msrowprovider.cpp,msrowproviderbase.h}` | repair independent payload positions, vertical UV bounds, loader column/shape contracts and empty interval/epoch handling |
+| 2026-10-22 | `patches/mx/radler/0010-math-...patch` | radler `cpp/math/{dijkstra_splitter,rms_image}.{cc,h}` and native tests | repair empty/padded masks and clipped/aliased/nonfinite RMS windows; preserve unspecified equal-cost shortest-path ties |
+| 2026-10-22 | `patches/mx/schaapcommon/0009-ducc0-...patch` | bundled ducc0 `external/ducc0/wgridder/wgridder_impl.h`, `external/ducc0/infra/threading.cc` | canonical channel/tile grouping and bounded ordered partial merges; drain accepted workers on callback or submission failure |
 
 A wsclean-mx binary still reports upstream's version string ("WSClean
 version 3.7"); it is a modified version as described above.

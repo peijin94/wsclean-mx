@@ -1,0 +1,80 @@
+[
+  {
+    "tag": "cpufix-final-20261022-3072-r1",
+    "variant": "mx",
+    "mode": "cpu",
+    "repeat": 1,
+    "size": 3072,
+    "threads": 8,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  },
+  {
+    "tag": "cpufix-final-20261022-3072-r2",
+    "variant": "mx",
+    "mode": "cpu",
+    "repeat": 2,
+    "size": 3072,
+    "threads": 8,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  },
+  {
+    "tag": "cpufix-final-20261022-4096-r1",
+    "variant": "mx",
+    "mode": "cpu",
+    "repeat": 1,
+    "size": 4096,
+    "threads": 8,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  },
+  {
+    "tag": "cpufix-final-20261022-4096-r2",
+    "variant": "mx",
+    "mode": "cpu",
+    "repeat": 2,
+    "size": 4096,
+    "threads": 8,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  },
+  {
+    "tag": "cpufix-final-20261022-common",
+    "variant": "mx",
+    "mode": "cpu",
+    "repeat": 1,
+    "size": 3072,
+    "threads": 8,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": true
+  },
+  {
+    "tag": "cpufix-final-20261022-j1",
+    "variant": "mx",
+    "mode": "cpu",
+    "repeat": 1,
+    "size": 3072,
+    "threads": 1,
+    "profile": false,
+    "monitor": false,
+    "sample": false,
+    "warmup": false,
+    "common": false
+  }
+]

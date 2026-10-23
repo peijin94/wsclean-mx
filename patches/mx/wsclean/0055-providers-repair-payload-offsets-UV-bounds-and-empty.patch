@@ -1,0 +1,419 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 23:19:43 -0700
+Subject: [PATCH] providers: repair payload offsets, UV bounds and empty
+ selections
+
+
+diff --git a/gridding/msprovidercollection.cpp b/gridding/msprovidercollection.cpp
+index 0b65c07f..df496649 100644
+--- a/gridding/msprovidercollection.cpp
++++ b/gridding/msprovidercollection.cpp
+@@ -22,7 +22,7 @@ inline void CalculateMsLimits(MsProviderCollection::MsData& ms_data, double u, d
+   const double half_width = 0.5 * image_width;
+   const double half_height = 0.5 * image_height;
+   const double x = u * pixel_size_x * image_width;
+-  const double y = u * pixel_size_y * image_height;
++  const double y = v * pixel_size_y * image_height;
+   const double imaging_weight = image_weights->GetWeight(u, v);
+   if (imaging_weight != 0.0) {
+     if (std::floor(x) > -half_width && std::ceil(x) < half_width && std::floor(y) > -half_height &&
+diff --git a/io/readinmemory.cpp b/io/readinmemory.cpp
+index 01e32129..7ff7f468 100644
+--- a/io/readinmemory.cpp
++++ b/io/readinmemory.cpp
+@@ -1,5 +1,8 @@
+ #include "readinmemory.h"
+ 
++#include <memory>
++#include <stdexcept>
++
+ #include <aocommon/logger.h>
+ 
+ #include "../msproviders/operations.h"
+@@ -19,6 +22,7 @@ void SetFlagsToZero(std::span<float> values, std::span<const bool> flags) {
+   }
+ }
+ 
++
+ void ReadMsMetaData(casacore::MeasurementSet& ms, InMemoryMs& result,
+                     const MSSelection& selection) {
+   result.antenna_names = wsclean::GetAntennaNames(ms.antenna());
+@@ -37,12 +41,8 @@ void ReadMsMetaData(casacore::MeasurementSet& ms, InMemoryMs& result,
+   result.has_frequency_bda = HasFrequencyBda(ms);
+   result.has_time_bda = false;
+ 
+-  casacore::ScalarColumn<double> time_column(ms, ms.columnName(ms.TIME));
+-  if (ms.nrow() == 0) {
+-    result.start_time = 0.0;
+-  } else {
+-    result.start_time = time_column(0);
+-  }
++  const casacore::ScalarColumn<double> time_column(ms, ms.columnName(ms.TIME));
++  result.start_time = time_column(0);
+ }
+ 
+ std::vector<InMemoryRow> ReadMsRows(casacore::MeasurementSet& ms,
+@@ -50,31 +50,42 @@ std::vector<InMemoryRow> ReadMsRows(casacore::MeasurementSet& ms,
+                                     const schaapcommon::reordering::MSSelection& selection) {
+   casacore::ArrayColumn<std::complex<float>> data_column(ms, data_column_name);
+   casacore::ArrayColumn<bool> flag_column(ms, ms.columnName(ms.FLAG));
+-  casacore::ArrayColumn<float> weight_column(ms, ms.columnName(ms.WEIGHT_SPECTRUM));
++  std::unique_ptr<casacore::ArrayColumn<float>> weight_spectrum_column;
++  if (ms.isColumn(ms.WEIGHT_SPECTRUM)) {
++    weight_spectrum_column =
++        std::make_unique<casacore::ArrayColumn<float>>(ms, ms.columnName(ms.WEIGHT_SPECTRUM));
++  }
++  casacore::ArrayColumn<float> weight_column(ms, ms.columnName(ms.WEIGHT));
+ 
+   casacore::ScalarColumn<int> antenna1_column(ms, ms.columnName(ms.ANTENNA1));
+-  casacore::ScalarColumn<int> antenna2_column(ms, ms.columnName(ms.ANTENNA1));
++  casacore::ScalarColumn<int> antenna2_column(ms, ms.columnName(ms.ANTENNA2));
+   casacore::ScalarColumn<int> data_desc_id_column(ms, ms.columnName(ms.DATA_DESC_ID));
+   casacore::ScalarColumn<int> field_id_column(ms, ms.columnName(ms.FIELD_ID));
+   casacore::ScalarColumn<double> time_column(ms, ms.columnName(ms.TIME));
+   casacore::ScalarColumn<double> interval_column(ms, ms.columnName(ms.INTERVAL));
+   casacore::ArrayColumn<double> uvw_column(ms, ms.columnName(ms.UVW));
++  const casacore::ScalarColumn<int> spectral_window_id(ms.dataDescription(), "SPECTRAL_WINDOW_ID");
++  const casacore::ScalarColumn<int> polarization_id(ms.dataDescription(), "POLARIZATION_ID");
++  const casacore::ScalarColumn<int> num_channels(ms.spectralWindow(), "NUM_CHAN");
++  const casacore::ScalarColumn<int> num_correlations(ms.polarization(), "NUM_CORR");
+ 
+   casacore::Array<std::complex<float>> data_array;
+   casacore::Array<float> weight_array;
++  casacore::Array<float> scalar_weight_array;
+   casacore::Array<bool> flag_array;
+   casacore::Array<double> uvw(casacore::IPosition{3});
+ 
+   size_t start_row;
+   size_t end_row;
+   GetRowRange(ms, selection, start_row, end_row);
++  if (start_row >= end_row) return {};
+   const bool require_time_ordering = selection.HasInterval();
+   double time = time_column(start_row);
+   size_t timestep = selection.HasInterval() ? selection.IntervalStart() : 0;
+ 
+   std::vector<InMemoryRow> in_memory_rows;
+-  in_memory_rows.reserve(ms.nrow());
+-  for (size_t row_index = 0; row_index != ms.nrow(); ++row_index) {
++  in_memory_rows.reserve(end_row - start_row);
++  for (size_t row_index = start_row; row_index != end_row; ++row_index) {
+     const int antenna1 = antenna1_column(row_index);
+     const int antenna2 = antenna2_column(row_index);
+     const int field_id = field_id_column(row_index);
+@@ -88,8 +99,38 @@ std::vector<InMemoryRow> ReadMsRows(casacore::MeasurementSet& ms,
+       time = next_time;
+     }
+     if (selection.IsSelected(field_id, timestep, antenna1, antenna2, uvw.data())) {
++      const int data_desc_id = data_desc_id_column(row_index);
++      if (data_desc_id < 0 || size_t(data_desc_id) >= ms.dataDescription().nrow())
++        throw std::runtime_error("Selected DATA_DESC_ID is outside DATA_DESCRIPTION");
++      const int spw = spectral_window_id(data_desc_id);
++      const int polarization = polarization_id(data_desc_id);
++      if (spw < 0 || size_t(spw) >= num_channels.nrow() || polarization < 0 ||
++          size_t(polarization) >= num_correlations.nrow())
++        throw std::runtime_error(
++            "Selected DATA_DESC_ID has invalid spectral window or polarization");
++      const int channels = num_channels(spw);
++      const int correlations = num_correlations(polarization);
++      if (channels <= 0 || correlations <= 0)
++        throw std::runtime_error("Selected DATA_DESC_ID must have positive NUM_CHAN and NUM_CORR");
++      const casacore::IPosition expected_shape(2, correlations, channels);
++      if (!data_column.isDefined(row_index) ||
++          !data_column.shape(row_index).isEqual(expected_shape))
++        throw std::runtime_error("DATA column shape does not match DATA_DESC_ID dimensions");
++      if (!flag_column.isDefined(row_index) ||
++          !flag_column.shape(row_index).isEqual(expected_shape))
++        throw std::runtime_error("FLAG column shape does not match DATA");
+       data_column.get(row_index, data_array, true);
+-      weight_column.get(row_index, weight_array, true);
++      if (weight_spectrum_column && weight_spectrum_column->isDefined(row_index) &&
++          weight_spectrum_column->shape(row_index).isEqual(data_array.shape())) {
++        weight_spectrum_column->get(row_index, weight_array, true);
++      } else {
++        if (!weight_column.isDefined(row_index) ||
++            !weight_column.shape(row_index).isEqual(casacore::IPosition(1, correlations)))
++          throw std::runtime_error("WEIGHT column shape does not match NUM_CORR");
++        weight_column.get(row_index, scalar_weight_array, true);
++        weight_array.resize(data_array.shape());
++        ExpandScalarWeights(scalar_weight_array, weight_array);
++      }
+       flag_column.get(row_index, flag_array, true);
+ 
+       InMemoryRow& row = in_memory_rows.emplace_back();
+@@ -99,7 +140,7 @@ std::vector<InMemoryRow> ReadMsRows(casacore::MeasurementSet& ms,
+ 
+       row.antenna1 = antenna1;
+       row.antenna2 = antenna2;
+-      row.data_desc_id = data_desc_id_column(row_index);
++      row.data_desc_id = data_desc_id;
+       row.field_id = field_id;
+       row.time = time;
+       row.interval = interval;
+@@ -116,6 +157,9 @@ InMemoryMs ReadMsInMemory(const std::string& measurement_set, const std::string&
+                           const schaapcommon::reordering::MSSelection& selection,
+                           bool sort_in_time) {
+   casacore::MeasurementSet ms(measurement_set);
++  // ReadObservationInfo() requires TIME(0).
++  // No observation epoch exists for an empty MS; return the empty defaults.
++  if (ms.nrow() == 0) return {};
+   if (sort_in_time) {
+     aocommon::Logger::Debug << "Sorting measurement set...\n";
+     ms = ms.sort(casacore::MS::columnName(casacore::MSMainEnums::TIME));
+diff --git a/io/readinmemory.h b/io/readinmemory.h
+index 11beddff..d6f6b980 100644
+--- a/io/readinmemory.h
++++ b/io/readinmemory.h
+@@ -13,6 +13,13 @@ class MSSelection;
+ 
+ namespace wsclean {
+ 
++/**
++ * Loads selected rows, retaining all channels and correlations. Channel range
++ * selection is deferred to reordering. Uses compatible, defined per-row
++ * WEIGHT_SPECTRUM cells, otherwise expands the per-correlation WEIGHT values.
++ * Malformed selected DATA, FLAG or fallback WEIGHT dimensions are rejected.
++ * An empty measurement set returns a default InMemoryMs, including metadata.
++ */
+ InMemoryMs ReadMsInMemory(const std::string& measurement_set, const std::string& data_column_name,
+                           const schaapcommon::reordering::MSSelection& selection,
+                           bool sort_in_time);
+diff --git a/msproviders/contiguousms.cpp b/msproviders/contiguousms.cpp
+index 76f306f7..e3a25265 100644
+--- a/msproviders/contiguousms.cpp
++++ b/msproviders/contiguousms.cpp
+@@ -156,6 +156,8 @@ void ContiguousMS::NextOutputRow() {
+ }
+ 
+ double ContiguousMS::StartTime() {
++  if (_startRow == _endRow)
++    throw std::runtime_error("Cannot determine start time for an empty row range");
+   return casacore::MEpoch::ScalarColumn(*_ms,
+                                         casacore::MS::columnName(casacore::MS::TIME))(_startRow)
+       .getValue()
+diff --git a/msproviders/contiguousms.h b/msproviders/contiguousms.h
+index c62805ed..0c45fe9a 100644
+--- a/msproviders/contiguousms.h
++++ b/msproviders/contiguousms.h
+@@ -49,6 +49,7 @@ class ContiguousMS final : public MSProvider {
+ 
+   void ReopenRW() override { _ms->reopenRW(); }
+ 
++  /** Selected interval start epoch in days; throws std::runtime_error if empty. */
+   double StartTime() override;
+ 
+   aocommon::PolarizationEnum Polarization() override { return _outputPolarization; }
+diff --git a/msproviders/msreaders/reorderedmsreader.cpp b/msproviders/msreaders/reorderedmsreader.cpp
+index cd1a206a..10e8a277 100644
+--- a/msproviders/msreaders/reorderedmsreader.cpp
++++ b/msproviders/msreaders/reorderedmsreader.cpp
+@@ -68,6 +68,7 @@ void ReorderedMsReader::NextInputRow() {
+ void ReorderedMsReader::ReadMeta(MSProvider::MetaData& metadata) { metadata = metadata_; }
+ 
+ void ReorderedMsReader::CacheMeta() {
++  if (!CurrentRowAvailable()) return;
+   if (uses_simple_binary_format_) {
+     schaapcommon::reordering::MetaRecord record;
+     record.Read(meta_file_);
+@@ -98,8 +99,14 @@ void ReorderedMsReader::CacheMeta() {
+ void ReorderedMsReader::ReadData(std::complex<float>* buffer) {
+   const int64_t n_visibilities = NVisibilitiesPerRow(metadata_.data_desc_id);
+   if (!has_data_) {
++    if (data_value_position_ != current_value_position_) {
++      data_file_.seekg(schaapcommon::reordering::PartHeader::BINARY_SIZE +
++                          current_value_position_ * sizeof(std::complex<float>),
++                      std::ios::beg);
++    }
+     data_file_.read(reinterpret_cast<char*>(data_buffer_.data()),
+                     n_visibilities * sizeof(std::complex<float>));
++    data_value_position_ = current_value_position_ + n_visibilities;
+     has_data_ = true;
+   }
+   std::copy_n(data_buffer_.data(), n_visibilities, buffer);
+@@ -118,8 +125,12 @@ void ReorderedMsReader::ReadModel(std::complex<float>* buffer) {
+ void ReorderedMsReader::ReadWeights(float* buffer) {
+   const int64_t n_visibilities = NVisibilitiesPerRow(metadata_.data_desc_id);
+   if (!has_weights_) {
++    if (weight_value_position_ != current_value_position_) {
++      weight_file_.seekg(current_value_position_ * sizeof(float), std::ios::beg);
++    }
+     weight_file_.read(reinterpret_cast<char*>(weight_buffer_.data()),
+                       n_visibilities * sizeof(float));
++    weight_value_position_ = current_value_position_ + n_visibilities;
+     has_weights_ = true;
+   }
+   std::copy_n(weight_buffer_.data(), n_visibilities, buffer);
+@@ -137,14 +148,14 @@ void ReorderedMsReader::WriteImagingWeights(const float* buffer) {
+   }
+   const size_t n_vis = NVisibilitiesPerRow(metadata_.data_desc_id);
+   imaging_weight_buffer_.resize(n_vis);
+-  const size_t chunkSize = n_vis * sizeof(float);
+-  imaging_weights_file_->seekg(chunkSize * current_input_row_, std::ios::beg);
++  const size_t byte_position = current_value_position_ * sizeof(float);
++  imaging_weights_file_->seekg(byte_position, std::ios::beg);
+   imaging_weights_file_->read(reinterpret_cast<char*>(imaging_weight_buffer_.data()),
+                               n_vis * sizeof(float));
+   for (size_t i = 0; i != n_vis; ++i) {
+     if (std::isfinite(buffer[i])) imaging_weight_buffer_[i] = buffer[i];
+   }
+-  imaging_weights_file_->seekp(chunkSize * current_input_row_, std::ios::beg);
++  imaging_weights_file_->seekp(byte_position, std::ios::beg);
+   imaging_weights_file_->write(reinterpret_cast<const char*>(imaging_weight_buffer_.data()),
+                                n_vis * sizeof(float));
+ }
+diff --git a/msproviders/msreaders/reorderedmsreader.h b/msproviders/msreaders/reorderedmsreader.h
+index 183375e9..6b2f5ebd 100644
+--- a/msproviders/msreaders/reorderedmsreader.h
++++ b/msproviders/msreaders/reorderedmsreader.h
+@@ -41,11 +41,12 @@ class ReorderedMsReader final : public MSReader {
+ 
+   size_t current_input_row_ = 0;
+   size_t current_value_position_ = 0;
++  // Payload reads are optional and independent. Track the next value in each
++  // stream so sequential reads need no seek, while skipped rows can be caught up.
++  size_t data_value_position_ = 0;
++  size_t weight_value_position_ = 0;
+   MSProvider::MetaData metadata_;
+ 
+-  // Chunkoffset counts the amount of data rows we are ahead or behind.
+-  // Positive values mean we are lagging, whereas negative values mean we are
+-  //  ahead of the current time step.
+   bool has_data_ = false;
+   bool has_weights_ = false;
+ 
+diff --git a/msproviders/operations.cpp b/msproviders/operations.cpp
+index fcfd1b56..73b85da7 100644
+--- a/msproviders/operations.cpp
++++ b/msproviders/operations.cpp
+@@ -1,4 +1,5 @@
+ #include "operations.h"
++#include "rowproviders/msrowproviderbase.h"
+ 
+ #include <aocommon/logger.h>
+ 
+@@ -35,7 +36,9 @@ void GetRowRange(casacore::MeasurementSet& ms, const MSSelection& selection, siz
+                  size_t& endRow) {
+   startRow = 0;
+   endRow = ms.nrow();
+-  if (selection.HasInterval()) {
++  if (selection.HasInterval() && endRow != 0) {
++    startRow = endRow;
++    if (selection.IntervalStart() >= selection.IntervalEnd()) return;
+     Logger::Info << "Determining first and last row index... ";
+     Logger::Info.Flush();
+     casacore::ScalarColumn<double> timeColumn(
+@@ -43,15 +46,18 @@ void GetRowRange(casacore::MeasurementSet& ms, const MSSelection& selection, siz
+     double time = timeColumn(0);
+     size_t timestepIndex = 0;
+     for (size_t row = 0; row != ms.nrow(); ++row) {
+-      if (time != timeColumn(row)) {
++      const double nextTime = timeColumn(row);
++      if (time != nextTime) {
++        if (nextTime < time) ThrowTimeOrderException();
+         ++timestepIndex;
+-        if (timestepIndex == selection.IntervalStart()) startRow = row;
+-        if (timestepIndex == selection.IntervalEnd()) {
+-          endRow = row;
+-          break;
+-        }
+-        time = timeColumn(row);
++        time = nextTime;
+       }
++      if (timestepIndex == selection.IntervalEnd()) {
++        endRow = row;
++        break;
++      }
++      if (timestepIndex == selection.IntervalStart() && startRow == ms.nrow())
++        startRow = row;
+     }
+     Logger::Info << "DONE (" << startRow << '-' << endRow << ")\n";
+   }
+diff --git a/msproviders/operations.h b/msproviders/operations.h
+index 21293dc2..b0926351 100644
+--- a/msproviders/operations.h
++++ b/msproviders/operations.h
+@@ -41,6 +41,9 @@ inline void ExpandScalarWeights(const casacore::Array<float>& weight_scalar_arra
+   }
+ }
+ 
++// Return the half-open row range for the selected timestep interval. Empty
++// intervals (including starts beyond the final timestep) return an empty range.
++// An interval requires nondecreasing TIME up to its exclusive end.
+ void GetRowRange(casacore::MeasurementSet& ms,
+                  const schaapcommon::reordering::MSSelection& selection, size_t& start_row,
+                  size_t& end_row);
+diff --git a/msproviders/rowproviders/msrowprovider.cpp b/msproviders/rowproviders/msrowprovider.cpp
+index 84d7b6d4..1b10078e 100644
+--- a/msproviders/rowproviders/msrowprovider.cpp
++++ b/msproviders/rowproviders/msrowprovider.cpp
+@@ -37,6 +37,14 @@ MSRowProvider::MSRowProvider(const casacore::MeasurementSet& ms, const MSSelecti
+ void MSRowProvider::Initialize() {
+   assert(!HasTimeBda(Ms()));
+ 
++  _startTimestep = Selection().HasInterval() ? Selection().IntervalStart() : 0;
++  _endTimestep = _startTimestep;
++  _currentRow = BeginRow();
++  _currentTimestep = _startTimestep;
++  // An empty row range is already at EOF. In particular, do not read a
++  // nonexistent first row (or use row zero as a substitute).
++  if (BeginRow() == EndRow()) return;
++
+   if (_requireModel)
+     _modelColumn.reset(new casacore::ArrayColumn<casacore::Complex>(Ms(), ModelColumnName()));
+ 
+@@ -70,7 +78,6 @@ void MSRowProvider::Initialize() {
+   _currentUVWArray.resize(3);
+ 
+   // Determine last timestep
+-  _startTimestep = Selection().HasInterval() ? Selection().IntervalStart() : 0;
+   size_t timestep = _startTimestep;
+   double time = columns.time(BeginRow());
+   for (size_t row = BeginRow(); row != EndRow(); ++row) {
+@@ -81,8 +88,6 @@ void MSRowProvider::Initialize() {
+   }
+   _endTimestep = timestep;
+ 
+-  _currentRow = BeginRow();
+-  _currentTimestep = _startTimestep;
+   _currentTime = columns.time(_currentRow);
+   readCurrentUvw();
+   _currentDataDescId = columns.data_description_id(_currentRow);
+diff --git a/msproviders/rowproviders/msrowproviderbase.h b/msproviders/rowproviders/msrowproviderbase.h
+index a73e7e78..53d2ef7a 100644
+--- a/msproviders/rowproviders/msrowproviderbase.h
++++ b/msproviders/rowproviders/msrowproviderbase.h
+@@ -5,6 +5,7 @@
+ 
+ #include <complex>
+ #include <memory>
++#include <stdexcept>
+ #include <string>
+ 
+ #include <aocommon/vectorset.h>
+@@ -60,8 +61,23 @@ class MsRowProviderBase {
+ 
+   virtual void OutputStatistics() const = 0;
+ 
+-  double StartTime() const { return columns_.epoch_as_time(begin_row_).getValue().get(); }
+-  double EndTime() const { return columns_.epoch_as_time(end_row_ - 1).getValue().get(); }
++  /**
++   * Epochs of the first and last rows in the selected interval, in days.
++   * An empty row range has no epoch: throw std::runtime_error rather than
++   * return the epoch of an unselected row or a fabricated observation time.
++   * @{
++   */
++  double StartTime() const {
++    if (begin_row_ == end_row_)
++      throw std::runtime_error("Cannot determine start time for an empty row range");
++    return columns_.epoch_as_time(begin_row_).getValue().get();
++  }
++  double EndTime() const {
++    if (begin_row_ == end_row_)
++      throw std::runtime_error("Cannot determine end time for an empty row range");
++    return columns_.epoch_as_time(end_row_ - 1).getValue().get();
++  }
++  /** @} */
+ 
+   size_t BeginRow() const { return begin_row_; }
+   size_t EndRow() const { return end_row_; }

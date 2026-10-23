@@ -1,0 +1,32 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    {
+      "priority": "P1",
+      "location": "work/schaapcommon/external/ducc0/infra/threading.cc:700",
+      "trigger": "After at least one worker is submitted, constructing a later submission's std::function throws std::bad_alloc, or thread_pool::submit throws before accepting that submission.",
+      "reasoning": "Submission remains outside the new try/catch. The exception bypasses counter.wait(), destroying f, counter, ex_mut and Distribution while accepted workers still reference them. In the gridder batch, partials can also unwind while workers populate or use them, permitting use-after-free and concurrent helper destruction. This is a pre-existing hole in the modified scheduler function; the invoking-callback repair does not cover it.",
+      "recommendation": "Drain successfully accepted submissions on submission failure before unwinding shared state. Account for submissions never accepted rather than waiting on the original worker count. Add a controlled rejecting-pool regression."
+    }
+  ],
+  "suggestions": [
+    {
+      "location": "tests/threaded_gridder_regression.cpp:204",
+      "suggestion": "Verify that adjust_nthreads(8) actually yields eight. The current participation assertion accepts two workers, so environment limits can silently weaken the fixed-eight-thread acceptance check. Saved logs inspected here do record eight participants."
+    },
+    {
+      "location": "tests/threaded_gridder_regression.cpp:283",
+      "suggestion": "Extend independent accuracy coverage to mixed-precision inversion and prediction, shifted centres, flip_v, omitted weights/masks, and production compilation flags. Current mixed-precision checks establish finite repeatability without an independent numerical oracle."
+    },
+    {
+      "location": "tests/thread_exception_regression.cpp:32",
+      "suggestion": "Add an end-to-end gridder callback exception case after scanning, while other tile partials are active, to verify deferred-helper cleanup through the production API."
+    },
+    {
+      "location": "work/schaapcommon/external/ducc0/wgridder/wgridder_impl.h:1317",
+      "suggestion": "Complete the planned idle-host performance/RSS measurements: per-block helper allocation, batch barriers and the full active-channel scan may have material costs despite bounded tile storage."
+    }
+  ],
+  "summary": "Reviewed the entire current Schaapcommon diff, both complete new tests, root driver integration, acceptance plan and surrounding production callers. Channel-by-channel transition detection establishes tile/minplane containment; canonical sorting and ordered merges support fixed-thread-count repeatability, with at most 32 live tile helpers. Nonfinite guards and uninstrumented repeats address the earlier test findings. Callback exceptions now drain workers, but submission exceptions retain a lifetime defect. Saved logs report 597 checks with zero failures and passing scheduler sanitizer runs; these were inspected, not rerun. Only shell syntax and diff-whitespace checks ran here and passed. Full-suite and scientific-gate acceptance remains with the parent."
+}

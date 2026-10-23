@@ -45,6 +45,12 @@ The [2026-10-22 CPU audit](docs/cpu-audit-2026-10-22.md) adds an allocation-free
 RMS-weighted peak scan (4.1–4.5× kernel microbenchmark speedup), with fresh
 thread scaling, native tests and retained threaded image-gate failures.
 It does **not** establish an end-to-end speedup or a new scientific release.
+The [CPU correctness repairs](docs/cpu-correctness-repairs-2026-10-22.md)
+address Dijkstra/RMS boundaries, payload positioning, UV limits, empty selections
+and the dormant loader, and introduce bounded ordered CPU gridding. Fixed-eight-thread
+3K/4K repeats pass bitwise checks; strict 4K old/new image checks and an additional
+one-thread legacy-bitwise check still fail.
+This development work does not certify a new scientific release.
 The [2026-10-17 audit](docs/audit-2026-10-17.md) records fresh benchmarks,
 regression coverage, and initial correctness/test gaps. The
 [CPU correctness continuation](docs/continuation-2026-10-17.md) covers selection-safe
@@ -68,7 +74,9 @@ The patch set lives in `patches/mx/<repo>/`, one directory per library:
 | radler/0001 | SubMinorLoop: multithreaded PSF subtraction and peak search | Högbom deconvolution 6.2 → 2.4 s at 4096² |
 | radler/0002, schaapcommon/0003 | Multiscale: one residual FFT per peak search, cached scale-kernel FFTs | fewer FFTs per multiscale iteration |
 | radler/0003 | Multiscale: reuse the scale-convolved residual, cache per-scale PSF transforms | deconvolution 4.18 → 3.64 s at 2048² |
-| schaapcommon/0004 | ducc0 gridder: spin lock per grid row instead of `std::mutex` | lock time ~5× lower |
+| schaapcommon/0004 | Historical ducc0 gridder: spin lock per grid row instead of `std::mutex` | lock time ~5× lower; superseded by ordered merges in development patch 0009 |
+| schaapcommon/0009 (`gpu-dev`) | Canonical tile ranges, bounded ordered gridding partials and exception-safe scheduler draining | fixed-thread repeatability; old/new scientific acceptance and performance are separate gates |
+| wsclean/0055, radler/0010 (`gpu-dev`) | Payload/UV/selection/loader and Dijkstra/RMS correctness repairs | targeted linked/native regressions; dormant loader remains disabled |
 | wsclean/0002 | Read measurement set columns in blocks of rows (direct reads) | 4096² dirty image 1.70× |
 | wsclean/0003 | Same, during reordering (cleaning runs) | reordering 2.3× |
 | radler/0004 | Peak finder: vectorized row maximum skips rows | peak search 8×, deconvolution 1.12× |
@@ -204,8 +212,10 @@ mode files; treat its figures accordingly until that is updated.
 
 Comparisons follow three tiers: bitwise for operation-preserving incremental
 changes at `-j 1`, ULP, and scientific metrics against the fixed native upstream
-reference. Multithreaded cleaning is not deterministic; reference rerun and
-perturbation spread must be considered together with source-level science gates.
+reference. The historical threaded baseline is not deterministic. The CPU
+correctness follow-up separately tests fixed-thread-count repeatability; it does
+not promise cross-thread-count/platform identity or erase old/new gate failures.
+Reference rerun and perturbation spread still need source-level science gates.
 
 ## Regression tests
 
@@ -215,7 +225,8 @@ scripts/test.sh build-mx
 
 This runs Python harness/FITS tests, rebuilds the selected mx binary, and runs
 linked-production convolution/resampler, median, peak, MS column-block,
-allocation and time-contract checks. It rejects mismatched CMake source mappings.
+allocation, payload positioning, UV limits, loader/interval, RMS window,
+threaded-gridder and scheduler exception checks. It rejects mismatched CMake source mappings.
 Synthetic unit fixtures are separate from the real MS benchmarks.
 Compiler output may include upstream's expected non-AVX warning on arm64.
 

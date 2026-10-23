@@ -1,0 +1,38 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    {
+      "priority": "P1",
+      "location": "work/schaapcommon/external/ducc0/wgridder/wgridder_impl.h:1088",
+      "trigger": "Use active channels with frequency/c = [1, 1.5, 2, 2.5, 3], u*pixsize_x = 1, v = w = 0, and multiple threads.",
+      "reasoning": "The range builder at lines 787–810 samples channels 0, 2 and 4, whose wrapped coordinates coincide, and skips channels 1 and 3. It therefore creates a range spanning different tiles. For illustrative nu=128 and support=8, kernel starts are [-3,61,-3,61,-3]; the initial buffer ends at 36, while channel 1's kernel ends at 69. The new assertion rejects this accepted regular/BDA input; the previous helper could flush and move between tiles. Sorting ranges does not establish containment.",
+      "recommendation": "Make range construction detect intermediate periodic crossings before relying on single-tile ownership. Add this case and its v-axis equivalent."
+    },
+    {
+      "priority": "P1",
+      "location": "work/schaapcommon/external/ducc0/wgridder/wgridder_impl.h:1326",
+      "trigger": "The invoking thread throws inside the batch callback, through the containment assertion, helper allocation failure, or a throwing visibility callback, while other workers remain active.",
+      "reasoning": "In infra/threading.cc:697–728, submitted workers catch exceptions, but the invoking thread calls f(sched) without a catch at line 720. Its exception bypasses counter.wait(). Distribution state, callback references and the partials array can then unwind while workers still access them, causing dangling accesses and potentially concurrent destruction/dumping of helpers. This is an existing scheduler defect exposed by the new assertion and per-block allocations.",
+      "recommendation": "Capture invoking-thread exceptions and drain all submitted workers before rethrowing or destroying batch state."
+    },
+    {
+      "priority": "P2",
+      "location": "tests/threaded_gridder_regression.cpp:230",
+      "trigger": "An inversion or prediction returns NaNs; mixed-precision inversion returns repeatable nonfinite values.",
+      "reasoning": "Both numerical oracles use std::max(current_error, computed_error), also at line 256. A NaN computed error leaves the current maximum unchanged, allowing the oracle to pass. Prediction has no separate finiteness assertion, and bytewise repetition can accept stable NaN representations. Mixed-precision checks at lines 201–203 likewise assert repetition and participation without checking finiteness.",
+      "recommendation": "Explicitly reject nonfinite output components and errors before accumulating maxima, including prediction, reinversion and mixed-precision results."
+    }
+  ],
+  "suggestions": [
+    {
+      "location": "tests/threaded_gridder_regression.cpp:145",
+      "suggestion": "Repeat uninstrumented inversion calls too. TrackedInput takes a global mutex on every gridding read, substantially changing scheduling. Its thread-ID set credibly demonstrates participation, but instrumented repeats alone provide weaker coverage of ordinary execution."
+    },
+    {
+      "location": "tests/threaded_gridder_regression.cpp:179",
+      "suggestion": "Add an independent mixed-precision numerical oracle and mixed-precision prediction coverage. Current mixed checks establish repeatability only. Production also uses flip_v, shifted centres, and omitted weight/mask arrays, which these fixtures do not exercise."
+    }
+  ],
+  "summary": "Read-only review completed, including acceptance criteria, full regression source, script integration and callers. For correctly contained buckets, canonical ordering, disjoint worker partials and ordered merges support fixed-thread-count determinism; tile scratch is bounded to 32 helpers. Periodic containment and exception handling have blocking defects, and numerical assertions can accept NaNs. No builds, heavy tests, edits or commits were performed."
+}

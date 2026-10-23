@@ -1,0 +1,452 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 23:33:27 -0700
+Subject: [PATCH] ducc0: order bounded gridding partials and drain failed
+ scheduling
+
+
+diff --git a/external/ducc0/infra/threading.cc b/external/ducc0/infra/threading.cc
+index 05cd465..ba3e050 100644
+--- a/external/ducc0/infra/threading.cc
++++ b/external/ducc0/infra/threading.cc
+@@ -695,30 +695,54 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
+ #else  // sequential submission
+ 
+   latch counter(nthreads_-1);
+-  for (size_t i=1; i<nthreads_; ++i)
++  size_t i=1;
++  try
+     {
+-    pool->submit(
+-      [this, &f, i, &counter, &ex, &ex_mut, pool] {
+-      try
+-        {
+-        ScopedUseThreadPool guard(*pool);
+-        MyScheduler sched(*this, i);
+-        f(sched);
+-        }
+-      catch (...)
+-        {
+-        LockGuard lock(ex_mut);
+-        ex = std::current_exception();
+-        }
++    for (; i<nthreads_; ++i)
++      {
++      pool->submit(
++        [this, &f, i, &counter, &ex, &ex_mut, pool] {
++        try
++          {
++          ScopedUseThreadPool guard(*pool);
++          MyScheduler sched(*this, i);
++          f(sched);
++          }
++        catch (...)
++          {
++          LockGuard lock(ex_mut);
++          ex = std::current_exception();
++          }
++        counter.count_down();
++        });
++      }
++    }
++  catch (...)
++    {
++    // Callback construction or submit can fail before accepting job i. Remove
++    // all unaccepted jobs from the latch, then keep the callback/distribution
++    // alive until every accepted worker has finished. A pool must not accept
++    // a job and then throw. Preserve the submission exception even if a worker
++    // also throws while draining.
++    for (; i<nthreads_; ++i)
+       counter.count_down();
+-      });
++    counter.wait();
++    throw;
++    }
++  try
++    {
++    // do remaining work directly on this thread
++    ScopedValueChanger<bool> changer(in_parallel_region, true);
++    MyScheduler sched(*this, 0);
++    f(sched);
++    }
++  catch (...)
++    {
++    // The distribution and callback are shared with submitted workers. Keep
++    // both alive until counter.wait(), including when the caller throws.
++    LockGuard lock(ex_mut);
++    ex = std::current_exception();
+     }
+-  {
+-  // do remaining work directly on this thread
+-  ScopedValueChanger<bool> changer(in_parallel_region, true);
+-  MyScheduler sched(*this, 0);
+-  f(sched);
+-  }
+ 
+ #endif
+ #undef DUCC0_HIERARCHICAL_SUBMISSION
+diff --git a/external/ducc0/wgridder/wgridder_impl.h b/external/ducc0/wgridder/wgridder_impl.h
+index cccd51f..5ff514a 100644
+--- a/external/ducc0/wgridder/wgridder_impl.h
++++ b/external/ducc0/wgridder/wgridder_impl.h
+@@ -68,31 +68,6 @@ template<typename T> using mysimd = typename simd_select<T,mysimdlen<T>>::type;
+ 
+ template<typename T> T sqr(T val) { return val*val; }
+ 
+-// Lock for one grid row in x2grid: held only while a thread adds one row of
+-// its tile buffer, too short for a std::mutex, whose contended path sleeps in
+-// the kernel. One cache line per lock (128 bytes on Apple M-series).
+-struct alignas(128) GridRowLock
+-  {
+-  std::atomic<bool> locked{false};
+-
+-  void lock()
+-    {
+-    for (size_t spins=0; locked.exchange(true, std::memory_order_acquire); )
+-      while (locked.load(std::memory_order_relaxed))
+-        {
+-        if (++spins<1024)
+-          {
+-#if defined(__aarch64__)
+-          __asm__ __volatile__("yield");
+-#endif
+-          }
+-        else
+-          std::this_thread::yield();
+-        }
+-    }
+-  void unlock() { locked.store(false, std::memory_order_release); }
+-  };
+-
+ template<typename T> void quickzero(const vmav<T,2> &arr, size_t nthreads)
+   {
+ #if 0
+@@ -809,30 +784,21 @@ timers.push("counting");
+               inc0(idx);
+               lmask(idx0+ch)=2;
+               };
+-            auto recurse=[&](uint32_t ch_lo, uint32_t ch_hi, Uvwidx uvw_lo, Uvwidx uvw_hi, auto &&recurse) -> void
++            if (ch0!=ch1)
+               {
+-              if (ch_lo+1==ch_hi)
+-                {
+-                if (uvw_lo!=uvw_hi)
+-                  inc(uvw_hi,ch_hi);
+-                }
+-              else
++              auto previous = get_uvwidx(uvwbase,irow,ch0);
++              inc0(previous);
++              // Coordinates wrap periodically: matching endpoints (or a
++              // matching midpoint) do not prove interior tile containment.
++              // Inspect every active channel so each emitted range has the
++              // same tile and minplane throughout, including wraps and
++              // returns to a tile visited earlier in this row.
++              for (uint32_t ch=ch0+1; ch<ch1; ++ch)
+                 {
+-                auto ch_mid = ch_lo+(ch_hi-ch_lo)/2;
+-                auto uvw_mid = get_uvwidx(uvwbase, irow, ch_mid);
+-                if (uvw_lo!=uvw_mid)
+-                  recurse(ch_lo, ch_mid, uvw_lo, uvw_mid, recurse);
+-                if (uvw_mid!=uvw_hi)
+-                  recurse(ch_mid, ch_hi, uvw_mid, uvw_hi, recurse);
++                auto current = get_uvwidx(uvwbase,irow,ch);
++                if (current!=previous) inc(current,ch);
++                previous = current;
+                 }
+-              };
+-
+-            if (ch0!=ch1)
+-              {
+-              auto uvw0 = get_uvwidx(uvwbase,irow,ch0);
+-              inc0(uvw0);
+-              if (ch0+1<ch1)
+-                recurse(ch0,ch1-1,uvw0,get_uvwidx(uvwbase,irow,ch1-1),recurse);
+               }
+             ch0 = ch1;
+             }
+@@ -918,6 +884,24 @@ timers.poppush("filling");
+           }
+         });
+ timers.poppush("building blockstart");
++      // Atomic reservations above only determine where a row is stored. Give
++      // every original tile/minplane bucket a canonical order *before* the
++      // visibility prefix sums and subdivision determine logical blocks.
++      execDynamic(blockstart.size(), nthreads, 1, [&](Scheduler &sched)
++        {
++        while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
++          {
++          auto first = ranges.begin()+blockstart[i].second;
++          auto last = (i+1<blockstart.size()) ?
++            ranges.begin()+blockstart[i+1].second : ranges.end();
++          sort(first, last, [](const RowchanRange &a, const RowchanRange &b)
++            {
++            if (a.row!=b.row) return a.row<b.row;
++            if (a.ch_begin!=b.ch_begin) return a.ch_begin<b.ch_begin;
++            return a.ch_end<b.ch_end;
++            });
++          }
++        });
+       vector<size_t> vissum;
+       vissum.reserve(ranges.size()+1);
+       size_t visacc=0;
+@@ -1026,7 +1010,7 @@ timers.pop();
+         vmav<Tacc,2> bufr, bufi;
+         Tacc *px0r, *px0i;
+         double w0, xdw;
+-        vector<GridRowLock> &locks;
++        const bool single_tile;
+ 
+         DUCC0_NOINLINE void dump()
+           {
+@@ -1039,15 +1023,12 @@ timers.pop();
+           for (int iu=0; iu<su; ++iu)
+             {
+             int idxv = idxv0;
+-            {
+-            lock_guard<GridRowLock> lock(locks[idxu]);
+             for (int iv=0; iv<sv; ++iv)
+               {
+               grid(idxu,idxv) += complex<Tcalc>(Tcalc(bufr(iu,iv)), Tcalc(bufi(iu,iv)));
+               bufr(iu,iv) = bufi(iu,iv) = 0;
+               if (++idxv>=inv) idxv=0;
+               }
+-            }
+             if (++idxu>=inu) idxu=0;
+             }
+           }
+@@ -1061,7 +1042,7 @@ timers.pop();
+         kbuf buf;
+ 
+         HelperX2g2(const Wgridder *parent_, const vmav<complex<Tcalc>,2> &grid_,
+-          vector<GridRowLock> &locks_, double w0_=-1, double dw_=-1)
++          double w0_=-1, double dw_=-1, bool single_tile_=false)
+           : parent(parent_), tkrn(*parent->krn), grid(grid_),
+             iu0(-1000000), iv0(-1000000),
+             bu0(-1000000), bv0(-1000000),
+@@ -1070,11 +1051,11 @@ timers.pop();
+             px0r(bufr.data()), px0i(bufi.data()),
+             w0(w0_),
+             xdw(1./dw_),
+-            locks(locks_)
++            single_tile(single_tile_)
+           { checkShape(grid.shape(), {parent->nu,parent->nv}); }
+         ~HelperX2g2() { dump(); }
+ 
+-        constexpr int lineJump() const { return svvec; }
++        static constexpr int lineJump() { return svvec; }
+ 
+         [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in,
+           [[maybe_unused]] size_t nth=0)
+@@ -1092,6 +1073,10 @@ timers.pop();
+           if ((iu0==iu0old) && (iv0==iv0old)) return;
+           if ((iu0<bu0) || (iv0<bv0) || (iu0+int(supp)>bu0+su) || (iv0+int(supp)>bv0+sv))
+             {
++            // A logical block contains exactly one original tile. Deferred
++            // partials must never flush a shared grid from a worker, including
++            // when the tile's halo wraps around either periodic boundary.
++            MR_assert(!single_tile || bu0<-nsafe, "logical block spans tiles");
+             dump();
+             bu0=((((iu0+nsafe)>>log2tile)<<log2tile))-nsafe;
+             bv0=((((iv0+nsafe)>>log2tile)<<log2tile))-nsafe;
+@@ -1218,92 +1203,131 @@ timers.pop();
+         if (supp<SUPP) return x2grid_c_helper<SUPP-1, wgrid>(supp, grid, p0, w0);
+       MR_assert(supp==SUPP, "requested support out of range");
+ 
+-      vector<GridRowLock> locks(nu);
+-
+-      execDynamic(blockstart.size(), nthreads, wgrid ? SUPP : 1, [&](Scheduler &sched)
++      using Helper = HelperX2g2<SUPP,wgrid>;
++      auto active = [&](size_t ix)
++        {
++        const auto &idx = blockstart[ix].first;
++        return (!wgrid) || ((idx.minplane+SUPP>p0)&&(idx.minplane<=p0));
++        };
++      auto grid_block = [&](size_t ix, Helper &hlp,
++                            vector<complex<Tcalc>> &phases, vector<Tcalc> &buf)
+         {
+         constexpr auto vlen=mysimd<Tacc>::size();
+         constexpr auto NVEC((SUPP+vlen-1)/vlen);
+-        HelperX2g2<SUPP,wgrid> hlp(this, grid, locks, w0, dw);
+-        constexpr auto jump = hlp.lineJump();
++        constexpr auto jump = Helper::lineJump();
+         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
+         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+NVEC;
+-        vector<complex<Tcalc>> phases;
+-        vector<Tcalc> buf;
+-
+-        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
++        const auto &uvwidx(blockstart[ix].first);
++        size_t nth = p0-uvwidx.minplane;
++        size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
++        for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
+           {
+-//auto ix = ix_+ranges.size()/2; if (ix>=ranges.size()) ix -=ranges.size();
+-          const auto &uvwidx(blockstart[ix].first);
+-          if ((!wgrid) || ((uvwidx.minplane+SUPP>p0)&&(uvwidx.minplane<=p0)))
++          const auto &rcr(ranges[cnt]);
++          if (cnt+1<iend)
+             {
+-//bool lastplane = (!wgrid) || (uvwidx.minplane+SUPP-1==p0);
+-            size_t nth = p0-uvwidx.minplane;
+-            size_t iend = (ix+1<blockstart.size()) ? blockstart[ix+1].second : ranges.size();
+-            for (size_t cnt=blockstart[ix].second; cnt<iend; ++cnt)
++            const auto &nextrcr(ranges[cnt+1]);
++            wgt.prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
++            ms_in.prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
++            bl.prefetchRow(nextrcr.row);
++            }
++          size_t row = rcr.row;
++          auto bcoord = bl.baseCoord(row);
++          auto imflip = Tcalc(bcoord.FixW());
++          if (shifting)
++            compute_phases(phases, buf, imflip, bcoord, rcr);
++          auto idx0 = bl.ofs_ms(row);
++          for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
++            {
++            auto coord = bcoord*bl.ffact(rcr.row, ch);
++            hlp.prep(coord, nth);
++            auto v(ms_in(idx0+ch));
++            if (shifting)
++              v*=phases[ch-rcr.ch_begin];
++            v*=wgt(idx0+ch);
++
++            if constexpr (NVEC==1)
+               {
+-              const auto &rcr(ranges[cnt]);
+-              if (cnt+1<iend)
++              mysimd<Tacc> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
++              for (size_t cu=0; cu<SUPP; ++cu)
+                 {
+-                const auto &nextrcr(ranges[cnt+1]);
+-                wgt.prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
+-                ms_in.prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
+-                bl.prefetchRow(nextrcr.row);
++                auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
++                auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
++                auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
++                auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
++                tr += vr*ku[cu];
++                ti += vi*ku[cu];
++                tr.copy_to(pxr,element_aligned_tag());
++                ti.copy_to(pxi,element_aligned_tag());
+                 }
+-              size_t row = rcr.row;
+-              auto bcoord = bl.baseCoord(row);
+-              auto imflip = Tcalc(bcoord.FixW());
+-              if (shifting)
+-                compute_phases(phases, buf, imflip, bcoord, rcr);
+-              auto idx0 = bl.ofs_ms(row);
+-              for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
++              }
++            else
++              {
++              mysimd<Tacc> vr(v.real()), vi(v.imag()*imflip);
++              for (size_t cu=0; cu<SUPP; ++cu)
+                 {
+-                auto coord = bcoord*bl.ffact(rcr.row, ch);
+-                hlp.prep(coord, nth);
+-                auto v(ms_in(idx0+ch));
+-                if (shifting)
+-                  v*=phases[ch-rcr.ch_begin];
+-                v*=wgt(idx0+ch);
+-
+-                if constexpr (NVEC==1)
++                mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
++                for (size_t cv=0; cv<NVEC; ++cv)
+                   {
+-                  mysimd<Tacc> vr=v.real()*kv[0], vi=v.imag()*imflip*kv[0];
+-                  for (size_t cu=0; cu<SUPP; ++cu)
+-                    {
+-                    auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
+-                    auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
+-                    auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
+-                    auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
+-                    tr += vr*ku[cu];
+-                    ti += vi*ku[cu];
+-                    tr.copy_to(pxr,element_aligned_tag());
+-                    ti.copy_to(pxi,element_aligned_tag());
+-                    }
+-                  }
+-                else
+-                  {
+-                  mysimd<Tacc> vr(v.real()), vi(v.imag()*imflip);
+-                  for (size_t cu=0; cu<SUPP; ++cu)
+-                    {
+-                    mysimd<Tacc> tmpr=vr*ku[cu], tmpi=vi*ku[cu];
+-                    for (size_t cv=0; cv<NVEC; ++cv)
+-                      {
+-                      auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
+-                      auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
+-                      auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
+-                      tr += tmpr*kv[cv];
+-                      tr.copy_to(pxr,element_aligned_tag());
+-                      auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
+-                      ti += tmpi*kv[cv];
+-                      ti.copy_to(pxi,element_aligned_tag());
+-                      }
+-                    }
++                  auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
++                  auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
++                  auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
++                  tr += tmpr*kv[cv];
++                  tr.copy_to(pxr,element_aligned_tag());
++                  auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
++                  ti += tmpi*kv[cv];
++                  ti.copy_to(pxi,element_aligned_tag());
+                   }
+                 }
+               }
+             }
+           }
+-        });
++        };
++
++      if (nthreads==1)
++        {
++        // Retain the one-thread helper lifetime and tile reuse. Canonical
++        // buckets already have row/channel order with a single filling worker.
++        Helper hlp(this, grid, w0, dw);
++        vector<complex<Tcalc>> phases;
++        vector<Tcalc> buf;
++        for (size_t ix=0; ix<blockstart.size(); ++ix)
++          if (active(ix)) grid_block(ix, hlp, phases, buf);
++        return;
++        }
++
++      // Fixed logical blocks own their partial sums, regardless of which
++      // worker runs them. Only one bounded batch is live at a time; helpers
++      // survive the worker call and flush in block order on the caller. No
++      // worker waits for another block's ticket, and no private full grids are
++      // allocated. One bucket fits one tile including its periodic halo; prep
++      // asserts that invariant before any possible worker-side flush.
++      constexpr size_t batch_size = 32;
++      array<unique_ptr<Helper>, batch_size> partials;
++      array<size_t, batch_size> blocks;
++      size_t next=0;
++      while (next<blockstart.size())
++        {
++        size_t count=0;
++        while ((next<blockstart.size()) && (count<batch_size))
++          {
++          if (active(next)) blocks[count++]=next;
++          ++next;
++          }
++        if (count==0) break;
++        execDynamic(count, nthreads, 1, [&](Scheduler &sched)
++          {
++          vector<complex<Tcalc>> phases;
++          vector<Tcalc> buf;
++          while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
++            {
++            partials[i] = make_unique<Helper>(this, grid, w0, dw, true);
++            grid_block(blocks[i], *partials[i], phases, buf);
++            }
++          });
++        // Destruction dumps each completed tile using the original Tacc to
++        // Tcalc conversion, wrapping and += arithmetic, in a total order.
++        for (size_t i=0; i<count; ++i) partials[i].reset();
++        }
+       }
+ 
+     template<bool wgrid> void x2grid_c(const vmav<complex<Tcalc>,2> &grid,

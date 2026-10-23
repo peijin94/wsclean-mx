@@ -1,0 +1,1090 @@
+{
+  "runs": [
+    {
+      "tag": "cpufix-final-20261022-3072-r1",
+      "variant": "mx",
+      "mode": "cpu",
+      "repeat": 1,
+      "size": 3072,
+      "threads": 8,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "warmup": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "cpufix-final-20261022-3072-r1",
+        "-j",
+        "8",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792737227.8822641,
+      "before": {
+        "unix_s": 1792737227.882269,
+        "load": [
+          2.8642578125,
+          3.44287109375,
+          3.6083984375
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                     3999.\nPages active:                                 214916.\nPages inactive:                               213086.\nPages speculative:                               716.\nPages throttled:                                   0.\nPages wired down:                             199090.\nPages purgeable:                                1839.\n\"Translation faults\":                    13561740410.\nPages copy-on-write:                       376108727.\nPages zero filled:                        5188494078.\nPages reactivated:                        4123543918.\nPages purged:                              329458217.\nFile-backed pages:                            303612.\nAnonymous pages:                              125106.\nPages stored in compressor:                   750693.\nPages occupied by compressor:                 367293.\nDecompressions:                           4233075750.\nCompressions:                             4570002100.\nPageins:                                   637728083.\nPageouts:                                    2107183.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792737254.6517818,
+      "after": {
+        "unix_s": 1792737254.651799,
+        "load": [
+          4.95166015625,
+          3.900390625,
+          3.7685546875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   176075.\nPages active:                                 133861.\nPages inactive:                               137344.\nPages speculative:                               827.\nPages throttled:                                   0.\nPages wired down:                             196302.\nPages purgeable:                                2015.\n\"Translation faults\":                    13563634256.\nPages copy-on-write:                       376116478.\nPages zero filled:                        5190110317.\nPages reactivated:                        4123670877.\nPages purged:                              329459929.\nFile-backed pages:                            132159.\nAnonymous pages:                              139873.\nPages stored in compressor:                   722183.\nPages occupied by compressor:                 354691.\nDecompressions:                           4233225656.\nCompressions:                             4570156684.\nPageins:                                   637808578.\nPageouts:                                    2107192.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "wall_s": 26.61,
+      "rss_MiB": 2188.953125
+    },
+    {
+      "tag": "cpufix-final-20261022-3072-r2",
+      "variant": "mx",
+      "mode": "cpu",
+      "repeat": 2,
+      "size": 3072,
+      "threads": 8,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "warmup": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "cpufix-final-20261022-3072-r2",
+        "-j",
+        "8",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792737254.6687648,
+      "before": {
+        "unix_s": 1792737254.668767,
+        "load": [
+          4.95166015625,
+          3.900390625,
+          3.7685546875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   176062.\nPages active:                                 133890.\nPages inactive:                               137347.\nPages speculative:                               828.\nPages throttled:                                   0.\nPages wired down:                             196302.\nPages purgeable:                                2015.\n\"Translation faults\":                    13563635780.\nPages copy-on-write:                       376116868.\nPages zero filled:                        5190110506.\nPages reactivated:                        4123670877.\nPages purged:                              329459929.\nFile-backed pages:                            132163.\nAnonymous pages:                              139902.\nPages stored in compressor:                   722140.\nPages occupied by compressor:                 354671.\nDecompressions:                           4233225699.\nCompressions:                             4570156684.\nPageins:                                   637808582.\nPageouts:                                    2107192.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792737281.214369,
+      "after": {
+        "unix_s": 1792737281.214376,
+        "load": [
+          6.3173828125,
+          4.28271484375,
+          3.90771484375
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   179350.\nPages active:                                 135968.\nPages inactive:                               134894.\nPages speculative:                               747.\nPages throttled:                                   0.\nPages wired down:                             195952.\nPages purgeable:                                2429.\n\"Translation faults\":                    13565625052.\nPages copy-on-write:                       376143729.\nPages zero filled:                        5191793524.\nPages reactivated:                        4123743795.\nPages purged:                              329462151.\nFile-backed pages:                            117573.\nAnonymous pages:                              154036.\nPages stored in compressor:                   723782.\nPages occupied by compressor:                 352189.\nDecompressions:                           4233310898.\nCompressions:                             4570296974.\nPageins:                                   637925743.\nPageouts:                                    2107241.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "wall_s": 26.42,
+      "rss_MiB": 2248.296875
+    },
+    {
+      "tag": "cpufix-final-20261022-4096-r1",
+      "variant": "mx",
+      "mode": "cpu",
+      "repeat": 1,
+      "size": 4096,
+      "threads": 8,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "warmup": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "cpufix-final-20261022-4096-r1",
+        "-j",
+        "8",
+        "-size",
+        "4096",
+        "4096",
+        "-scale",
+        "2amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792737281.231484,
+      "before": {
+        "unix_s": 1792737281.231485,
+        "load": [
+          6.3173828125,
+          4.28271484375,
+          3.90771484375
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   179337.\nPages active:                                 135727.\nPages inactive:                               134586.\nPages speculative:                               748.\nPages throttled:                                   0.\nPages wired down:                             196513.\nPages purgeable:                                2424.\n\"Translation faults\":                    13565626567.\nPages copy-on-write:                       376144122.\nPages zero filled:                        5191793782.\nPages reactivated:                        4123743795.\nPages purged:                              329462151.\nFile-backed pages:                            117577.\nAnonymous pages:                              153484.\nPages stored in compressor:                   723780.\nPages occupied by compressor:                 352189.\nDecompressions:                           4233310900.\nCompressions:                             4570296974.\nPageins:                                   637925747.\nPageouts:                                    2107241.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792737310.759687,
+      "after": {
+        "unix_s": 1792737310.759703,
+        "load": [
+          6.8994140625,
+          4.5947265625,
+          4.0322265625
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   232525.\nPages active:                                  73511.\nPages inactive:                               134187.\nPages speculative:                               970.\nPages throttled:                                   0.\nPages wired down:                             196280.\nPages purgeable:                                2166.\n\"Translation faults\":                    13568046754.\nPages copy-on-write:                       376153346.\nPages zero filled:                        5193937970.\nPages reactivated:                        4123968813.\nPages purged:                              329469906.\nFile-backed pages:                            111689.\nAnonymous pages:                               96979.\nPages stored in compressor:                   737546.\nPages occupied by compressor:                 361627.\nDecompressions:                           4233466004.\nCompressions:                             4570565238.\nPageins:                                   638043633.\nPageouts:                                    2107242.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "wall_s": 29.4,
+      "rss_MiB": 2831.75
+    },
+    {
+      "tag": "cpufix-final-20261022-4096-r2",
+      "variant": "mx",
+      "mode": "cpu",
+      "repeat": 2,
+      "size": 4096,
+      "threads": 8,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "warmup": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "cpufix-final-20261022-4096-r2",
+        "-j",
+        "8",
+        "-size",
+        "4096",
+        "4096",
+        "-scale",
+        "2amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792737310.777772,
+      "before": {
+        "unix_s": 1792737310.7777731,
+        "load": [
+          6.8994140625,
+          4.5947265625,
+          4.0322265625
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   232477.\nPages active:                                  73580.\nPages inactive:                               134188.\nPages speculative:                               971.\nPages throttled:                                   0.\nPages wired down:                             196280.\nPages purgeable:                                2166.\n\"Translation faults\":                    13568048276.\nPages copy-on-write:                       376153740.\nPages zero filled:                        5193938168.\nPages reactivated:                        4123968813.\nPages purged:                              329469906.\nFile-backed pages:                            111692.\nAnonymous pages:                               97047.\nPages stored in compressor:                   737488.\nPages occupied by compressor:                 361604.\nDecompressions:                           4233466063.\nCompressions:                             4570565238.\nPageins:                                   638043637.\nPageouts:                                    2107242.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792737341.061745,
+      "after": {
+        "unix_s": 1792737341.06176,
+        "load": [
+          6.65185546875,
+          4.73291015625,
+          4.099609375
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   224866.\nPages active:                                  99791.\nPages inactive:                                93943.\nPages speculative:                             12475.\nPages throttled:                                   0.\nPages wired down:                             193980.\nPages purgeable:                                2760.\n\"Translation faults\":                    13570698381.\nPages copy-on-write:                       376169526.\nPages zero filled:                        5196132330.\nPages reactivated:                        4124238676.\nPages purged:                              329476392.\nFile-backed pages:                            110193.\nAnonymous pages:                               96016.\nPages stored in compressor:                   748032.\nPages occupied by compressor:                 374045.\nDecompressions:                           4233720425.\nCompressions:                             4570928950.\nPageins:                                   638180300.\nPageouts:                                    2107271.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "wall_s": 30.13,
+      "rss_MiB": 2777.546875
+    },
+    {
+      "tag": "cpufix-final-20261022-common",
+      "variant": "mx",
+      "mode": "cpu",
+      "repeat": 1,
+      "size": 3072,
+      "threads": 8,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "warmup": false,
+      "common": true,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "cpufix-final-20261022-common",
+        "-j",
+        "8",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "-reuse-psf",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-followup-20261022-0945/beam-controls/common/img",
+        "-reuse-dirty",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-followup-20261022-0945/beam-controls/common/img",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792737341.081135,
+      "before": {
+        "unix_s": 1792737341.081137,
+        "load": [
+          6.65185546875,
+          4.73291015625,
+          4.099609375
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2750.38M  free = 1345.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   224800.\nPages active:                                  99891.\nPages inactive:                                93950.\nPages speculative:                             12470.\nPages throttled:                                   0.\nPages wired down:                             193980.\nPages purgeable:                                2760.\n\"Translation faults\":                    13570699924.\nPages copy-on-write:                       376169922.\nPages zero filled:                        5196132531.\nPages reactivated:                        4124238676.\nPages purged:                              329476392.\nFile-backed pages:                            110200.\nAnonymous pages:                               96111.\nPages stored in compressor:                   747953.\nPages occupied by compressor:                 374009.\nDecompressions:                           4233720506.\nCompressions:                             4570928950.\nPageins:                                   638180305.\nPageouts:                                    2107271.\nSwapins:                                    89449896.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792737358.652119,
+      "after": {
+        "unix_s": 1792737358.652128,
+        "load": [
+          16.05712890625,
+          6.80615234375,
+          4.845703125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2734.38M  free = 1361.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   124594.\nPages active:                                 165751.\nPages inactive:                               155773.\nPages speculative:                              9612.\nPages throttled:                                   0.\nPages wired down:                             193024.\nPages purgeable:                                1921.\n\"Translation faults\":                    13572518364.\nPages copy-on-write:                       376196184.\nPages zero filled:                        5197636234.\nPages reactivated:                        4124345208.\nPages purged:                              329479416.\nFile-backed pages:                            181756.\nAnonymous pages:                              149380.\nPages stored in compressor:                   702291.\nPages occupied by compressor:                 350345.\nDecompressions:                           4233803233.\nCompressions:                             4570993109.\nPageins:                                   638340759.\nPageouts:                                    2107322.\nSwapins:                                    89450442.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "wall_s": 17.44,
+      "rss_MiB": 2216.609375
+    },
+    {
+      "tag": "cpufix-final-20261022-j1",
+      "variant": "mx",
+      "mode": "cpu",
+      "repeat": 1,
+      "size": 3072,
+      "threads": 1,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "warmup": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "cpufix-final-20261022-j1",
+        "-j",
+        "1",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792737358.6687481,
+      "before": {
+        "unix_s": 1792737358.668751,
+        "load": [
+          16.05712890625,
+          6.80615234375,
+          4.845703125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2734.38M  free = 1361.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   124538.\nPages active:                                 165789.\nPages inactive:                               155779.\nPages speculative:                              9628.\nPages throttled:                                   0.\nPages wired down:                             193024.\nPages purgeable:                                1921.\n\"Translation faults\":                    13572519841.\nPages copy-on-write:                       376196577.\nPages zero filled:                        5197636425.\nPages reactivated:                        4124345208.\nPages purged:                              329479416.\nFile-backed pages:                            181796.\nAnonymous pages:                              149400.\nPages stored in compressor:                   702282.\nPages occupied by compressor:                 350342.\nDecompressions:                           4233803242.\nCompressions:                             4570993109.\nPageins:                                   638340791.\nPageouts:                                    2107322.\nSwapins:                                    89450442.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792737430.875366,
+      "after": {
+        "unix_s": 1792737430.875377,
+        "load": [
+          7.935546875,
+          6.28662109375,
+          4.802734375
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2734.38M  free = 1361.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   150962.\nPages active:                                 163001.\nPages inactive:                               161794.\nPages speculative:                              2236.\nPages throttled:                                   0.\nPages wired down:                             199169.\nPages purgeable:                                2255.\n\"Translation faults\":                    13574537960.\nPages copy-on-write:                       376214765.\nPages zero filled:                        5199353679.\nPages reactivated:                        4124426421.\nPages purged:                              329488753.\nFile-backed pages:                            119561.\nAnonymous pages:                              207470.\nPages stored in compressor:                   636981.\nPages occupied by compressor:                 321938.\nDecompressions:                           4233896905.\nCompressions:                             4571054739.\nPageins:                                   638428030.\nPageouts:                                    2107335.\nSwapins:                                    89450514.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "wall_s": 72.06,
+      "rss_MiB": 2207.390625
+    }
+  ],
+  "comparisons": [
+    {
+      "label": "final-3072-repeat",
+      "tier": "T0",
+      "exit": 0,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-3072-r1/mx",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-3072-r2/mx",
+        "--tier",
+        "T0",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        }
+      ]
+    },
+    {
+      "label": "final-3072-pre-review",
+      "tier": "T0",
+      "exit": 0,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-20261022-3072-new-r1/mx",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-3072-r1/mx",
+        "--tier",
+        "T0",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        }
+      ]
+    },
+    {
+      "label": "final-3072-old-new",
+      "tier": "T2",
+      "exit": 0,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-20261022-3072-old-r1/cpu-weighted-v1-20261022",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-3072-r1/mx",
+        "--tier",
+        "T2",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": false,
+          "n_diff": 9315057,
+          "rel_rms": 3.08e-06,
+          "rel_peak": 2.23e-07,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": false,
+          "n_diff": 9305583,
+          "rel_rms": 2.49e-06,
+          "rel_peak": 1.35e-07,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": false,
+          "n_diff": 9397115,
+          "rel_rms": 2.18e-06,
+          "rel_peak": 2.54e-06,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": false,
+          "n_diff": 9311328,
+          "rel_rms": 1.92e-06,
+          "rel_peak": 2.09e-07,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": false,
+          "n_diff": 9322165,
+          "rel_rms": 3.44e-06,
+          "rel_peak": 1.09e-05,
+          "verdict": "PASS"
+        }
+      ]
+    },
+    {
+      "label": "final-4096-repeat",
+      "tier": "T0",
+      "exit": 0,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-4096-r1/mx",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-4096-r2/mx",
+        "--tier",
+        "T0",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        }
+      ]
+    },
+    {
+      "label": "final-4096-pre-review",
+      "tier": "T0",
+      "exit": 0,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-20261022-4096-new-r1/mx",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-4096-r1/mx",
+        "--tier",
+        "T0",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        }
+      ]
+    },
+    {
+      "label": "final-4096-old-new",
+      "tier": "T2",
+      "exit": 1,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-20261022-4096-old-r1/cpu-weighted-v1-20261022",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-4096-r1/mx",
+        "--tier",
+        "T2",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": false,
+          "n_diff": 16567289,
+          "rel_rms": 2.4e-06,
+          "rel_peak": 3.18e-07,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": false,
+          "n_diff": 16772966,
+          "rel_rms": 0.000224,
+          "rel_peak": 7.15e-05,
+          "verdict": "FAIL"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": false,
+          "n_diff": 16717637,
+          "rel_rms": 0.00142,
+          "rel_peak": 0.00133,
+          "verdict": "FAIL"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": false,
+          "n_diff": 16566770,
+          "rel_rms": 1.98e-06,
+          "rel_peak": 2.38e-07,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": false,
+          "n_diff": 16773527,
+          "rel_rms": 0.000516,
+          "rel_peak": 0.00573,
+          "verdict": "FAIL"
+        }
+      ]
+    },
+    {
+      "label": "final-common-repeat",
+      "tier": "T0",
+      "exit": 0,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-20261022-common-new-r1/mx",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-common/mx",
+        "--tier",
+        "T0",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        }
+      ]
+    },
+    {
+      "label": "final-one-thread-old-new",
+      "tier": "T0",
+      "exit": 1,
+      "command": [
+        "/Users/peijinz/dev/wsclean-mx/.venv/bin/python",
+        "/Users/peijinz/dev/wsclean-mx/bench/compare_fits.py",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpuaudit-20261022-threads-r1-j1/cpu-audit-base-20261022",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/cpufix-final-20261022-j1/mx",
+        "--tier",
+        "T0",
+        "--max-rel-rms",
+        "1e-4",
+        "--max-rel-peak",
+        "1e-3"
+      ],
+      "products": [
+        {
+          "product": "img-dirty.fits",
+          "bitwise": false,
+          "n_diff": 8860316,
+          "rel_rms": 3.49e-07,
+          "rel_peak": 4.33e-07,
+          "verdict": "FAIL"
+        },
+        {
+          "product": "img-horizon-mask.fits",
+          "bitwise": true,
+          "n_diff": 0,
+          "rel_rms": 0.0,
+          "rel_peak": 0.0,
+          "verdict": "PASS"
+        },
+        {
+          "product": "img-image.fits",
+          "bitwise": false,
+          "n_diff": 9436565,
+          "rel_rms": 0.000745,
+          "rel_peak": 0.000193,
+          "verdict": "FAIL"
+        },
+        {
+          "product": "img-model.fits",
+          "bitwise": false,
+          "n_diff": 9419203,
+          "rel_rms": 0.00644,
+          "rel_peak": 0.00619,
+          "verdict": "FAIL"
+        },
+        {
+          "product": "img-psf.fits",
+          "bitwise": false,
+          "n_diff": 9061195,
+          "rel_rms": 3.27e-07,
+          "rel_peak": 1.19e-07,
+          "verdict": "FAIL"
+        },
+        {
+          "product": "img-residual.fits",
+          "bitwise": false,
+          "n_diff": 9436649,
+          "rel_rms": 0.00171,
+          "rel_peak": 0.00864,
+          "verdict": "FAIL"
+        }
+      ]
+    }
+  ],
+  "input_unchanged": true,
+  "reviews": {
+    "correctness": {
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "suggestions": [],
+      "summary": "Reviewed all current WSClean/Radler diffs, the four full regression files, scripts/test.sh, relevant callers, requirements and plotting code. The earlier empty-range blocker is resolved through guarded initialization and documented epoch errors; skipped MODEL reads now have coverage. No additional concrete defects found. Plot labels match retained results, including 4K old/new T2 failures. Inspected saved reports only; ran no tests and changed no files. Threaded gridder/scheduler implementations excluded."
+    },
+    "threaded": {
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "suggestions": [
+        {
+          "location": "tests/threaded_gridder_regression.cpp:204",
+          "suggestion": "Assert adjust_nthreads(8)==8 for fixed-eight-thread acceptance; participation>1 permits reduced concurrency."
+        },
+        {
+          "location": "tests/threaded_gridder_regression.cpp:283",
+          "suggestion": "Extend independent numerical coverage to mixed precision, shifted centres, coordinate flips and omitted weights/masks."
+        },
+        {
+          "location": "tests/thread_exception_regression.cpp:138",
+          "suggestion": "Add an end-to-end gridder exception test after scanning while deferred tile helpers are active."
+        },
+        {
+          "location": "work/schaapcommon/external/ducc0/wgridder/wgridder_impl.h:1304",
+          "suggestion": "Complete idle-host performance/RSS measurements for channel scanning, per-block allocation and batch barriers."
+        }
+      ],
+      "summary": "Inspected the entire two-file Schaapcommon diff, both complete regression tests, scripts/test.sh integration, requirements, prior review-threaded-v2.json and surrounding production paths. No blocking defect found. Under reject-before-accept semantics, callback-construction and submission failures count down unaccepted jobs, drain accepted workers and bare-rethrow the original exception, including when draining workers throw. Shared callback, scheduler and partial-helper lifetimes remain valid; exception publication is synchronized and reuse is covered. Canonical bucket sorting precedes subdivision, channel scanning establishes tile/minplane containment, and caller-ordered merging limits live tile helpers to 32. Nonfinite guards and uninstrumented repeats remain. Inspected saved passing normal/ASan/UBSan/TSan scheduler logs and the 597-check gridder log; did not execute regression or heavy tests. Executed shell-syntax and diff-whitespace checks successfully. This is code approval only: full suites remain with the parent, and the initial 4K old/new T2 failure remains recorded and unwaived."
+    }
+  },
+  "provenance": {
+    "wsclean": "99bb9fc25d46016721e889f7b1b21820f4aa8c77",
+    "radler": "172e4a01a72d525d8a515bdae435538b62899a10",
+    "schaapcommon": "5623a6bd27303dca2357997a1353e40b13c86c22",
+    "aocommon": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+    "binary_sha256": "af07b46ed32b0aee4fa7bf3bb4f98f78859e635a4616fb1db6bf3313dfd3994e",
+    "thread_library_sha256": "9a381a99e37869c6ba9ac262b2db603d2510ca033eb5fe285b9d14b38d7cfe74",
+    "linkage": "/Users/peijinz/dev/wsclean-mx/build-mx/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n"
+  },
+  "patch_replay": {
+    "wsclean": {
+      "patches": 55,
+      "tree": "4242c245be86bc3b97a89576535fac907af62e74",
+      "matches_head": true
+    },
+    "radler": {
+      "patches": 10,
+      "tree": "91a11556fbfd405c77d3f6c8bb23b7e35482810f",
+      "matches_head": true
+    },
+    "schaapcommon": {
+      "patches": 9,
+      "tree": "f0ae1b5f390feeb2b14f28e4ce0e00b83475b106",
+      "matches_head": true
+    },
+    "aocommon": {
+      "patches": 2,
+      "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+      "matches_head": true
+    }
+  },
+  "strict_campaign_exit": 1,
+  "remaining_strict_failures": [
+    "final-4096-old-new",
+    "final-one-thread-old-new"
+  ]
+}

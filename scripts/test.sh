@@ -111,6 +111,34 @@ fi
   -L"$BREW/lib" -lcfitsio -Wl,-rpath,"$DEPS_PREFIX/lib" \
   -o "$OUT/inmemory_time_regression"
 "$OUT/inmemory_time_regression"
+# Exercise provider, geometry, loader and RMS callers against this fresh build.
+PROJECT_LIBS=("$BUILD/libwsclean.a" "$BUILD/_deps/radler-build/cpp/libradler.a"
+  "$BUILD/_deps/schaapcommon-build/libschaapcommon.a"
+  -L"$DEPS_PREFIX/lib" -lcasa_ms -lcasa_measures -lcasa_scimath -lcasa_tables
+  -lcasa_scimath_f -lcasa_casa -L"$BREW/lib" -lhdf5_cpp -lhdf5
+  -lboost_filesystem -lboost_atomic -lgsl -lgslcblas -lcfitsio
+  -lfftw3f_threads -lfftw3f -lfftw3_threads -lfftw3
+  -L"$BUILD" -lschaapthreading -framework Accelerate
+  -Wl,-rpath,"$BUILD" -Wl,-rpath,"$DEPS_PREFIX/lib")
+for regression in reader_position uv_limits readinmemory rms_window; do
+  "$CXX" "${COMMON[@]}" -I"$ROOT/work/wsclean" -I"$BUILD" \
+    "tests/${regression}_regression.cpp" "${PROJECT_LIBS[@]}" \
+    -o "$OUT/${regression}_regression"
+  "$OUT/${regression}_regression"
+done
+"$OUT/rms_window_regression" all 4
+"$CXX" -std=c++20 -O3 -DNDEBUG -march=native -pthread \
+  -I"$ROOT/work/schaapcommon/external" tests/threaded_gridder_regression.cpp \
+  "$BUILD/_deps/schaapcommon-build/libschaapcommon.a" \
+  -L"$BUILD" -lschaapthreading -Wl,-rpath,"$BUILD" \
+  -o "$OUT/threaded_gridder_regression"
+"$OUT/threaded_gridder_regression" 16
+"$CXX" -std=c++20 -O2 -pthread -I"$ROOT/work/schaapcommon/external" \
+  tests/thread_exception_regression.cpp \
+  "$BUILD/_deps/schaapcommon-build/libschaapcommon.a" \
+  -L"$BUILD" -lschaapthreading -Wl,-rpath,"$BUILD" \
+  -o "$OUT/thread_exception_regression"
+"$OUT/thread_exception_regression"
 # The legacy programs below have differential assertions and nonzero failures.
 "$CXX" "${COMMON[@]}" bench/micro/median_select.cpp -o "$OUT/median_select"
 "$OUT/median_select"

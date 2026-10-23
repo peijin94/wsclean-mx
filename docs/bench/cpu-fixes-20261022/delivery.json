@@ -1,0 +1,99 @@
+{
+  "status": "source repairs reviewed and exported; strict legacy-image gates retain failures",
+  "initial_root": "f673e148234d03cb46ca3a7b14c772da6855b6d1",
+  "component_provenance": {
+    "wsclean": "99bb9fc25d46016721e889f7b1b21820f4aa8c77",
+    "radler": "172e4a01a72d525d8a515bdae435538b62899a10",
+    "schaapcommon": "5623a6bd27303dca2357997a1353e40b13c86c22",
+    "aocommon": "dd2b059a885433c33f2e00f7ab3d01f8331f4697",
+    "binary_sha256": "af07b46ed32b0aee4fa7bf3bb4f98f78859e635a4616fb1db6bf3313dfd3994e",
+    "thread_library_sha256": "9a381a99e37869c6ba9ac262b2db603d2510ca033eb5fe285b9d14b38d7cfe74",
+    "linkage": "/Users/peijinz/dev/wsclean-mx/build-mx/wsclean:\n\t/opt/homebrew/opt/hdf5/lib/libhdf5_cpp.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.2.0)\n\t/opt/homebrew/opt/python@3.15/Frameworks/Python.framework/Versions/3.15/Python (compatibility version 3.15.0, current version 3.15.0)\n\t/opt/homebrew/opt/gsl/lib/libgsl.28.dylib (compatibility version 29.0.0, current version 29.0.0)\n\t/opt/homebrew/opt/gsl/lib/libgslcblas.0.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_ms.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_measures.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_tables.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_scimath_f.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/boost/lib/libboost_filesystem.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_atomic.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_program_options.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/boost/lib/libboost_container.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/opt/homebrew/opt/cfitsio/lib/libcfitsio.10.dylib (compatibility version 10.0.0, current version 4.7.0)\n\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.8.0)\n\t/Users/peijinz/dev/wsclean-mx/deps/install/lib/libcasa_casa.9.dylib (compatibility version 9.0.0, current version 9.0.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t/opt/homebrew/opt/fftw/lib/libfftw3f_threads.3.dylib (compatibility version 11.0.0, current version 11.11.0)\n\t@rpath/libschaapthreading.dylib (compatibility version 0.0.0, current version 0.0.0)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)\n"
+  },
+  "patch_replay": {
+    "wsclean": {
+      "patches": 55,
+      "tree": "4242c245be86bc3b97a89576535fac907af62e74",
+      "matches_head": true
+    },
+    "radler": {
+      "patches": 10,
+      "tree": "91a11556fbfd405c77d3f6c8bb23b7e35482810f",
+      "matches_head": true
+    },
+    "schaapcommon": {
+      "patches": 9,
+      "tree": "f0ae1b5f390feeb2b14f28e4ce0e00b83475b106",
+      "matches_head": true
+    },
+    "aocommon": {
+      "patches": 2,
+      "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+      "matches_head": true
+    }
+  },
+  "tests": {
+    "python_passed": 216,
+    "wsclean_passed": 160,
+    "wsclean_skipped": 4,
+    "wsclean_assertions": 869917,
+    "radler_executable_suites_passed": 4,
+    "radler_ctest_entries_passed": 8,
+    "reader_assertions": 5570,
+    "uv_assertions": 630,
+    "loader_interval_provider_assertions": 417,
+    "rms_checks_per_thread_setting": 17109,
+    "rms_thread_settings": [
+      1,
+      4
+    ],
+    "dijkstra_sanitized_assertions": 6409149,
+    "gridder_checks": 597,
+    "gridder_families": 18,
+    "observed_workers_per_family": 8,
+    "scheduler_additional_submission_scenarios": 24,
+    "scheduler_parent_sanitizers": [
+      "ASan",
+      "UBSan",
+      "TSan"
+    ]
+  },
+  "total_real_runs": 18,
+  "initial_failed_comparisons": [
+    "3072-old-repeat",
+    "4096-old-new-1",
+    "4096-old-new-2",
+    "4096-old-new-3"
+  ],
+  "final_failed_comparisons": [
+    "final-4096-old-new",
+    "final-one-thread-old-new"
+  ],
+  "one_thread_legacy_args_identical": true,
+  "one_thread_products_numerically_outside_T2": [
+    "img-image.fits",
+    "img-model.fits",
+    "img-residual.fits"
+  ],
+  "tile_array_bound_KiB": {
+    "float": 430.0,
+    "double": 528.0
+  },
+  "input": {
+    "unchanged": true,
+    "files": 108,
+    "bytes": 4428203949
+  },
+  "final_input_unchanged": true,
+  "reviews": {
+    "correctness": "review-correctness-v2.json",
+    "threading": "review-threaded-v3.json"
+  },
+  "publication": {
+    "pushed": false,
+    "released": false,
+    "merged_to_main": false,
+    "issue_updates": false
+  },
+  "evidence_root": "/Users/peijinz/dev/wsclean-mx/bench/out/cpu-fixes-20261022-2223"
+}

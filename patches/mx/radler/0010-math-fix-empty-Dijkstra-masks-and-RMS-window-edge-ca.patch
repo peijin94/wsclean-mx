@@ -1,0 +1,417 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Thu, 22 Oct 2026 23:19:43 -0700
+Subject: [PATCH] math: fix empty Dijkstra masks and RMS window edge cases
+
+
+diff --git a/cpp/math/dijkstra_splitter.cc b/cpp/math/dijkstra_splitter.cc
+index 8078fe0..4fbf79a 100644
+--- a/cpp/math/dijkstra_splitter.cc
++++ b/cpp/math/dijkstra_splitter.cc
+@@ -222,6 +222,12 @@ void DijkstraSplitter::GetBoundingMask(const bool* vertical_mask,
+                                        std::size_t& sub_x, std::size_t& sub_y,
+                                        std::size_t& subwidth,
+                                        std::size_t& subheight) const {
++  if (vertical_mask_width == 0 || height_ == 0) {
++    sub_x = vertical_mask_x;
++    sub_y = 0;
++    subwidth = subheight = 0;
++    return;
++  }
+   sub_x = vertical_mask_width + vertical_mask_x;
+   sub_y = height_;
+   std::size_t sub_x2 = 0;
+@@ -247,9 +253,12 @@ void DijkstraSplitter::GetBoundingMask(const bool* vertical_mask,
+       }
+     }
+   }
+-  if (sub_x2 < sub_x) {
++  if (sub_y == height_) {
++    sub_x = vertical_mask_x;
++    sub_y = 0;
+     subwidth = 0;
+     subheight = 0;
++    return;
+   } else {
+     subwidth = sub_x2 + 1 - sub_x;
+     subheight = sub_y2 + 1 - sub_y;
+@@ -258,7 +267,8 @@ void DijkstraSplitter::GetBoundingMask(const bool* vertical_mask,
+   if (width_ % 2 == 0) {
+     if (subwidth % 2 != 0) {
+       ++subwidth;
+-      if (subwidth + sub_x >= width_) {
++      // Preserve the usual left-padding choice, but never move before zero.
++      if (sub_x != 0 && subwidth + sub_x >= width_) {
+         --sub_x;
+         for (size_t y = sub_y; y != sub_y + subheight; ++y) {
+           mask[sub_x + y * width_] = false;
+@@ -273,7 +283,7 @@ void DijkstraSplitter::GetBoundingMask(const bool* vertical_mask,
+   if (height_ % 2 == 0) {
+     if (subheight % 2 != 0) {
+       ++subheight;
+-      if (subheight + sub_y >= height_) {
++      if (sub_y != 0 && subheight + sub_y >= height_) {
+         --sub_y;
+         std::fill_n(&mask[sub_y * width_ + sub_x], subwidth, false);
+       } else {
+diff --git a/cpp/math/dijkstra_splitter.h b/cpp/math/dijkstra_splitter.h
+index af85a63..0a04320 100644
+--- a/cpp/math/dijkstra_splitter.h
++++ b/cpp/math/dijkstra_splitter.h
+@@ -84,6 +84,8 @@ class DijkstraSplitter {
+    * masks. The input should have the size of the full image. All values inside
+    * the bounding box are set to their proper value. Some values outside the
+    * bounding box might also be changed.
++   * An empty intersection has zero width and height. An empty vertical strip
++   * does not read either input mask or write the output mask.
+    * @param [out] sub_x Bounding box x-value
+    * @param [out] sub_y Bounding box y-value
+    * @param [out] subwidth Bounding box width
+diff --git a/cpp/math/rms_image.cc b/cpp/math/rms_image.cc
+index dcd9381..3a19b2f 100644
+--- a/cpp/math/rms_image.cc
++++ b/cpp/math/rms_image.cc
+@@ -33,20 +33,29 @@ void Make(Image& rms_output, const Image& input_image, double window_size,
+ }
+ 
+ void SlidingMinimum(Image& output, const Image& input, size_t window_size) {
++  const size_t radius = window_size / 2;
++  if (radius == 0 || input.Empty()) {
++    output = Image(input);
++    return;
++  }
+   const size_t width = input.Width();
+-  output = Image(width, input.Height());
+-  Image temp(output);
++  Image result(width, input.Height());
++  Image temp(width, input.Height());
+ 
+   schaapcommon::StaticFor<size_t> loop;
++  // Order NaNs after all numbers, so a window is NaN only if all values are.
++  const auto less = [](float lhs, float rhs) {
++    return lhs < rhs || (std::isnan(rhs) && !std::isnan(lhs));
++  };
+ 
+   loop.Run(0, input.Height(), [&](size_t yStart, size_t yEnd) {
+     for (size_t y = yStart; y != yEnd; ++y) {
+       float* outRowptr = &temp[y * width];
+       const float* inRowptr = &input[y * width];
+       for (size_t x = 0; x != width; ++x) {
+-        size_t left = std::max(x, window_size / 2) - window_size / 2;
+-        size_t right = std::min(x, width - window_size / 2) + window_size / 2;
+-        outRowptr[x] = *std::min_element(inRowptr + left, inRowptr + right);
++        const size_t left = x - std::min(x, radius);
++        const size_t right = x + std::min(width - x, radius);
++        outRowptr[x] = *std::min_element(inRowptr + left, inRowptr + right, less);
+       }
+     }
+   });
+@@ -55,17 +64,17 @@ void SlidingMinimum(Image& output, const Image& input, size_t window_size) {
+     aocommon::UVector<float> vals;
+     for (size_t x = xStart; x != xEnd; ++x) {
+       for (size_t y = 0; y != input.Height(); ++y) {
+-        size_t top = std::max(y, window_size / 2) - window_size / 2;
+-        size_t bottom =
+-            std::min(y, input.Height() - window_size / 2) + window_size / 2;
++        const size_t top = y - std::min(y, radius);
++        const size_t bottom = y + std::min(input.Height() - y, radius);
+         vals.clear();
+         for (size_t winY = top; winY != bottom; ++winY) {
+           vals.push_back(temp[winY * width + x]);
+         }
+-        output[y * width + x] = *std::min_element(vals.begin(), vals.end());
++        result[y * width + x] = *std::min_element(vals.begin(), vals.end(), less);
+       }
+     }
+   });
++  output = std::move(result);
+ }
+ 
+ void SlidingMaximum(Image& output, const Image& input, size_t window_size) {
+diff --git a/cpp/math/rms_image.h b/cpp/math/rms_image.h
+index 2d5e254..451123b 100644
+--- a/cpp/math/rms_image.h
++++ b/cpp/math/rms_image.h
+@@ -12,9 +12,20 @@ void Make(aocommon::Image& rms_output, const aocommon::Image& input_image,
+           long double beam_pa, long double pixel_scale_l,
+           long double pixel_scale_m);
+ 
++/**
++ * Compute local minima over clipped half-open rectangles
++ * [x-r, x+r) x [y-r, y+r), where r = floor(window_size / 2).
++ * Thus odd sizes have the same footprint as the preceding even size. Sizes
++ * zero and one copy the input unchanged. Oversized windows are clipped without
++ * wrapping; empty images retain their dimensions. NaNs are ignored in each
++ * nondegenerate window unless every value is NaN. Infinities participate
++ * normally, and equal values retain the first row-major value (including its
++ * zero sign). Output may alias input, including through an image view.
++ */
+ void SlidingMinimum(aocommon::Image& output, const aocommon::Image& input,
+                     size_t window_size);
+ 
++/** Compute local maxima with the same window, NaN and aliasing rules. */
+ void SlidingMaximum(aocommon::Image& output, const aocommon::Image& input,
+                     size_t window_size);
+ 
+diff --git a/cpp/math/test/test_dijkstra_splitter.cc b/cpp/math/test/test_dijkstra_splitter.cc
+index 2611fb1..7c36798 100644
+--- a/cpp/math/test/test_dijkstra_splitter.cc
++++ b/cpp/math/test/test_dijkstra_splitter.cc
+@@ -334,7 +334,7 @@ BOOST_AUTO_TEST_CASE(flood_horizontal_area) {
+                     "XXXXXXXXXX\n");
+ }
+ 
+-BOOST_AUTO_TEST_CASE(get_bounding_mask) {
++BOOST_AUTO_TEST_CASE(shortest_path_equal_cost_routes) {
+   const size_t width = 10, height = 8;
+   Image image = MakeImage(width,
+                           "    X     "
+@@ -346,8 +346,44 @@ BOOST_AUTO_TEST_CASE(get_bounding_mask) {
+                           "    X     "
+                           "    X     ");
+   DijkstraSplitter splitter(width, height);
++  for (bool vertical : {true, false}) {
++    Image path(width, height, 0.0f);
++    if (vertical)
++      splitter.DivideVertically(image.Data(), path.Data(), 3, 6);
++    else
++      splitter.DivideHorizontally(image.Data(), path.Data(), 3, 6);
++    size_t previous = 0;
++    for (size_t major = 0; major < (vertical ? height : width); ++major) {
++      size_t count = 0;
++      for (size_t minor = 0; minor < (vertical ? width : height); ++minor) {
++        const size_t index = vertical ? minor + major * width
++                                      : major + minor * width;
++        if (path[index] != 0.0f) {
++          ++count;
++          BOOST_CHECK_EQUAL(path[index], 1.0f);
++          BOOST_CHECK_EQUAL(image[index], 0.1f);
++          BOOST_CHECK_GE(minor, 3u);
++          BOOST_CHECK_LT(minor, 6u);
++          if (major != 0)
++            BOOST_CHECK_LE(std::abs(int(minor) - int(previous)), 1);
++          previous = minor;
++        }
++      }
++      // One low-cost pixel per row/column is a connected minimum-cost route.
++      // The priority queue does not specify which equal-cost route is chosen.
++      BOOST_CHECK_EQUAL(count, 1u);
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(get_bounding_mask) {
++  const size_t width = 10, height = 8;
++  DijkstraSplitter splitter(width, height);
+   Image dividingLines(width, height, 0.0f);
+-  splitter.DivideVertically(image.Data(), dividingLines.Data(), 3, 6);
++  // This fixture tests exact mask geometry, not a heap's equal-key ordering.
++  // Supply the intended nonrectangular dividing line explicitly.
++  for (size_t y = 0; y < height; ++y)
++    dividingLines[(y == 4 ? 3 : 4) + y * width] = 1.0f;
+ 
+   aocommon::UVector<bool> mask(width * height);
+   size_t subXL, subXR, subY, subWidthL, subWidthR, subHeight;
+@@ -387,7 +423,8 @@ BOOST_AUTO_TEST_CASE(get_bounding_mask) {
+                     " XXXXXX\n");
+ 
+   dividingLines = 0.0f;
+-  splitter.DivideHorizontally(image.Data(), dividingLines.Data(), 3, 6);
++  for (size_t x = 0; x < width; ++x)
++    dividingLines[x + (x == 4 ? 3 : 4) * width] = 1.0f;
+ 
+   splitter.FloodHorizontalArea(dividingLines.Data(), 1, mask.data(), subY,
+                                subHeight);
+@@ -528,14 +565,114 @@ BOOST_AUTO_TEST_CASE(get_bounding_mask_on_noise) {
+                              subX, subY, subWidth, subHeight);
+     for (size_t i = 0; i != mask1.size(); ++i) {
+       size_t n = 0;
+-      if (mask1[n]) ++n;
+-      if (mask2[n]) ++n;
+-      if (mask3[n]) ++n;
+-      if (mask4[n]) ++n;
++      if (mask1[i]) ++n;
++      if (mask2[i]) ++n;
++      if (mask3[i]) ++n;
++      if (mask4[i]) ++n;
+       BOOST_CHECK_EQUAL(n, 1u);
+     }
+   }
+ }
+ 
++BOOST_AUTO_TEST_CASE(get_bounding_mask_even_padding_at_edge) {
++  // Padding may end exactly at the image edge. It must not move an origin
++  // at zero to size_t(-1), nor clear any originally selected pixel.
++  for (const auto dimensions : {std::pair<size_t, size_t>{10, 8}, {2, 2}}) {
++    const size_t width = dimensions.first, height = dimensions.second;
++    DijkstraSplitter splitter(width, height);
++    aocommon::UVector<bool> vertical(width * height, false);
++    aocommon::UVector<bool> horizontal(width * height, true);
++    aocommon::UVector<bool> output(width * height, true);
++    for (size_t y = 0; y + 1 < height; ++y)
++      for (size_t x = 0; x + 1 < width; ++x)
++        vertical[y * width + x] = true;
++    size_t x, y, subwidth, subheight;
++    splitter.GetBoundingMask(vertical.data(), 0, width, horizontal.data(),
++                             output.data(), x, y, subwidth, subheight);
++    BOOST_REQUIRE_EQUAL(x, 0u);
++    BOOST_REQUIRE_EQUAL(y, 0u);
++    BOOST_REQUIRE_EQUAL(subwidth, width);
++    BOOST_REQUIRE_EQUAL(subheight, height);
++    for (size_t i = 0; i < output.size(); ++i)
++      BOOST_CHECK_EQUAL(output[i], vertical[i]);
++  }
++}
++
++BOOST_AUTO_TEST_CASE(get_bounding_mask_random_intersections) {
++  std::mt19937 random(41);
++  for (size_t trial = 0; trial != 500; ++trial) {
++    const size_t width = 1 + random() % 17, height = 1 + random() % 13;
++    const size_t left = random() % (width + 1);
++    const size_t strip = random() % (width - left + 1);
++    aocommon::UVector<bool> vertical(strip * height);
++    aocommon::UVector<bool> horizontal(width * height);
++    aocommon::UVector<bool> expected(width * height, false);
++    aocommon::UVector<bool> output(width * height, true);
++    for (size_t i = 0; i < vertical.size(); ++i)
++      vertical[i] = random() % 3 == 0;
++    for (size_t i = 0; i < horizontal.size(); ++i)
++      horizontal[i] = random() % 2 == 0;
++    size_t selected = 0;
++    for (size_t y = 0; y < height; ++y)
++      for (size_t x = 0; x < strip; ++x) {
++        const size_t i = y * width + left + x;
++        expected[i] = vertical[y * strip + x] && horizontal[i];
++        if (expected[i]) ++selected;
++      }
++    size_t x, y, subwidth, subheight;
++    DijkstraSplitter(width, height).GetBoundingMask(
++        vertical.data(), left, strip, horizontal.data(), output.data(), x, y,
++        subwidth, subheight);
++    BOOST_REQUIRE_LE(x, width);
++    BOOST_REQUIRE_LE(y, height);
++    BOOST_REQUIRE_LE(subwidth, width - x);
++    BOOST_REQUIRE_LE(subheight, height - y);
++    if (selected == 0) {
++      BOOST_CHECK_EQUAL(subwidth, 0u);
++      BOOST_CHECK_EQUAL(subheight, 0u);
++    } else {
++      if (width % 2 == 0) BOOST_CHECK_EQUAL(subwidth % 2, 0u);
++      if (height % 2 == 0) BOOST_CHECK_EQUAL(subheight % 2, 0u);
++      size_t found = 0;
++      for (size_t yy = y; yy < y + subheight; ++yy)
++        for (size_t xx = x; xx < x + subwidth; ++xx) {
++          const size_t i = yy * width + xx;
++          BOOST_CHECK_EQUAL(output[i], expected[i]);
++          if (output[i]) ++found;
++        }
++      BOOST_CHECK_EQUAL(found, selected);
++    }
++  }
++}
++
++BOOST_AUTO_TEST_CASE(get_bounding_mask_empty) {
++  const size_t width = 10, height = 8;
++  DijkstraSplitter splitter(width, height);
++  aocommon::UVector<bool> vertical(width * height, false);
++  aocommon::UVector<bool> horizontal(width * height, true);
++  aocommon::UVector<bool> output(width * height, true);
++  size_t x, y, subwidth, subheight;
++  // A zero-width strip has no intersection and must not touch the output.
++  splitter.GetBoundingMask(vertical.data(), 0, 0, horizontal.data(),
++                           output.data(), x, y, subwidth, subheight);
++  BOOST_CHECK_EQUAL(subwidth, 0u);
++  BOOST_CHECK_EQUAL(subheight, 0u);
++  BOOST_CHECK_LE(x, width);
++  BOOST_CHECK_LE(y, height);
++  for (bool value : output) BOOST_CHECK(value);
++  splitter.GetBoundingMask(vertical.data(), 0, width, horizontal.data(),
++                           output.data(), x, y, subwidth, subheight);
++  BOOST_CHECK_EQUAL(subwidth, 0u);
++  BOOST_CHECK_EQUAL(subheight, 0u);
++  BOOST_CHECK_LE(x, width);
++  BOOST_CHECK_LE(y, height);
++  for (bool value : output) BOOST_CHECK(!value);
++  DijkstraSplitter empty(0, 0);
++  empty.GetBoundingMask(nullptr, 0, 0, nullptr, nullptr, x, y, subwidth,
++                        subheight);
++  BOOST_CHECK_EQUAL(subwidth, 0u);
++  BOOST_CHECK_EQUAL(subheight, 0u);
++}
++
+ BOOST_AUTO_TEST_SUITE_END()
+ }  // namespace radler
+diff --git a/cpp/math/test/test_rms_image.cc b/cpp/math/test/test_rms_image.cc
+index df51cbd..bacccc1 100644
+--- a/cpp/math/test/test_rms_image.cc
++++ b/cpp/math/test/test_rms_image.cc
+@@ -3,6 +3,9 @@
+ 
+ #include <boost/test/unit_test.hpp>
+ 
++#include <cmath>
++#include <limits>
++
+ #include <aocommon/logger.h>
+ 
+ #include "math/rms_image.h"
+@@ -11,6 +14,58 @@ namespace radler::math {
+ 
+ BOOST_AUTO_TEST_SUITE(rms_image)
+ 
++BOOST_AUTO_TEST_CASE(sliding_half_open_rectangular_windows) {
++  const aocommon::Image input(3, 2, {6, -3, 4, 9, 2, -7});
++  const aocommon::Image minimum(3, 2, {6, -3, -3, 6, -3, -7});
++  const aocommon::Image maximum(3, 2, {6, 6, 4, 9, 9, 4});
++  for (size_t window : {2, 3}) {
++    aocommon::Image output;
++    SlidingMinimum(output, input, window);
++    BOOST_CHECK_EQUAL_COLLECTIONS(output.begin(), output.end(), minimum.begin(),
++                                 minimum.end());
++    SlidingMaximum(output, input, window);
++    BOOST_CHECK_EQUAL_COLLECTIONS(output.begin(), output.end(), maximum.begin(),
++                                 maximum.end());
++  }
++}
++
++BOOST_AUTO_TEST_CASE(sliding_degenerate_and_oversized_windows) {
++  const aocommon::Image input(1, 3, {4, -2, 7});
++  for (size_t window : {0, 1}) {
++    aocommon::Image output(input);
++    SlidingMinimum(output, output, window);
++    BOOST_CHECK_EQUAL_COLLECTIONS(output.begin(), output.end(), input.begin(),
++                                 input.end());
++    SlidingMaximum(output, output, window);
++    BOOST_CHECK_EQUAL_COLLECTIONS(output.begin(), output.end(), input.begin(),
++                                 input.end());
++  }
++  aocommon::Image output;
++  SlidingMinimum(output, input, std::numeric_limits<size_t>::max());
++  for (float value : output) BOOST_CHECK_EQUAL(value, -2);
++  SlidingMaximum(output, input, std::numeric_limits<size_t>::max());
++  for (float value : output) BOOST_CHECK_EQUAL(value, 7);
++  const aocommon::Image empty(nullptr, 0, 3);
++  SlidingMinimum(output, empty, 2);
++  BOOST_CHECK_EQUAL(output.Width(), 0);
++  BOOST_CHECK_EQUAL(output.Height(), 3);
++}
++
++BOOST_AUTO_TEST_CASE(sliding_nan_and_aliasing) {
++  const float nan = std::numeric_limits<float>::quiet_NaN();
++  aocommon::Image image(3, 2, {nan, 3, -2, nan, nan, nan});
++  SlidingMinimum(image, image, 6);
++  for (float value : image) BOOST_CHECK_EQUAL(value, -2);
++  image = aocommon::Image(3, 2, {nan, 3, -2, nan, nan, nan});
++  SlidingMaximum(image, image, 6);
++  for (float value : image) BOOST_CHECK_EQUAL(value, 3);
++  image = nan;
++  SlidingMinimum(image, image, 4);
++  for (float value : image) BOOST_CHECK(std::isnan(value));
++  SlidingMaximum(image, image, 4);
++  for (float value : image) BOOST_CHECK(std::isnan(value));
++}
++
+ BOOST_AUTO_TEST_CASE(make_rms_factor_image) {
+   aocommon::LogReceiver log_receiver;
+   aocommon::Logger::SetVerbosity(aocommon::LogVerbosityLevel::kQuiet);
