@@ -81,6 +81,9 @@ not affected. Details are in [benchmark.md](benchmark.md).
 
 ## Install
 
+See [install.md](install.md) for CPU and experimental Metal installation,
+verification, runtime controls, and safe source-update instructions.
+
 Apple Silicon Mac, [Homebrew](https://brew.sh):
 
 ```bash
