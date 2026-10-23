@@ -1,0 +1,102 @@
+[
+  {
+    "left": "j8-r1",
+    "right": "j8-r2",
+    "tier": "T0",
+    "role": "repeat",
+    "exit": 0,
+    "log": "j8-r1-vs-j8-r2-T0.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  },
+  {
+    "left": "j4-r1",
+    "right": "j4-r2",
+    "tier": "T0",
+    "role": "repeat",
+    "exit": 0,
+    "log": "j4-r1-vs-j4-r2-T0.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  },
+  {
+    "left": "j12-r1",
+    "right": "j12-r2",
+    "tier": "T0",
+    "role": "repeat",
+    "exit": 0,
+    "log": "j12-r1-vs-j12-r2-T0.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  },
+  {
+    "left": "j16-r1",
+    "right": "j16-r2",
+    "tier": "T0",
+    "role": "repeat",
+    "exit": 0,
+    "log": "j16-r1-vs-j16-r2-T0.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  },
+  {
+    "left": "j8-r1",
+    "right": "j4-r1",
+    "tier": "T2",
+    "role": "cross-thread",
+    "exit": 0,
+    "log": "j8-r1-vs-j4-r1-T2.log",
+    "all_bitwise": false,
+    "max_rel_rms": 2.8e-06
+  },
+  {
+    "left": "j8-r1",
+    "right": "j12-r1",
+    "tier": "T2",
+    "role": "cross-thread",
+    "exit": 0,
+    "log": "j8-r1-vs-j12-r1-T2.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  },
+  {
+    "left": "j8-r1",
+    "right": "j16-r1",
+    "tier": "T2",
+    "role": "cross-thread",
+    "exit": 0,
+    "log": "j8-r1-vs-j16-r1-T2.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  },
+  {
+    "left": "j8-r2",
+    "right": "j4-r2",
+    "tier": "T2",
+    "role": "cross-thread",
+    "exit": 0,
+    "log": "j8-r2-vs-j4-r2-T2.log",
+    "all_bitwise": false,
+    "max_rel_rms": 2.8e-06
+  },
+  {
+    "left": "j8-r2",
+    "right": "j12-r2",
+    "tier": "T2",
+    "role": "cross-thread",
+    "exit": 0,
+    "log": "j8-r2-vs-j12-r2-T2.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  },
+  {
+    "left": "j8-r2",
+    "right": "j16-r2",
+    "tier": "T2",
+    "role": "cross-thread",
+    "exit": 0,
+    "log": "j8-r2-vs-j16-r2-T2.log",
+    "all_bitwise": true,
+    "max_rel_rms": 0.0
+  }
+]

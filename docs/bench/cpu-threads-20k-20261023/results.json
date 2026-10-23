@@ -1,0 +1,1161 @@
+{
+  "provenance": {
+    "root_head": "e83e93446223e07e2e01f8c4c68b2a11630ae79f",
+    "binary_sha256": "af07b46ed32b0aee4fa7bf3bb4f98f78859e635a4616fb1db6bf3313dfd3994e",
+    "runner_sha256": "fe8e2d9b1b028cf077584aab72eaa9ff2905b9dc3f27889f196dc0efb3569556",
+    "logical_cpus": 8,
+    "deep_default_niter": 150000,
+    "explicit_test_niter": 20000,
+    "timeout_s": 300
+  },
+  "runs": [
+    {
+      "tag": "threads20k-20261023-0717-j8-warmup",
+      "threads": 8,
+      "repeat": 0,
+      "warmup": true,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j8-warmup",
+        "-j",
+        "8",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765361.238375,
+      "before": {
+        "unix_s": 1792765361.2383811,
+        "load": [
+          2.32763671875,
+          2.37060546875,
+          2.58154296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                     4328.\nPages active:                                 292158.\nPages inactive:                               291170.\nPages speculative:                               298.\nPages throttled:                                   0.\nPages wired down:                             198478.\nPages purgeable:                                   2.\n\"Translation faults\":                    13761736425.\nPages copy-on-write:                       383331173.\nPages zero filled:                        5343357706.\nPages reactivated:                        4130473227.\nPages purged:                              330172122.\nFile-backed pages:                            365567.\nAnonymous pages:                              218059.\nPages stored in compressor:                   484164.\nPages occupied by compressor:                 212668.\nDecompressions:                           4237111963.\nCompressions:                             4575292285.\nPageins:                                   642435991.\nPageouts:                                    2109029.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765386.589857,
+      "after": {
+        "unix_s": 1792765386.589869,
+        "load": [
+          3.66259765625,
+          2.6904296875,
+          2.6904296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   180454.\nPages active:                                 189712.\nPages inactive:                               192294.\nPages speculative:                               284.\nPages throttled:                                   0.\nPages wired down:                             195740.\nPages purgeable:                                4328.\n\"Translation faults\":                    13763508300.\nPages copy-on-write:                       383339733.\nPages zero filled:                        5344963510.\nPages reactivated:                        4130529255.\nPages purged:                              330175261.\nFile-backed pages:                            205416.\nAnonymous pages:                              176874.\nPages stored in compressor:                   526080.\nPages occupied by compressor:                 240616.\nDecompressions:                           4237170655.\nCompressions:                             4575397712.\nPageins:                                   642472790.\nPageouts:                                    2109038.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 25.18,
+        "user_s": 106.22,
+        "system_s": 8.26,
+        "inversion_s": 14.127475,
+        "prediction_s": 3.683254,
+        "deconvolution_s": 4.933194,
+        "other_s": 2.436076999999999,
+        "cpu_core_equivalent": 4.546465448768864,
+        "rss_bytes": 2690973696,
+        "machine_cpu_percent": 56.8308181096108
+      },
+      "time_receipt": "real 25.18\nuser 106.22\nsys 8.26\n          2690973696  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1618438  page reclaims\n               22610  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1324  voluntary context switches\n              290337  involuntary context switches\n        874068454261  instructions retired\n        326842119920  cycles elapsed\n          2666957368  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j8-r1",
+      "threads": 8,
+      "repeat": 1,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j8-r1",
+        "-j",
+        "8",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765386.606844,
+      "before": {
+        "unix_s": 1792765386.6068459,
+        "load": [
+          3.66259765625,
+          2.6904296875,
+          2.6904296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   180379.\nPages active:                                 189821.\nPages inactive:                               192297.\nPages speculative:                               285.\nPages throttled:                                   0.\nPages wired down:                             195740.\nPages purgeable:                                4328.\n\"Translation faults\":                    13763509894.\nPages copy-on-write:                       383340123.\nPages zero filled:                        5344963713.\nPages reactivated:                        4130529255.\nPages purged:                              330175261.\nFile-backed pages:                            205420.\nAnonymous pages:                              176983.\nPages stored in compressor:                   526010.\nPages occupied by compressor:                 240578.\nDecompressions:                           4237170726.\nCompressions:                             4575397712.\nPageins:                                   642472794.\nPageouts:                                    2109038.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765413.29477,
+      "after": {
+        "unix_s": 1792765413.2947772,
+        "load": [
+          5.28564453125,
+          3.1611328125,
+          2.85986328125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   134736.\nPages active:                                 207661.\nPages inactive:                               205428.\nPages speculative:                              1921.\nPages throttled:                                   0.\nPages wired down:                             206538.\nPages purgeable:                                3430.\n\"Translation faults\":                    13765510762.\nPages copy-on-write:                       383353933.\nPages zero filled:                        5346745910.\nPages reactivated:                        4130630927.\nPages purged:                              330179980.\nFile-backed pages:                            164290.\nAnonymous pages:                              250720.\nPages stored in compressor:                   519554.\nPages occupied by compressor:                 242816.\nDecompressions:                           4237234601.\nCompressions:                             4575477674.\nPageins:                                   642592226.\nPageouts:                                    2109039.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 26.54,
+        "user_s": 107.63,
+        "system_s": 8.01,
+        "inversion_s": 14.865529,
+        "prediction_s": 3.914929,
+        "deconvolution_s": 5.408754,
+        "other_s": 2.3507879999999988,
+        "cpu_core_equivalent": 4.357196684250188,
+        "rss_bytes": 2373074944,
+        "machine_cpu_percent": 54.46495855312735
+      },
+      "time_receipt": "real 26.54\nuser 107.63\nsys 8.01\n          2373074944  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1615871  page reclaims\n               21794  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1878  voluntary context switches\n              332081  involuntary context switches\n        873429969087  instructions retired\n        328983439764  cycles elapsed\n          2644937272  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j4-r1",
+      "threads": 4,
+      "repeat": 1,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j4-r1",
+        "-j",
+        "4",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765413.311008,
+      "before": {
+        "unix_s": 1792765413.3110101,
+        "load": [
+          5.28564453125,
+          3.1611328125,
+          2.85986328125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   134726.\nPages active:                                 207666.\nPages inactive:                               205433.\nPages speculative:                              1922.\nPages throttled:                                   0.\nPages wired down:                             206538.\nPages purgeable:                                3430.\n\"Translation faults\":                    13765512323.\nPages copy-on-write:                       383354321.\nPages zero filled:                        5346746096.\nPages reactivated:                        4130630927.\nPages purged:                              330179980.\nFile-backed pages:                            164293.\nAnonymous pages:                              250728.\nPages stored in compressor:                   519550.\nPages occupied by compressor:                 242815.\nDecompressions:                           4237234605.\nCompressions:                             4575477674.\nPageins:                                   642592230.\nPageouts:                                    2109039.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765441.575994,
+      "after": {
+        "unix_s": 1792765441.576004,
+        "load": [
+          4.66552734375,
+          3.20849609375,
+          2.88623046875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   169929.\nPages active:                                 205555.\nPages inactive:                               204581.\nPages speculative:                               392.\nPages throttled:                                   0.\nPages wired down:                             198340.\nPages purgeable:                                4257.\n\"Translation faults\":                    13767289696.\nPages copy-on-write:                       383362023.\nPages zero filled:                        5348371990.\nPages reactivated:                        4130666756.\nPages purged:                              330184333.\nFile-backed pages:                            146599.\nAnonymous pages:                              263929.\nPages stored in compressor:                   494256.\nPages occupied by compressor:                 220303.\nDecompressions:                           4237275649.\nCompressions:                             4575497167.\nPageins:                                   642707044.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 28.14,
+        "user_s": 81.33,
+        "system_s": 5.75,
+        "inversion_s": 16.700845,
+        "prediction_s": 4.071762,
+        "deconvolution_s": 5.12911,
+        "other_s": 2.238283,
+        "cpu_core_equivalent": 3.0945273631840795,
+        "rss_bytes": 2652569600,
+        "machine_cpu_percent": 38.681592039801
+      },
+      "time_receipt": "real 28.14\nuser 81.33\nsys 5.75\n          2652569600  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1604025  page reclaims\n               21792  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1626  voluntary context switches\n               97560  involuntary context switches\n        870436547493  instructions retired\n        268749806080  cycles elapsed\n          2624178648  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j12-r1",
+      "threads": 12,
+      "repeat": 1,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j12-r1",
+        "-j",
+        "12",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765441.5915341,
+      "before": {
+        "unix_s": 1792765441.591536,
+        "load": [
+          4.66552734375,
+          3.20849609375,
+          2.88623046875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   169601.\nPages active:                                 205915.\nPages inactive:                               204581.\nPages speculative:                               395.\nPages throttled:                                   0.\nPages wired down:                             198343.\nPages purgeable:                                4257.\n\"Translation faults\":                    13767291979.\nPages copy-on-write:                       383362413.\nPages zero filled:                        5348372383.\nPages reactivated:                        4130666756.\nPages purged:                              330184333.\nFile-backed pages:                            146606.\nAnonymous pages:                              264285.\nPages stored in compressor:                   494065.\nPages occupied by compressor:                 220265.\nDecompressions:                           4237275841.\nCompressions:                             4575497167.\nPageins:                                   642707050.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765465.907671,
+      "after": {
+        "unix_s": 1792765465.907678,
+        "load": [
+          4.69677734375,
+          3.333984375,
+          2.9404296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   189468.\nPages active:                                 194992.\nPages inactive:                               194245.\nPages speculative:                               603.\nPages throttled:                                   0.\nPages wired down:                             194709.\nPages purgeable:                                4805.\n\"Translation faults\":                    13769005182.\nPages copy-on-write:                       383369706.\nPages zero filled:                        5349981182.\nPages reactivated:                        4130694727.\nPages purged:                              330189741.\nFile-backed pages:                            146475.\nAnonymous pages:                              243365.\nPages stored in compressor:                   506623.\nPages occupied by compressor:                 225083.\nDecompressions:                           4237291488.\nCompressions:                             4575531481.\nPageins:                                   642821449.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 24.16,
+        "user_s": 106.84,
+        "system_s": 7.71,
+        "inversion_s": 13.941192,
+        "prediction_s": 3.233185,
+        "deconvolution_s": 4.848764,
+        "other_s": 2.1368590000000003,
+        "cpu_core_equivalent": 4.741307947019868,
+        "rss_bytes": 2661089280,
+        "machine_cpu_percent": 59.266349337748345
+      },
+      "time_receipt": "real 24.16\nuser 106.84\nsys 7.71\n          2661089280  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1604329  page reclaims\n               21794  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1568  voluntary context switches\n              282695  involuntary context switches\n        873386706218  instructions retired\n        324234747544  cycles elapsed\n          2630470128  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j16-r1",
+      "threads": 16,
+      "repeat": 1,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j16-r1",
+        "-j",
+        "16",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765465.925306,
+      "before": {
+        "unix_s": 1792765465.9253068,
+        "load": [
+          4.69677734375,
+          3.333984375,
+          2.9404296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   189999.\nPages active:                                 194735.\nPages inactive:                               193970.\nPages speculative:                               604.\nPages throttled:                                   0.\nPages wired down:                             194709.\nPages purgeable:                                4805.\n\"Translation faults\":                    13769006660.\nPages copy-on-write:                       383370090.\nPages zero filled:                        5349981365.\nPages reactivated:                        4130694727.\nPages purged:                              330189741.\nFile-backed pages:                            146479.\nAnonymous pages:                              242830.\nPages stored in compressor:                   506620.\nPages occupied by compressor:                 225083.\nDecompressions:                           4237291491.\nCompressions:                             4575531481.\nPageins:                                   642821453.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765490.157113,
+      "after": {
+        "unix_s": 1792765490.157119,
+        "load": [
+          4.81787109375,
+          3.45556640625,
+          2.99267578125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   187534.\nPages active:                                 194882.\nPages inactive:                               198105.\nPages speculative:                               143.\nPages throttled:                                   0.\nPages wired down:                             198780.\nPages purgeable:                                1102.\n\"Translation faults\":                    13770713562.\nPages copy-on-write:                       383378786.\nPages zero filled:                        5351584726.\nPages reactivated:                        4130696095.\nPages purged:                              330193607.\nFile-backed pages:                            146145.\nAnonymous pages:                              246985.\nPages stored in compressor:                   497615.\nPages occupied by compressor:                 219656.\nDecompressions:                           4237298126.\nCompressions:                             4575531895.\nPageins:                                   642935444.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 24.1,
+        "user_s": 107.82,
+        "system_s": 7.6,
+        "inversion_s": 13.989631,
+        "prediction_s": 3.256744,
+        "deconvolution_s": 4.743774,
+        "other_s": 2.1098510000000026,
+        "cpu_core_equivalent": 4.78921161825726,
+        "rss_bytes": 2695643136,
+        "machine_cpu_percent": 59.86514522821575
+      },
+      "time_receipt": "real 24.10\nuser 107.82\nsys 7.60\n          2695643136  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1604401  page reclaims\n               21794  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1541  voluntary context switches\n              280089  involuntary context switches\n        872456319878  instructions retired\n        324899115565  cycles elapsed\n          2665089592  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j16-r2",
+      "threads": 16,
+      "repeat": 2,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j16-r2",
+        "-j",
+        "16",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765490.172284,
+      "before": {
+        "unix_s": 1792765490.172286,
+        "load": [
+          4.81787109375,
+          3.45556640625,
+          2.99267578125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   187522.\nPages active:                                 194889.\nPages inactive:                               198108.\nPages speculative:                               145.\nPages throttled:                                   0.\nPages wired down:                             198780.\nPages purgeable:                                1102.\n\"Translation faults\":                    13770715053.\nPages copy-on-write:                       383379182.\nPages zero filled:                        5351584910.\nPages reactivated:                        4130696095.\nPages purged:                              330193607.\nFile-backed pages:                            146150.\nAnonymous pages:                              246992.\nPages stored in compressor:                   497613.\nPages occupied by compressor:                 219656.\nDecompressions:                           4237298128.\nCompressions:                             4575531895.\nPageins:                                   642935449.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765514.732207,
+      "after": {
+        "unix_s": 1792765514.732213,
+        "load": [
+          5.42431640625,
+          3.69384765625,
+          3.0908203125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   194934.\nPages active:                                 187851.\nPages inactive:                               205620.\nPages speculative:                               125.\nPages throttled:                                   0.\nPages wired down:                             191871.\nPages purgeable:                                3449.\n\"Translation faults\":                    13772393759.\nPages copy-on-write:                       383385747.\nPages zero filled:                        5353184613.\nPages reactivated:                        4130696188.\nPages purged:                              330195377.\nFile-backed pages:                            155437.\nAnonymous pages:                              238159.\nPages stored in compressor:                   495088.\nPages occupied by compressor:                 218699.\nDecompressions:                           4237299353.\nCompressions:                             4575531895.\nPageins:                                   643049159.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 24.4,
+        "user_s": 107.88,
+        "system_s": 7.44,
+        "inversion_s": 13.935796,
+        "prediction_s": 3.404485,
+        "deconvolution_s": 4.668043,
+        "other_s": 2.3916759999999986,
+        "cpu_core_equivalent": 4.726229508196721,
+        "rss_bytes": 2702016512,
+        "machine_cpu_percent": 59.07786885245901
+      },
+      "time_receipt": "real 24.40\nuser 107.88\nsys 7.44\n          2702016512  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1604229  page reclaims\n               21794  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                 966  voluntary context switches\n              279749  involuntary context switches\n        871932003809  instructions retired\n        323260243484  cycles elapsed\n          2671413792  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j12-r2",
+      "threads": 12,
+      "repeat": 2,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j12-r2",
+        "-j",
+        "12",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765514.749836,
+      "before": {
+        "unix_s": 1792765514.749838,
+        "load": [
+          5.42431640625,
+          3.69384765625,
+          3.0908203125
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   194929.\nPages active:                                 187837.\nPages inactive:                               205622.\nPages speculative:                               141.\nPages throttled:                                   0.\nPages wired down:                             191872.\nPages purgeable:                                3449.\n\"Translation faults\":                    13772395234.\nPages copy-on-write:                       383386138.\nPages zero filled:                        5353184797.\nPages reactivated:                        4130696188.\nPages purged:                              330195377.\nFile-backed pages:                            155455.\nAnonymous pages:                              238145.\nPages stored in compressor:                   495087.\nPages occupied by compressor:                 218699.\nDecompressions:                           4237299354.\nCompressions:                             4575531895.\nPageins:                                   643049178.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765539.249125,
+      "after": {
+        "unix_s": 1792765539.249131,
+        "load": [
+          6.49462890625,
+          4.060546875,
+          3.23779296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   182925.\nPages active:                                 199536.\nPages inactive:                               206011.\nPages speculative:                               348.\nPages throttled:                                   0.\nPages wired down:                             191945.\nPages purgeable:                                5098.\n\"Translation faults\":                    13774166803.\nPages copy-on-write:                       383394626.\nPages zero filled:                        5354839405.\nPages reactivated:                        4130705306.\nPages purged:                              330197738.\nFile-backed pages:                            145339.\nAnonymous pages:                              260556.\nPages stored in compressor:                   492838.\nPages occupied by compressor:                 218335.\nDecompressions:                           4237305796.\nCompressions:                             4575537358.\nPageins:                                   643154639.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 24.35,
+        "user_s": 108.38,
+        "system_s": 7.4,
+        "inversion_s": 14.042355,
+        "prediction_s": 3.397479,
+        "deconvolution_s": 4.862912,
+        "other_s": 2.0472540000000006,
+        "cpu_core_equivalent": 4.75482546201232,
+        "rss_bytes": 2639380480,
+        "machine_cpu_percent": 59.435318275154
+      },
+      "time_receipt": "real 24.35\nuser 108.38\nsys 7.40\n          2639380480  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1604146  page reclaims\n               21794  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1620  voluntary context switches\n              284214  involuntary context switches\n        872023329835  instructions retired\n        322823465528  cycles elapsed\n          2610219504  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j4-r2",
+      "threads": 4,
+      "repeat": 2,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j4-r2",
+        "-j",
+        "4",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765539.2658129,
+      "before": {
+        "unix_s": 1792765539.265814,
+        "load": [
+          6.49462890625,
+          4.060546875,
+          3.23779296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   182912.\nPages active:                                 199539.\nPages inactive:                               206015.\nPages speculative:                               354.\nPages throttled:                                   0.\nPages wired down:                             191945.\nPages purgeable:                                5098.\n\"Translation faults\":                    13774168280.\nPages copy-on-write:                       383395015.\nPages zero filled:                        5354839590.\nPages reactivated:                        4130705306.\nPages purged:                              330197738.\nFile-backed pages:                            145349.\nAnonymous pages:                              260559.\nPages stored in compressor:                   492838.\nPages occupied by compressor:                 218335.\nDecompressions:                           4237305796.\nCompressions:                             4575537358.\nPageins:                                   643154648.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765567.592947,
+      "after": {
+        "unix_s": 1792765567.5929542,
+        "load": [
+          5.6435546875,
+          4.09765625,
+          3.279296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   205720.\nPages active:                                 188745.\nPages inactive:                               187688.\nPages speculative:                               578.\nPages throttled:                                   0.\nPages wired down:                             200095.\nPages purgeable:                                2192.\n\"Translation faults\":                    13775861294.\nPages copy-on-write:                       383402323.\nPages zero filled:                        5356447355.\nPages reactivated:                        4130705799.\nPages purged:                              330205189.\nFile-backed pages:                            138859.\nAnonymous pages:                              238152.\nPages stored in compressor:                   487152.\nPages occupied by compressor:                 216274.\nDecompressions:                           4237310798.\nCompressions:                             4575537433.\nPageins:                                   643268870.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 28.2,
+        "user_s": 82.99,
+        "system_s": 5.52,
+        "inversion_s": 16.912035,
+        "prediction_s": 4.204147,
+        "deconvolution_s": 5.019655,
+        "other_s": 2.0641629999999997,
+        "cpu_core_equivalent": 3.1386524822695034,
+        "rss_bytes": 2616639488,
+        "machine_cpu_percent": 39.233156028368796
+      },
+      "time_receipt": "real 28.20\nuser 82.99\nsys 5.52\n          2616639488  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1604185  page reclaims\n               21792  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1609  voluntary context switches\n              104630  involuntary context switches\n        869376506361  instructions retired\n        267075903623  cycles elapsed\n          2586757616  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    },
+    {
+      "tag": "threads20k-20261023-0717-j8-r2",
+      "threads": 8,
+      "repeat": 2,
+      "warmup": false,
+      "variant": "mx",
+      "mode": "cpu",
+      "size": 3072,
+      "niter": 20000,
+      "profile": false,
+      "monitor": false,
+      "sample": false,
+      "common": false,
+      "command": [
+        "bash",
+        "bench/run.sh",
+        "mx",
+        "threads20k-20261023-0717-j8-r2",
+        "-j",
+        "8",
+        "-size",
+        "3072",
+        "3072",
+        "-scale",
+        "2.7amin",
+        "-weight",
+        "briggs",
+        "0",
+        "-pol",
+        "I",
+        "-multiscale",
+        "-multiscale-scale-bias",
+        "0.8",
+        "-niter",
+        "20000",
+        "-mgain",
+        "0.95",
+        "-auto-threshold",
+        "0.5",
+        "-auto-mask",
+        "3",
+        "-local-rms",
+        "-horizon-mask",
+        "10deg",
+        "-mem",
+        "40",
+        "-reorder",
+        "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+      ],
+      "env": {
+        "MX_METAL_DEBUG_TIMING": "1"
+      },
+      "start_unix_s": 1792765567.6091032,
+      "before": {
+        "unix_s": 1792765567.6091049,
+        "load": [
+          5.6435546875,
+          4.09765625,
+          3.279296875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   205715.\nPages active:                                 188749.\nPages inactive:                               187688.\nPages speculative:                               579.\nPages throttled:                                   0.\nPages wired down:                             200095.\nPages purgeable:                                2192.\n\"Translation faults\":                    13775862768.\nPages copy-on-write:                       383402719.\nPages zero filled:                        5356447538.\nPages reactivated:                        4130705799.\nPages purged:                              330205189.\nFile-backed pages:                            138861.\nAnonymous pages:                              238155.\nPages stored in compressor:                   487151.\nPages occupied by compressor:                 216274.\nDecompressions:                           4237310799.\nCompressions:                             4575537433.\nPageins:                                   643268874.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "exit": 0,
+      "end_unix_s": 1792765592.316462,
+      "after": {
+        "unix_s": 1792765592.316469,
+        "load": [
+          6.1259765625,
+          4.32958984375,
+          3.38623046875
+        ],
+        "swap": "vm.swapusage: total = 4096.00M  used = 2598.38M  free = 1497.62M  (encrypted)",
+        "vm": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                   159543.\nPages active:                                 216084.\nPages inactive:                               215190.\nPages speculative:                               311.\nPages throttled:                                   0.\nPages wired down:                             192100.\nPages purgeable:                                7216.\n\"Translation faults\":                    13777593631.\nPages copy-on-write:                       383411378.\nPages zero filled:                        5358075894.\nPages reactivated:                        4130705882.\nPages purged:                              330209204.\nFile-backed pages:                            157805.\nAnonymous pages:                              273780.\nPages stored in compressor:                   485836.\nPages occupied by compressor:                 215872.\nDecompressions:                           4237312018.\nCompressions:                             4575537433.\nPageins:                                   643383970.\nPageouts:                                    2109040.\nSwapins:                                    89459574.\nSwapouts:                                  100432346.",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+      },
+      "times": {
+        "wall_s": 24.54,
+        "user_s": 109.08,
+        "system_s": 7.27,
+        "inversion_s": 14.299888,
+        "prediction_s": 3.314084,
+        "deconvolution_s": 4.687673,
+        "other_s": 2.2383550000000003,
+        "cpu_core_equivalent": 4.741238793806031,
+        "rss_bytes": 2688598016,
+        "machine_cpu_percent": 59.26548492257538
+      },
+      "time_receipt": "real 24.54\nuser 109.08\nsys 7.27\n          2688598016  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n             1604225  page reclaims\n               21794  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                1751  voluntary context switches\n              278231  involuntary context switches\n        871720788985  instructions retired\n        322947207612  cycles elapsed\n          2657929736  peak memory footprint\n",
+      "major_cycles": [
+        1
+      ],
+      "components": [
+        20000
+      ],
+      "stop_reasons": [
+        "maximum number of iterations was reached."
+      ],
+      "last_iteration": [
+        20000
+      ]
+    }
+  ],
+  "summary": {
+    "8": {
+      "wall_samples_s": [
+        26.54,
+        24.54
+      ],
+      "median": {
+        "wall_s": 25.54,
+        "user_s": 108.35499999999999,
+        "system_s": 7.64,
+        "inversion_s": 14.582708499999999,
+        "prediction_s": 3.6145065,
+        "deconvolution_s": 5.0482135,
+        "other_s": 2.2945714999999995,
+        "cpu_core_equivalent": 4.549217739028109,
+        "rss_bytes": 2530836480.0,
+        "machine_cpu_percent": 56.86522173785137
+      },
+      "iterations": [
+        [
+          20000
+        ],
+        [
+          20000
+        ]
+      ],
+      "major_cycles": [
+        [
+          1
+        ],
+        [
+          1
+        ]
+      ]
+    },
+    "4": {
+      "wall_samples_s": [
+        28.14,
+        28.2
+      ],
+      "median": {
+        "wall_s": 28.17,
+        "user_s": 82.16,
+        "system_s": 5.635,
+        "inversion_s": 16.806440000000002,
+        "prediction_s": 4.137954499999999,
+        "deconvolution_s": 5.0743825000000005,
+        "other_s": 2.151223,
+        "cpu_core_equivalent": 3.1165899227267913,
+        "rss_bytes": 2634604544.0,
+        "machine_cpu_percent": 38.95737403408489
+      },
+      "iterations": [
+        [
+          20000
+        ],
+        [
+          20000
+        ]
+      ],
+      "major_cycles": [
+        [
+          1
+        ],
+        [
+          1
+        ]
+      ]
+    },
+    "12": {
+      "wall_samples_s": [
+        24.16,
+        24.35
+      ],
+      "median": {
+        "wall_s": 24.255000000000003,
+        "user_s": 107.61,
+        "system_s": 7.555,
+        "inversion_s": 13.9917735,
+        "prediction_s": 3.315332,
+        "deconvolution_s": 4.855838,
+        "other_s": 2.0920565000000004,
+        "cpu_core_equivalent": 4.748066704516094,
+        "rss_bytes": 2650234880.0,
+        "machine_cpu_percent": 59.35083380645118
+      },
+      "iterations": [
+        [
+          20000
+        ],
+        [
+          20000
+        ]
+      ],
+      "major_cycles": [
+        [
+          1
+        ],
+        [
+          1
+        ]
+      ]
+    },
+    "16": {
+      "wall_samples_s": [
+        24.1,
+        24.4
+      ],
+      "median": {
+        "wall_s": 24.25,
+        "user_s": 107.85,
+        "system_s": 7.52,
+        "inversion_s": 13.9627135,
+        "prediction_s": 3.3306145000000003,
+        "deconvolution_s": 4.7059085,
+        "other_s": 2.2507635000000006,
+        "cpu_core_equivalent": 4.757720563226991,
+        "rss_bytes": 2698829824.0,
+        "machine_cpu_percent": 59.471507040337386
+      },
+      "iterations": [
+        [
+          20000
+        ],
+        [
+          20000
+        ]
+      ],
+      "major_cycles": [
+        [
+          1
+        ],
+        [
+          1
+        ]
+      ]
+    }
+  },
+  "comparisons": [
+    {
+      "left": "j8-r1",
+      "right": "j8-r2",
+      "tier": "T0",
+      "role": "repeat",
+      "exit": 0,
+      "log": "j8-r1-vs-j8-r2-T0.log"
+    },
+    {
+      "left": "j4-r1",
+      "right": "j4-r2",
+      "tier": "T0",
+      "role": "repeat",
+      "exit": 0,
+      "log": "j4-r1-vs-j4-r2-T0.log"
+    },
+    {
+      "left": "j12-r1",
+      "right": "j12-r2",
+      "tier": "T0",
+      "role": "repeat",
+      "exit": 0,
+      "log": "j12-r1-vs-j12-r2-T0.log"
+    },
+    {
+      "left": "j16-r1",
+      "right": "j16-r2",
+      "tier": "T0",
+      "role": "repeat",
+      "exit": 0,
+      "log": "j16-r1-vs-j16-r2-T0.log"
+    },
+    {
+      "left": "j8-r1",
+      "right": "j4-r1",
+      "tier": "T2",
+      "role": "cross-thread",
+      "exit": 0,
+      "log": "j8-r1-vs-j4-r1-T2.log"
+    },
+    {
+      "left": "j8-r1",
+      "right": "j12-r1",
+      "tier": "T2",
+      "role": "cross-thread",
+      "exit": 0,
+      "log": "j8-r1-vs-j12-r1-T2.log"
+    },
+    {
+      "left": "j8-r1",
+      "right": "j16-r1",
+      "tier": "T2",
+      "role": "cross-thread",
+      "exit": 0,
+      "log": "j8-r1-vs-j16-r1-T2.log"
+    },
+    {
+      "left": "j8-r2",
+      "right": "j4-r2",
+      "tier": "T2",
+      "role": "cross-thread",
+      "exit": 0,
+      "log": "j8-r2-vs-j4-r2-T2.log"
+    },
+    {
+      "left": "j8-r2",
+      "right": "j12-r2",
+      "tier": "T2",
+      "role": "cross-thread",
+      "exit": 0,
+      "log": "j8-r2-vs-j12-r2-T2.log"
+    },
+    {
+      "left": "j8-r2",
+      "right": "j16-r2",
+      "tier": "T2",
+      "role": "cross-thread",
+      "exit": 0,
+      "log": "j8-r2-vs-j16-r2-T2.log"
+    }
+  ],
+  "input_unchanged": true
+}

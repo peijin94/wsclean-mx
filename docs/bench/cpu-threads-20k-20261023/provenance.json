@@ -1,0 +1,9 @@
+{
+  "root_head": "e83e93446223e07e2e01f8c4c68b2a11630ae79f",
+  "binary_sha256": "af07b46ed32b0aee4fa7bf3bb4f98f78859e635a4616fb1db6bf3313dfd3994e",
+  "runner_sha256": "fe8e2d9b1b028cf077584aab72eaa9ff2905b9dc3f27889f196dc0efb3569556",
+  "logical_cpus": 8,
+  "deep_default_niter": 150000,
+  "explicit_test_niter": 20000,
+  "timeout_s": 300
+}
