@@ -101,8 +101,14 @@ threading runtime and vendored casacore from the new keg. A 61-file manifest of
 private and loaded external Mach-O files supports the subsequent public-download
 readback check. `-mgpu` is explicitly refused by this CPU-only binary.
 
-The public release/tap download is verified separately after publication; those
-remote receipts are retained in the raw release directory. This report does not
+After publication, an empty-cache install from the public tap downloaded the
+same bottle checksum and poured successfully. All 34 package Mach-O files match
+the locally tested pour. Homebrew upgraded the external Python runtime from
+3.15.0 to 3.15.0_1, so the complete 3K/4K campaign was repeated: **12 additional
+T0 product checks passed**, with unchanged inputs. Name/version, runtime paths
+and strict linkage pass again. See [public verification](bench/release-0.1.1/public-verification.json).
+The four release assets, their published digests, release body, tag and public
+tap recipe were read back and verified. This report does not
 claim cross-prefix runtime testing beyond Homebrew's generated relocation checks
 and the separate relocated native-component test.
 

@@ -5,13 +5,17 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
-- Release 0.1.1 preparation is on `release/0.1.1`. Primary executable/output is
+- Release 0.1.1 is published from `release/0.1.1`, tag commit `e326ea1`.
+  Public tap `404e5ff`, immutable source `f56963c`; main received packaging/docs
+  only (`4d01123`), not the experimental implementation. Primary executable/output is
   `wsclean-mx`; internal CMake target remains `wsclean`. `WSCLEAN_MX_VERSION`
   labels the MX release independently of upstream3.7/FITS metadata. The release
   package explicitly disables Metal; native install carries its own threading
   runtime. Active MX callers reject stale `build-mx/wsclean`, while historical
   snapshots and unmodified upstream keep their old names. Packaging/publication
-  receipts will be recorded in `docs/release-0.1.1.md` when completed.
+  receipts are in `docs/release-0.1.1.md`: 36 native/source/local-pour T0 checks,
+  plus12 checks after a fresh public download upgraded Python3.15.0_1;263 Python
+  tests, native160pass/4existing skips. The old legacy-reference gaps remain.
 
 - CPU copy/masked-peak follow-up: `docs/cpu-copy-and-masked-peak-2026-10-23.md`;
   Radler `bc85f14`, patch0011. Borrowed-image transform adapters remove accidental
