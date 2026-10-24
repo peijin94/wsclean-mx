@@ -4,6 +4,15 @@
 
 WSClean optimized for macOS on Apple Silicon.
 
+**Current release: [0.1.1](https://github.com/peijin94/wsclean-mx/releases/tag/v0.1.1).**
+The executable is now **`wsclean-mx`**, with a separately reported MX version and
+upstream WSClean 3.7 identity. The Homebrew release is CPU-only. See the
+[versioned installation guide](https://github.com/peijin94/wsclean-mx/blob/v0.1.1/install.md)
+and [release validation/limitations](https://github.com/peijin94/wsclean-mx/blob/v0.1.1/docs/release-0.1.1.md).
+This default branch retains the historical implementation and measurements below;
+use the release tag for the current source. No experimental implementation merge
+is implied by the packaging update.
+
 wsclean-mx is a small patch set on top of upstream
 [WSClean](https://gitlab.com/aroffringa/wsclean), pinned to the exact commit
 that ships in the LINC 5.2.1 container (`2d5c1ed8`, WSClean 3.7). It builds
@@ -85,59 +94,19 @@ Apple Silicon Mac, [Homebrew](https://brew.sh):
 
 ```bash
 brew tap peijin94/wsclean-mx
-brew install wsclean-mx        # prebuilt bottle, no compilation
-wsclean -version
+brew tap ska-sa/tap
+brew install ska-sa/tap/casacore-data
+brew install peijin94/wsclean-mx/wsclean-mx
+wsclean-mx -version
 ```
 
 ## Building
 
-To build from source instead (same result, ~4 min plus casacore):
-
-Requirements: Apple Silicon Mac, Xcode command line tools, and
-[Homebrew](https://brew.sh).
-
-```bash
-brew install cmake ninja gcc fftw cfitsio hdf5 gsl boost openblas wcslib \
-    pybind11 open-mpi uv
-brew tap ska-sa/tap && brew install ska-sa/tap/casacore-data
-
-git clone --recursive git@github.com:peijin94/wsclean-mx.git
-cd wsclean-mx
-scripts/build_deps.sh       # casacore 3.8.2 -> deps/install
-scripts/build_mx.sh         # wsclean-mx      -> build-mx/wsclean
-scripts/build_upstream.sh   # (optional) unpatched reference -> build-upstream/wsclean
-scripts/build_upstream_fix.sh  # (optional) fixed reference -> build-reffix/wsclean
-```
-
-`build_upstream_fix.sh` builds the pinned upstream plus the macOS build fixes plus
-only `patches/mx/wsclean/0001` (the uninitialized-padding repair), from a
-disposable clone in `deps/src/wsclean-ref-fix`, and writes
-`build-reffix/provenance.json` (commits, patch hashes, binary hash, linked
-libraries, compiler). Plain upstream is not a valid comparison baseline on macOS:
-with `clang -ffast-math` it produces corrupt 2048² images, which is why the
-repaired reference exists.
-
-Verified 2026-10-18: a fresh `build-reffix/wsclean` reproduces the frozen
-`bench/bin/upstream-fix` snapshot bitwise — zero differing pixels in all five
-image products (dirty, restored, model, PSF, residual) on the deterministic
-`-j 1` multiscale 1024² case. Binary SHA-256s differ only because the embedded
-source paths differ.
-
-`build-mx/wsclean` is a drop-in WSClean binary with the usual command line:
-
-```bash
-build-mx/wsclean -size 2048 2048 -scale 0.0625 -weight briggs 0 \
-    -mgain 0.8 -multiscale -niter 3000 -name out/img my.ms
-```
-
-Build notes:
-
-- casacore is built locally because the Homebrew and `/usr/local` versions are
-  too old; system packages are left untouched.
-- If `ROOT` is set in your shell, `unset ROOT` before building; the scripts
-  use it to locate `deps/`.
-- `scripts/check_headers.sh` (run by the build) fails if headers from another
-  casacore were picked up.
+For the released source and current commands, use the
+[0.1.1 source-build guide](https://github.com/peijin94/wsclean-mx/blob/v0.1.1/install.md).
+Check out `v0.1.1` explicitly; this branch's historical developer tree is not the
+0.1.1 release source. The installed formula pins an immutable reviewed source
+commit and its actual archive checksum.
 
 ## Repository layout
 
