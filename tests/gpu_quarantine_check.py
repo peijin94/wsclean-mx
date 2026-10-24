@@ -10,9 +10,12 @@ from pathlib import Path
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from wsclean_binary import mx_binary
+
 
 def check(build, cpu_only=False):
-    binary = build.resolve() / 'wsclean'
+    binary = mx_binary(build.resolve())
     failures = []
     symbols = subprocess.check_output(['nm', '-C', str(binary)], text=True)
     retired = ('mx::metal::inversion(', 'mx::metal::inversionSupported(',

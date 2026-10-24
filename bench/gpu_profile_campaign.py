@@ -11,9 +11,13 @@ import re
 from pathlib import Path
 import subprocess
 import signal
+import sys
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'scripts'))
+from wsclean_binary import resolve_variant
+
 ART=ROOT/'bench/out/gpu-profile-20261022-1147'
 MS=ROOT/'bench/out/gpu-audit-20261022-0715/input-15.ms'
 DEFAULT_NITER=150000
@@ -153,7 +157,7 @@ def run_job(job,folder):
         with (folder/(tag+'.runner.log')).open('x') as f:
             process=subprocess.Popen(cmd,cwd=ROOT,stdout=f,stderr=subprocess.STDOUT,env=env,start_new_session=True)
             if job['monitor'] or job['sample']:
-                pid=find_target(process,f'/{tag}/{variant}/img',ROOT/'bench/bin'/variant/'wsclean');result['target_pid']=pid
+                pid=find_target(process,f'/{tag}/{variant}/img',resolve_variant(ROOT,variant));result['target_pid']=pid
                 if job['monitor']:
                     monitor_file=(folder/(tag+'.monitor.jsonl')).open('x')
                     monitor=subprocess.Popen([str(ART/'gpu-monitor'),'100',str(RUN_TIMEOUT_S*1000),str(pid)],stdin=subprocess.PIPE,stdout=monitor_file,stderr=f)

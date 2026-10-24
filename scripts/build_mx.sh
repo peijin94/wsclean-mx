@@ -19,6 +19,6 @@ for dep in aocommon schaapcommon radler; do
 done
 
 "$ROOT/scripts/configure_wsclean.sh" "$ROOT/work/wsclean" "$BUILD" "${DEP_FLAGS[@]}"
-"$CMAKE" --build "$BUILD" -j "$(sysctl -n hw.ncpu)" --target wsclean
+"$CMAKE" --build "$BUILD" -j "${JOBS:-4}" --target wsclean
 "$ROOT/scripts/check_headers.sh" "$BUILD"
-"$BUILD/wsclean" -version | head -3
+"$BUILD/wsclean-mx" -version | head -4

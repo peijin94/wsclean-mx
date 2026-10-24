@@ -5,6 +5,14 @@ reasoning and long-form design in `notes.md`.
 
 ## Active validation and next work
 
+- Release 0.1.1 preparation is on `release/0.1.1`. Primary executable/output is
+  `wsclean-mx`; internal CMake target remains `wsclean`. `WSCLEAN_MX_VERSION`
+  labels the MX release independently of upstream3.7/FITS metadata. The release
+  package explicitly disables Metal; native install carries its own threading
+  runtime. Active MX callers reject stale `build-mx/wsclean`, while historical
+  snapshots and unmodified upstream keep their old names. Packaging/publication
+  receipts will be recorded in `docs/release-0.1.1.md` when completed.
+
 - CPU copy/masked-peak follow-up: `docs/cpu-copy-and-masked-peak-2026-10-23.md`;
   Radler `bc85f14`, patch0011. Borrowed-image transform adapters remove accidental
   copies; masked row reduction is ~2x faster in isolation. All 19 full-depth runs

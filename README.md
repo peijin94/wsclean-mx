@@ -4,7 +4,15 @@
 
 WSClean optimized for macOS on Apple Silicon.
 
-wsclean-mx is a small patch set on top of upstream
+**0.1.1 uses the executable name `wsclean-mx`.** The CPU release adds the
+provider, threaded-ordering and deconvolution updates described below. Metal
+is explicitly disabled in the Homebrew package. MX's release version and the
+pinned upstream WSClean 3.7 version are printed separately by `-version`.
+See [the changelog](CHANGELOG.md) for the rename, upgrade instructions and
+remaining numerical-validation limits; older 0.1.0 measurements below are
+not new 0.1.1 equivalence claims.
+
+wsclean-mx is a patch set on top of upstream
 [WSClean](https://gitlab.com/aroffringa/wsclean), pinned to the exact commit
 that ships in the LINC 5.2.1 container (`2d5c1ed8`, WSClean 3.7). It builds
 natively for arm64, moves serial FFT and deconvolution work onto all cores,
@@ -115,7 +123,7 @@ Apple Silicon Mac, [Homebrew](https://brew.sh):
 ```bash
 brew tap peijin94/wsclean-mx
 brew install wsclean-mx        # prebuilt bottle, no compilation
-wsclean -version
+wsclean-mx -version
 ```
 
 ## Building
@@ -132,8 +140,9 @@ brew tap ska-sa/tap && brew install ska-sa/tap/casacore-data
 
 git clone --recursive git@github.com:peijin94/wsclean-mx.git
 cd wsclean-mx
+git checkout v0.1.1
 scripts/build_deps.sh       # casacore 3.8.2 -> deps/install
-scripts/build_mx.sh         # wsclean-mx      -> build-mx/wsclean
+scripts/build_mx.sh         # wsclean-mx      -> build-mx/wsclean-mx
 scripts/build_upstream.sh   # (optional) unpatched reference -> build-upstream/wsclean
 scripts/build_upstream_fix.sh  # (optional) fixed reference -> build-reffix/wsclean
 ```
@@ -152,10 +161,12 @@ image products (dirty, restored, model, PSF, residual) on the deterministic
 `-j 1` multiscale 1024² case. Binary SHA-256s differ only because the embedded
 source paths differ.
 
-`build-mx/wsclean` is a drop-in WSClean binary with the usual command line:
+`build-mx/wsclean-mx` accepts the usual WSClean options. Update scripts that
+previously invoked this package as `wsclean`; the package no longer installs
+that command name or an alias that could shadow upstream WSClean:
 
 ```bash
-build-mx/wsclean -size 2048 2048 -scale 0.0625 -weight briggs 0 \
+build-mx/wsclean-mx -size 2048 2048 -scale 0.0625 -weight briggs 0 \
     -mgain 0.8 -multiscale -niter 3000 -name out/img my.ms
 ```
 
@@ -262,7 +273,9 @@ the broader multiscale scientific-acceptance question.
 
 ## Roadmap
 
-The published `main`/CPU release remains separate from experimental `gpu-dev`.
+The 0.1.1 release is cut from `release/0.1.1`; its Homebrew executable is
+CPU-only. Experimental Metal remains opt-in on `gpu-dev`, not part of the
+release bottle or its numerical-acceptance claim.
 On `gpu-dev`, a Metal-enabled build's `-mgpu` flag uses a two-buffer GPU prediction
 FFT pipeline; inversion and gridding/degridding remain on ducc0. GPU multiscale
 convolution (`MX_METAL_CONVOLVE=1`) and peak search (`MX_METAL_PEAK=1`) are explicit

@@ -7,17 +7,18 @@ bench_slug() {
   [[ "$1" =~ ^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$ ]] || bench_die "invalid $2: $1"
 }
 
+bench_binary() {
+  python3 "$ROOT/scripts/wsclean_binary.py" -- "$1" || bench_die "unavailable variant: $1"
+}
+
 bench_variant() {
-  local binary
   bench_slug "$1" variant
   case "$1" in
     linc)
       command -v container >/dev/null || bench_die "unavailable variant: linc (container not found)"
       return ;;
-    mx|upstream) binary="$ROOT/build-$1/wsclean" ;;
-    *) binary="$ROOT/bench/bin/$1/wsclean" ;;
   esac
-  [ -f "$binary" ] && [ -x "$binary" ] || bench_die "unknown or unavailable variant: $1"
+  bench_binary "$1" >/dev/null
 }
 
 # Deny confirmed MS writers and overrides of runner-owned paths. This is not

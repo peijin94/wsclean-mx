@@ -5,6 +5,51 @@ All notable changes to wsclean-mx are documented here. The format follows
 [SemVer](https://semver.org/). Upstream WSClean remains at 3.7
 (`2d5c1ed8d7559e5178d243661b408baa288681e6`, LINC 5.2.1 pin).
 
+## [0.1.1] — 2026-10-23
+
+### Executable and packaging
+
+- The primary executable is now **`wsclean-mx`**, including native source
+  builds and the Homebrew package. Update scripts that invoked the package as
+  `wsclean`; no compatibility alias is installed to shadow upstream WSClean.
+- `-version` reports MX 0.1.1 separately from upstream WSClean 3.7. FITS
+  upstream-version metadata is unchanged. The internal CMake target remains
+  `wsclean`; the optional MPI executable remains `wsclean-mp` and is not
+  included in the Homebrew bottle.
+- Active runners require the renamed MX executable instead of silently using
+  a stale `build-mx/wsclean`. Existing frozen snapshots and unmodified upstream
+  builds retain support for their historical names.
+- The Homebrew package explicitly disables Metal and replaces its temporary
+  build-directory runtime search path with an executable-relative library path.
+
+### CPU changes since 0.1.0
+
+- Repair reordered-provider payload positioning, UV-bound coordinates, empty
+  selections, Dijkstra/RMS boundaries and dormant loader contracts.
+- Use bounded, ordered threaded gridding and drain scheduler exceptions safely.
+- Fuse RMS-weighted peak selection, remove accidental full-image copies from
+  transform/model adapters, and share the vectorized masked-peak scanner.
+- Deep exo-pipe benchmark scripts default to a 150,000 iteration cap. The
+  general-purpose WSClean CLI iteration default is unchanged.
+
+The copy-removal pass preserves all six products bitwise in 19 full-depth runs
+against the repaired current baseline. CLEAN medians fell about 10.8% at 3K
+and 4K in that campaign; whole-run timing spread and unchanged RSS are documented
+in [the measured report](docs/cpu-copy-and-masked-peak-2026-10-23.md).
+
+### Scope and known limits
+
+- This is a CPU release. Source-level experimental Metal code is not a claim
+  that GPU imaging is scientifically accepted, and is not compiled into the bottle.
+- Fixed-thread repeatability and incremental bitwise checks do **not** establish
+  universal equivalence to 0.1.0 or upstream. Strict 4K old/new image checks and
+  a one-thread legacy-bitwise comparison remain failed under their original
+  thresholds; those failures are retained, not waived. See
+  [CPU correctness evidence](docs/cpu-correctness-repairs-2026-10-22.md).
+- Four existing native-test skips remain: two unavailable external BDA fixtures
+  and two explicitly disabled upstream benchmarks. MPI runtime, every observing
+  mode and every Apple Silicon/macOS combination are not covered by this release.
+
 ## [0.1.0] — 2026-10-19
 
 First installable release: a native Apple-Silicon (`arm64`) WSClean with

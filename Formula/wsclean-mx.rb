@@ -3,29 +3,19 @@
 #
 # Homebrew formula for wsclean-mx: Apple-Silicon optimized WSClean.
 #
-# Status: released as 0.1.0. Brew only accepts tap formulas, so stage with:
+# Stage this formula in a tap; the published tap carries stable release metadata.
 #   brew tap-new peijin94/wsclean-mx   (once)
 #   cp Formula/wsclean-mx.rb "$(brew --repo peijin94/wsclean-mx)/Formula/"
 #   brew install --HEAD --build-bottle peijin94/wsclean-mx/wsclean-mx
 #   brew bottle wsclean-mx   # (after install, produces the bottle tarball)
 # This file is the source of truth; the tap copy is disposable.
 #
-# At release time fill in the v0.1.0 tarball url/sha256 below (the `head`
-# line stays for development builds).
+# Stable URL/SHA and bottle metadata are added from verified release artifacts.
 
 class WscleanMx < Formula
   desc "WSClean optimized for Apple Silicon (multithreaded gridding/deconvolution)"
   homepage "https://github.com/peijin94/wsclean-mx"
-  # Release tarball for 0.1.0 (`head` below stays for development builds).
-  url "https://github.com/peijin94/wsclean-mx/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "5a082b43f404f40d6099729d4eb10aaa712e0e3228287452c4e8f1be91e26e42"
-  head "https://github.com/peijin94/wsclean-mx.git", branch: "main"
-  version "0.1.0"
-
-  bottle do
-    root_url "https://github.com/peijin94/wsclean-mx/releases/download/v0.1.0"
-    sha256 cellar: :any_skip_relocation, arm64_golden_gate: "f6ea5748aa33dc4e5f4f7d0c716c2ffc74c813f83183a237afe82d14d587f787"
-  end
+  head "https://github.com/peijin94/wsclean-mx.git", branch: "gpu-dev"
 
   depends_on arch: :arm64
   depends_on macos: :sequoia
@@ -67,6 +57,7 @@ class WscleanMx < Formula
   end
 
   def install
+    mx_version = build.head? ? "HEAD" : version.to_s
     # The casacore resource lives permanently inside this keg (libexec), so
     # the bottled wsclean links it by its keg-absolute path — never by the
     # temporary build directory.
@@ -133,21 +124,35 @@ class WscleanMx < Formula
         -DFETCHCONTENT_SOURCE_DIR_AOCOMMON=#{src["aocommon"]}
         -DFETCHCONTENT_SOURCE_DIR_SCHAAPCOMMON=#{src["schaapcommon"]}
         -DFETCHCONTENT_SOURCE_DIR_RADLER=#{src["radler"]}
+        -DWSCLEAN_MX_METAL=OFF
+        -DWSCLEAN_MX_VERSION=#{mx_version}
       ]
       system "cmake", "-S", src["wsclean"], "-B", ".", "-G", "Ninja", *args
       system "cmake", "--build", ".", "--target", "wsclean"
-      bin.install "wsclean"
+      bin.install "wsclean-mx"
       # wsclean's threading runtime: a build-tree shared lib the binary loads
       # via @rpath. Upstream forces CMAKE_BUILD_WITH_INSTALL_RPATH=FALSE, so
-      # the built binary only knows the build dir; point it at the keg lib
-      # the same way bench/snapshot.sh does for frozen snapshots.
+      # Replace the build rpath, rather than retaining a dead temporary path.
+      # The executable-relative path also survives bottle relocation.
       lib.install "libschaapthreading.dylib"
-      system "install_name_tool", "-add_rpath", lib, bin/"wsclean"
-      system "codesign", "--force", "--sign", "-", bin/"wsclean"
+      system "install_name_tool", "-rpath", (buildpath/"build").realpath,
+             "@executable_path/../lib", bin/"wsclean-mx"
+      system "codesign", "--force", "--sign", "-", bin/"wsclean-mx"
     end
   end
 
   test do
-    assert_match "WSClean version", shell_output("#{bin}/wsclean -version")
+    assert_predicate bin/"wsclean-mx", :executable?
+    refute_predicate bin/"wsclean", :exist?
+    output = shell_output("#{bin}/wsclean-mx -version")
+    expected_version = build.head? ? "HEAD" : version.to_s
+    assert_match "wsclean-mx version #{expected_version}", output
+    assert_match "WSClean version 3.7", output
+    load_commands = shell_output("/usr/bin/otool -l #{bin}/wsclean-mx")
+    rpaths = load_commands.scan(/cmd LC_RPATH\s+cmdsize \d+\s+path (.+?) \(offset/).flatten
+    assert_includes rpaths, "@executable_path/../lib"
+    rpaths.each do |path|
+      refute_match %r{/(?:private/)?tmp/|/\.hermes/|/Library/Caches/Homebrew/|/build$}, path
+    end
   end
 end

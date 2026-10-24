@@ -1,0 +1,853 @@
+{
+  "status": "native_verified_package_pending",
+  "source_wsclean_commit": "e4bc27619f5e27ae74169f1454c497b7184c00b1",
+  "patches": {
+    "patches/mx/aocommon/0001-Median-MAD-radix-histogram-select-instead-of-full-nt.patch": "619ad7e963cdcd4c19d8be7d765abc165656f4f8f9b4d086fcf873d48dcadc51",
+    "patches/mx/aocommon/0002-MultiArray-use-malloc-for-fundamental-alignment.patch": "10e9c62fd3cd47fec88072fe968c8724288af1130224feec8447b0ea5c58af98",
+    "patches/mx/radler/0001-SubMinorLoop-multithreaded-PSF-subtraction-and-peak-.patch": "389231c7607654b0c0cc293fd2f3ae7b8d1a973e7f193622b1e832585cb81ca6",
+    "patches/mx/radler/0002-Multiscale-transform-the-residual-once-per-peak-sear.patch": "f7e270e04bfe6d138bb2e893bcd0db89d2d5ee79884b508bc1250a4abe6d0b56",
+    "patches/mx/radler/0003-Multiscale-reuse-the-scale-convolved-residual-and-pe.patch": "0f4231674b1ca633467beb4e7f87c1ae9aecc1bbfa9288224c8e9223ca3ab4d2",
+    "patches/mx/radler/0004-peak_finder-Simple-skip-rows-that-cannot-raise-the-p.patch": "de4ab2dd5f14ce1c984b90805ca6f589aeb3d19fc021fae9981d43b41591bb81",
+    "patches/mx/radler/0005-Multiscale-allocate-peak-scratch-only-for-RMS-weight.patch": "3e333991c0f8c1048827118cbd1b9a7b498a6eef0e87ef360124c649138ae5cc",
+    "patches/mx/radler/0006-algorithms-GPU-peak-scan-hook-in-FindSingleScalePeak.patch": "60a0b674e8fae2ed812762e90e1f739ae8e0e291d1c7ca48fc42cb4f510f11fa",
+    "patches/mx/radler/0007-Add-optional-batched-scale-transforms-and-validate-G.patch": "276c80c57fb4fd457ee269317ee13fa3906dfcd4af74a7bf62fa24d91db0b70e",
+    "patches/mx/radler/0008-multiscale-publish-immutable-kernel-identities-and-f.patch": "457ce7b1466d3bfdc4a6d61c9e86a21f5af09df7477d1d507932b511c3b1986f",
+    "patches/mx/radler/0009-peak_finder-fuse-CPU-RMS-weighted-peak-scans.patch": "76231d93ce81f07c33601bc8ddffc18947107fe0856a68b8c5d44c1e4e23408f",
+    "patches/mx/radler/0010-math-fix-empty-Dijkstra-masks-and-RMS-window-edge-ca.patch": "20941da391cd6eeef7632403d1f4ee863564f6c8794a6f167fbcf4741a5e8cc3",
+    "patches/mx/radler/0011-verified-Remove-multiscale-image-copies-and-vectoriz.patch": "d267a126d11078597d23169d870afe0cc781a72c264cd3b05bbdbf729796979a",
+    "patches/mx/schaapcommon/0001-Resampler-multithreaded-ducc0-FFT-instead-of-single-.patch": "1128e1d5fea0c65f0719d76754d62f233992b6ea5404382c3779e8eb0b2e60ab",
+    "patches/mx/schaapcommon/0002-Convolve-multithreaded-ducc0-FFT-instead-of-FFTW-row.patch": "506eae0237e4ea12aa61ac0dd0da509edf9922a2c912af2c80297ab98fffb90e",
+    "patches/mx/schaapcommon/0003-Convolve-expose-the-forward-transform-and-the-transf.patch": "227e6c8a7da767cf912d4aef8f585148d6055ace0503f9afb92b7933cedae598",
+    "patches/mx/schaapcommon/0004-ducc0-wgridder-spin-lock-per-grid-row-instead-of-std.patch": "66f2dacdbefe059ef035ade574abb1a0353432a1ebeecc05d8d854af4339f50e",
+    "patches/mx/schaapcommon/0005-math-optional-GPU-hook-for-the-convolution-c2r.patch": "3869034ebe9de131ab353143f6a4bc241914952bea44ef95b4849dcb6e8d86f0",
+    "patches/mx/schaapcommon/0006-ducc0-wgridder-optional-GPU-hook-for-the-prediction-.patch": "943740fdc345433d846f9e008317d534bcf2ec4bad833b0195ec870c305242f9",
+    "patches/mx/schaapcommon/0007-Pipeline-prediction-in-two-shared-planes-with-ordere.patch": "e88febb88c8ae8a48434f835b12033c5dce8a827de40d4697de1b4f4aebf39db",
+    "patches/mx/schaapcommon/0008-Expose-optional-prediction-prepare-and-consume-profi.patch": "73ca70c579ed4dd8d432e0486a0d6e3b37b6d0a980a3944e0230825035496789",
+    "patches/mx/schaapcommon/0009-ducc0-order-bounded-gridding-partials-and-drain-fail.patch": "fdfc6391cf8c72bf1da1eea6ba6345dc1f9bc6b4e11578ab21677bed7d8bae5c",
+    "patches/mx/wsclean/0001-WGridder-RealImage-zero-the-padding-instead-of-NaN.patch": "a50b4f49a40992e81e79821122fda6c5458625332c160f69b451bc7256572bb7",
+    "patches/mx/wsclean/0002-ContiguousMSReader-read-MS-columns-in-row-blocks.patch": "11d8c164483c67d36e94bd4df4b0c8002d832865cdf792a7b35ff4a8d43f9e0a",
+    "patches/mx/wsclean/0003-MSRowProvider-read-MS-columns-in-row-blocks-during-r.patch": "e38675672ae29b1de11178d8ff4f6cd214688ebb52e424e61077e82a7e544cd1",
+    "patches/mx/wsclean/0004-ColumnBlock-preserve-selected-rows-and-validate-cell.patch": "4046ff8543ef38718e7d2cab1bee6d6267d73ed92993b72567a6ee9131a339aa",
+    "patches/mx/wsclean/0005-InMemoryProvider-return-start-time-in-MJD-days.patch": "bf124f9343a4ea58099f2d997fcb39cdbaa9c3325e7e07132a2fc4a5b715419a",
+    "patches/mx/wsclean/0006-Metal-backend-runtime-compiled-gridding-kernels-behi.patch": "93f1a16a2c1b692762a9dfa4aba0eb229123022b549b8c5a73f1f2d873a7df6d",
+    "patches/mx/wsclean/0007-Metal-gridding-ducc0-kernel-parameters-variant-bench.patch": "0dc48e50f3a7c684cd35a98993dfbdf5259ce7039da4cca3728dde9bdb9f6016",
+    "patches/mx/wsclean/0008-Metal-gridding-evaluate-ducc0-s-fitted-polynomial-po.patch": "c0ae8c3b389341ec73cce9a98597b7386395a4f8c4fba0fdc137b64f8fbc62d0",
+    "patches/mx/wsclean/0009-Metal-gridding-degridding-kernel-round-trip-benchmar.patch": "061d3bfab93b36484ae1ff0646464a8ce149a1cb6ea9e333f9c30e9f969a76ec",
+    "patches/mx/wsclean/0010-Metal-probe-measure-on-real-uv-coverage-instead-of-a.patch": "7e3b49787bed43d2cb18777cd4580430e516c439c4bf5cb3800f9507977979e4",
+    "patches/mx/wsclean/0011-uvw_file.h-a-data-row-needs-a-tab-not-just-a-leading.patch": "2aba2020d0c387891f0aa44ed8343c1872a1474166451267de7822b06698bfa4",
+    "patches/mx/wsclean/0012-Metal-pull-model-gridding-variant-polycols-measured-.patch": "3a1c9548594eae47b6dd0aa3dd5eb945ea409895f076c554a88aa6b74d3e66fb",
+    "patches/mx/wsclean/0013-Metal-gridding-split-tile-dispatch-the-real-data-win.patch": "b64bc76c7a6f6a6114b716e3bf7f05ca0ee5202f06cbb4f42f0b03ad43f8a10a",
+    "patches/mx/wsclean/0014-Metal-floor-anchored-kernel-window-ducc0-s-placement.patch": "c5b5ec3e74651fb973e96c57cfd4ba4c65829a8c13403229f9ab1407be451c54",
+    "patches/mx/wsclean/0015-Metal-mgpu-wiring-and-a-refusing-2-D-gate.patch": "139c98d56cf4657f34b50bb52248da6b362511baaf3c53ea05923421178fff0b",
+    "patches/mx/wsclean/0016-Metal-w-layer-inversion-three-bugs-fixed-one-scale-s.patch": "0b2ddf1548b176ec56408ec7384b913c31e7e86220d29d22ee4488c8f5a8c6fc",
+    "patches/mx/wsclean/0017-Metal-restore-the-mgpu-call-site-for-the-new-inversi.patch": "75e6e00d44212208d925dcb2a2cf7419ed2ade5bbd5acd74555fc622746289aa",
+    "patches/mx/wsclean/0018-Metal-w-path-whole-image-nm1-scan-drop-the-false-nor.patch": "03234d5844472078e991056acc5a461610a267ae8ace9c47f5d5ba230796c3c9",
+    "patches/mx/wsclean/0019-Metal-w-path-uses-w-and-FixW-ducc0-s-convention.patch": "1728210d02ba8b93258fcf4e86955a7404423081110800deb79d754fc5a50f31",
+    "patches/mx/wsclean/0020-Metal-port-ducc0-s-getNuNv-cost-model-exactly-the-w-.patch": "548dbdb391c0384c0d4fa6223feeb870fb41d071511d2fbb36f4a4dde47297b4",
+    "patches/mx/wsclean/0021-Metal-parameterise-the-kernels-for-odd-support-ducc0.patch": "400631bbc2399414e885f9c280a9d58a395860c4a4b98583c4696e2716ec1f82",
+    "patches/mx/wsclean/0022-Metal-fix-w-layer-inversion-transpose-kernel-select-.patch": "b1f92f31a7a2c7f85a7089f7e865859f611b0eb44404211021122a77b315a6af",
+    "patches/mx/wsclean/0023-metal-batch-all-w-planes-into-one-command-buffer-cac.patch": "b41b4a9497b956b87da7dae19fd837076f96bc524bc6544c6fa16fe0738f926d",
+    "patches/mx/wsclean/0024-metal-parallelize-batched-host-prep-across-planes-wi.patch": "df1855a05ef67ac56b34f943a6eee0e01a1ad45e60af2b303e610d43b59aa262",
+    "patches/mx/wsclean/0025-metal-exact-ducc0-parity-on-real-data-float64-coords.patch": "e36ef58a5c12cd7fd76cf074d2dcc74f39ce3122c490be6f934cabaab906b85f",
+    "patches/mx/wsclean/0026-metal-chunk-rows-group-planes-exact-beyond-horizon-n.patch": "311535c8cbeb4fd7f04153fc6dd5025ac0c8e477a54d0f536e33492ebb7e2cab",
+    "patches/mx/wsclean/0027-metal-profile-driven-speedups-19.3s-6.8s-on-LWA-4-sl.patch": "0c7c3a9b28b24dc4b088ad683405c730e9af2896e61ea97523b4308b5bf2a331",
+    "patches/mx/wsclean/0028-metal-per-group-gather-autoreleasepool-drains-batch-.patch": "93198c26685f9f13364563c41893b0da374482a3c9598a1072a6ffc97acea6fa",
+    "patches/mx/wsclean/0029-metal-plain-store-epilogue-batch-phase-timing-thread.patch": "77d51f44c885b4cc94671953faee908801ce38ebb3ad5581eafc62dbab35141c",
+    "patches/mx/wsclean/0030-metal-drop-per-plane-roll-fold-N-2-shift-into-extrac.patch": "7eee29b6a02b1f70772f2a88ed00e94db1dd24215dedf7ce5edb30eea29dadad",
+    "patches/mx/wsclean/0031-metal-quiet-by-default-gate-backend-notice-behind-TI.patch": "92186d17df6f6a66582ec35853b13a1f1f39ef7e917aebb147b0a8aff6213488",
+    "patches/mx/wsclean/0032-metal-skip-exact-zero-visibilities-ducc0-nvis-mask-f.patch": "d070f56f14e87ef8de6c926d529bbc5591685bdce727a90cdc05a497be73ff87",
+    "patches/mx/wsclean/0033-metal-band-limited-FFTs-mirroring-ducc0-ufirst-vfirs.patch": "28cc146a5e5b5ef29d8648bb17297801053c930160e496dbcf61689cb8f435da",
+    "patches/mx/wsclean/0034-metal-512-threads-group-empty-tile-early-return-para.patch": "7d7f0adb5f61086fb1675e46be615d4c2cd3f060ed472f83ddff60a5e00f4394",
+    "patches/mx/wsclean/0035-wgridder-expose-ducc0-phase-timers-behind-MX_WGRIDDE.patch": "c8e2b7f02415b84da21f0fa6e042c27fc867e4fff062ce850141dbe15b347973",
+    "patches/mx/wsclean/0036-metal-CPU-gridding-vkFFT-engine-MX_METAL_ENGINE-cpu-.patch": "97f0f0db59f3ff244bc2e5399010c97b0d3fd2bf6360cc50300b885901f9fd23",
+    "patches/mx/wsclean/0037-metal-cpu-vkfft-pipeline-FFT-against-gridding-FFT-is.patch": "c95987f3f861f93458aafe66cafbb183b7ecb8e5310cbd0f69d3fb66a502c935",
+    "patches/mx/wsclean/0038-metal-cpu-vkfft-skip-occupancy-bitsets-for-the-GPU-F.patch": "b5bbd4f713a27aafa3e7a432aa817f77e574505b5aa9997e6cae3bef81e3cba0",
+    "patches/mx/wsclean/0039-metal-cpu-vkfft-clip-tap-window-to-tile-branch-free-.patch": "92de1659ece5816920f52a2a8904924198b3aa055bcd70ef47d35f05a2a82915",
+    "patches/mx/wsclean/0040-metal-GPU-peak-finder-for-multiscale-CLEAN-mx_peak_f.patch": "01b6fab6a8f402046364591a240e38ab77b43d7f4b7ac4719c2362bb44d101d3",
+    "patches/mx/wsclean/0041-metal-register-the-GPU-peak-scan-hook-at-startup.patch": "5ee03e0e2cbfdf752e84bb473fea22e84bec14ee6537b88cfdbf9a93ecf741c2",
+    "patches/mx/wsclean/0042-metal-lock-inversion-to-ducc0-gate-GPU-hooks-behind-.patch": "a3319608a05c496ed3034a396ac8a13c6790e54f3919256e26d825212212c1f2",
+    "patches/mx/wsclean/0043-metal-GPU-convolution-via-Hermitian-expansion-vkFFT-.patch": "0c43f8debae6e201bb1b030e1fa0d2693638f030ad7aa331a7c52944feaf36e0",
+    "patches/mx/wsclean/0044-metal-forward-FFT-submit-for-the-prediction-hook.patch": "290362c7075decad4b8d27ea37087a23785323d54b7f72bd04395b1205b33df0",
+    "patches/mx/wsclean/0045-metal-gate-forward-FFT-probe-prediction-path.patch": "7e911dd154c4e21914f2b8b94eb393185b4a47de8d42844fa0bfcfd9d135b190",
+    "patches/mx/wsclean/0046-metal-GPU-prediction-FFT-via-copy-swap-forward-c2c.patch": "9a1c5de08daf3a155a0731480faa431410709ec3384dbdcdcb0e7c956210e1ef",
+    "patches/mx/wsclean/0047-metal-drop-superseded-R2C-probe-and-debug-scaffoldin.patch": "04dc39f6fee0c7a6f4a7a6c4aac35bfb986a8cb283ade5b2cf167da6cb41143a",
+    "patches/mx/wsclean/0048-metal-convolve-hook-opt-in-batched-c2c-probe-documen.patch": "1442b6c5a94e917c98aa78e47cfee6a1b502a8294c30e0df81863131c8f94473",
+    "patches/mx/wsclean/0049-tools-drop-superseded-Table-copy-cutout-reference-ta.patch": "87c16e234aa0443fa536d1647126698f6df6753f297626f9d4fdbf7319e291fc",
+    "patches/mx/wsclean/0050-Repair-Metal-activation-and-add-validated-prediction.patch": "18b93871f2976fded344bb42d896564d429187dc3e4b4f28dc39d07bfcc1a0ba",
+    "patches/mx/wsclean/0051-Quarantine-retired-Metal-inversion-outside-productio.patch": "9a7f02d7a579ad8bcdb1cd7ec3581604e9d848ee858e2e9d51d8a6180b506b85",
+    "patches/mx/wsclean/0052-Preserve-theoretical-beam-across-reused-PSF-and-MFS-.patch": "f72f75d6ad6ed7c1660d41ef1bc01c41e199d2c3de734fef9f78ba0baab64722",
+    "patches/mx/wsclean/0053-Add-opt-in-host-and-completed-Metal-command-profilin.patch": "2c441b83c101a38e6c35f094b4ddc566de42d208f4d0a5d1ada1caa219193137",
+    "patches/mx/wsclean/0054-metal-bound-resource-reuse-and-fuse-resident-multisc.patch": "32105652e164eca0c1bdb715510b667daee7b6198543023619e8f4e5e33431b8",
+    "patches/mx/wsclean/0055-providers-repair-payload-offsets-UV-bounds-and-empty.patch": "4437daf0c6a88e4cb405e9bafb44e146c8d9b31d248fefcf6966ac14f56225b3",
+    "patches/mx/wsclean/0056-Name-the-MX-executable-and-install-its-threading-run.patch": "5f74931345607a24ad440810245e029d94ce9bcb05fed8005a30de546ad16d3d"
+  },
+  "patch_count": 78,
+  "patch_replay": {
+    "wsclean": {
+      "patches": 56,
+      "tree": "c18e1960412852b9b0c41f0c7885a8d1349dba71",
+      "matches": true
+    },
+    "aocommon": {
+      "patches": 2,
+      "tree": "ec86adbc88e117cf199809ab0947e162f8ed02b4",
+      "matches": true
+    },
+    "schaapcommon": {
+      "patches": 9,
+      "tree": "f0ae1b5f390feeb2b14f28e4ce0e00b83475b106",
+      "matches": true
+    },
+    "radler": {
+      "patches": 11,
+      "tree": "b5e65f96f44b0c458263c1593654c632e90d1f16",
+      "matches": true
+    }
+  },
+  "python_tests": 258,
+  "native_wsclean": {
+    "passed": 160,
+    "skipped": 4,
+    "assertions_passed": 869917
+  },
+  "native_radler": {
+    "test_suites": 4,
+    "build_entries": 4
+  },
+  "review": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [
+      {
+        "file": "install.md",
+        "line": 105,
+        "message": "Update the parallelism description: scripts/build_mx.sh:22 now honors JOBS and defaults to four jobs; only build_deps.sh still derives parallelism from hw.ncpu."
+      },
+      {
+        "file": "Formula/wsclean-mx.rb",
+        "message": "Publication remains pending the immutable source URL/SHA, actual bottle metadata, package installation/relocation validation, and planned gpu-dev fast-forward. The current HEAD-only snapshot is consistent with the stated pre-tag workflow."
+      }
+    ],
+    "summary": "> \ud83e\udde0 **From Hindsight memory (Component map)** \u2014 This repository distributes a patch overlay; I checked the exported patch against current source.\nReviewed all 23 changed/new root files and four nested source files. All three original findings are resolved: patch0056 exactly matches the complete nested diff and candidate e4bc27619f5e27ae74169f1454c497b7184c00b1; the install component includes threading with relative-rpath precedence; snapshot arguments use an option terminator. patch-replay-candidate.json records matching source trees across all 78 distributed patches; replay was not personally rerun. Saved fix1 dyld traces show build-tree and relocated executables loading their own threading library, and related GREEN logs record 59 passing tests. Identity, upstream 3.7/FITS metadata, MPI naming, legacy snapshots, and configured Python invocation are preserved; no math changes found. Formula code explicitly disables Metal and distinguishes HEAD identity. Active documentation retains failed legacy scientific gates and limits certification claims. Personally ran whitespace, Ruby/shell/Python syntax checks, candidate/patch comparisons, and read-only leading-dash probes confirming exit 2 without help bypass. No writes, staging, commits, publication, brew, imaging, builds, or test suites were performed."
+  },
+  "imaging": {
+    "baseline": {
+      "passed": true,
+      "phase": "baseline",
+      "runs": [
+        {
+          "run": {
+            "phase": "baseline",
+            "size": 3072,
+            "binary": "/Users/peijinz/dev/wsclean-mx/bench/bin/v011-baseline/wsclean",
+            "binary_sha256": "9c92740f73bc85ef9c72da1d7339795fd07d7382696a01608660e6e920270aaa",
+            "version": "\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-55-g99bb9fc2\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/Users/peijinz/dev/wsclean-mx/bench/bin/v011-baseline/wsclean",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072/img",
+              "-j",
+              "8",
+              "-size",
+              "3072",
+              "3072",
+              "-scale",
+              "2.7amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 89.34937310218811
+          },
+          "gate": {
+            "label": "baseline-3072",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        },
+        {
+          "run": {
+            "phase": "baseline",
+            "size": 4096,
+            "binary": "/Users/peijinz/dev/wsclean-mx/bench/bin/v011-baseline/wsclean",
+            "binary_sha256": "9c92740f73bc85ef9c72da1d7339795fd07d7382696a01608660e6e920270aaa",
+            "version": "\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-55-g99bb9fc2\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/Users/peijinz/dev/wsclean-mx/bench/bin/v011-baseline/wsclean",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096/img",
+              "-j",
+              "8",
+              "-size",
+              "4096",
+              "4096",
+              "-scale",
+              "2amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 136.1219358444214
+          },
+          "gate": {
+            "label": "baseline-4096",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        }
+      ],
+      "input_unchanged": true,
+      "binary_unchanged": true
+    },
+    "native": {
+      "passed": true,
+      "phase": "native",
+      "runs": [
+        {
+          "run": {
+            "phase": "native",
+            "size": 3072,
+            "binary": "/Users/peijinz/dev/wsclean-mx/build-mx/wsclean-mx",
+            "binary_sha256": "604a0d65e25048a10ea777423092b6a451368004f5771e691afb9faa30d00954",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-56-ge4bc2761\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/Users/peijinz/dev/wsclean-mx/build-mx/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-native/3072/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-native/3072/img",
+              "-j",
+              "8",
+              "-size",
+              "3072",
+              "3072",
+              "-scale",
+              "2.7amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 89.12036085128784
+          },
+          "gate": {
+            "label": "native-3072",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-native/3072",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        },
+        {
+          "run": {
+            "phase": "native",
+            "size": 4096,
+            "binary": "/Users/peijinz/dev/wsclean-mx/build-mx/wsclean-mx",
+            "binary_sha256": "604a0d65e25048a10ea777423092b6a451368004f5771e691afb9faa30d00954",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: mx-base-56-ge4bc2761\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/Users/peijinz/dev/wsclean-mx/build-mx/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-native/4096/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-native/4096/img",
+              "-j",
+              "8",
+              "-size",
+              "4096",
+              "4096",
+              "-scale",
+              "2amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 145.02884316444397
+          },
+          "gate": {
+            "label": "native-4096",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-native/4096",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        }
+      ],
+      "input_unchanged": true,
+      "binary_unchanged": true
+    }
+  },
+  "limits": [
+    "CPU only; no new Metal hardware acceptance",
+    "MPI runtime not exercised",
+    "Earlier strict legacy-reference failures remain unchanged"
+  ]
+}

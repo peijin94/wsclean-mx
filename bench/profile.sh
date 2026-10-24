@@ -28,11 +28,7 @@ sampler="${SAMPLE_TOOL:-sample}"
 command -v "$sampler" >/dev/null \
   || bench_die "unavailable sampler: $sampler (macOS 'sample' is required)"
 
-case "$variant" in
-  upstream) bin="$ROOT/build-upstream/wsclean" ;;
-  mx)       bin="$ROOT/build-mx/wsclean" ;;
-  *)        bin="$ROOT/bench/bin/$variant/wsclean" ;;
-esac
+bin="$(bench_binary "$variant")"
 
 out="$ROOT/bench/out/$tag/$variant-profile"
 bench_output "$out"

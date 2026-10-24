@@ -1,14 +1,15 @@
 # Installing wsclean-mx
 
-Choose a CPU release for ordinary use, or build `gpu-dev` explicitly to test the
-Metal backend. Installing the Homebrew package does **not** install the
-experimental GPU branch.
+Choose the CPU release for ordinary use, or build `gpu-dev` explicitly to test
+Metal. Release 0.1.1 names the primary command **`wsclean-mx`**, replacing the
+package’s old `wsclean` command without installing a compatibility alias.
+Installing the Homebrew package does **not** enable Metal.
 
 | Installation | Executable | GPU support |
 |---|---|---|
-| Homebrew CPU release | `wsclean` | No; rejects `-mgpu` |
-| CPU source build | `build-mx/wsclean` | Off by default |
-| Experimental Metal source build | `build-mx-metal/wsclean` | `-mgpu` enables prediction; deconvolution requires additional opt-ins |
+| Homebrew CPU release | `wsclean-mx` | No; rejects `-mgpu` |
+| CPU source build at `v0.1.1` | `build-mx/wsclean-mx` | Off by default |
+| Experimental Metal source build | `build-mx-metal/wsclean-mx` | `-mgpu` enables prediction; deconvolution requires additional opt-ins |
 
 The build scripts target Apple Silicon macOS. The current GPU implementation was
 validated on an Apple M2 with 16 GiB RAM and macOS 27.0.1; that is a tested
@@ -42,8 +43,8 @@ required by this backend: its shaders compile at runtime from source strings.
 ```bash
 brew tap peijin94/wsclean-mx
 brew install peijin94/wsclean-mx/wsclean-mx
-command -v wsclean
-wsclean -version
+command -v wsclean-mx
+wsclean-mx -version
 ```
 
 Homebrew selects a compatible bottle when available; otherwise it may build from
@@ -58,8 +59,10 @@ brew update
 brew upgrade peijin94/wsclean-mx/wsclean-mx
 ```
 
-`brew install --HEAD` follows the formula's `main` branch, **not** `gpu-dev`.
-For Metal, use the source instructions below. The formula is maintained in
+`brew install --HEAD` follows `gpu-dev`, but the formula still explicitly builds
+CPU-only and labels the MX version `HEAD`. For Metal, use the source instructions
+below. Stable 0.1.1 reports both `wsclean-mx version 0.1.1` and upstream
+`WSClean version 3.7`. The formula is maintained in
 [`Formula/wsclean-mx.rb`](Formula/wsclean-mx.rb).
 
 ## 3. Source-build dependencies
@@ -88,20 +91,21 @@ root directory. HTTPS cloning does not require GitHub SSH-key setup.
 ### CPU source build
 
 ```bash
-git clone --recurse-submodules --branch main \
+git clone --recurse-submodules --branch v0.1.1 \
   https://github.com/peijin94/wsclean-mx.git wsclean-mx-cpu
 cd wsclean-mx-cpu
 unset ROOT
 
 scripts/build_deps.sh
 scripts/build_mx.sh
-build-mx/wsclean -version
+build-mx/wsclean-mx -version
 ```
 
 `build_mx.sh` creates missing `work/` developer trees, applies the exported
 patches, configures the CPU build and checks that the correct casacore headers
-were used. Both `build_deps.sh` and `build_mx.sh` currently choose build parallelism
-from `hw.ncpu`; setting `JOBS=4` does not override those two scripts.
+were used. `build_mx.sh` honors `JOBS` and defaults to four build jobs.
+`build_deps.sh` still derives its build parallelism from `hw.ncpu` rather than
+using `JOBS`.
 
 ### Experimental Metal source build
 
@@ -115,7 +119,7 @@ scripts/build_deps.sh
 scripts/mx_tree.sh init
 JOBS=4 scripts/metal_build.sh --reconfigure
 scripts/check_headers.sh build-mx-metal
-build-mx-metal/wsclean -version
+build-mx-metal/wsclean-mx -version
 ```
 
 **Do not skip `scripts/mx_tree.sh init`:** unlike `build_mx.sh`, the Metal build
@@ -134,7 +138,7 @@ The source builds run in place. Prefer an explicit path when comparing CPU and
 GPU installations:
 
 ```bash
-build-mx-metal/wsclean -version
+build-mx-metal/wsclean-mx -version
 ```
 
 Optionally add **one** build directory to the current shell's PATH, from the
@@ -142,8 +146,8 @@ checkout root:
 
 ```bash
 export PATH="$PWD/build-mx-metal:$PATH"
-command -v wsclean
-type -a wsclean
+command -v wsclean-mx
+type -a wsclean-mx
 ```
 
 For a CPU source build, use `$PWD/build-mx` instead. Persist an absolute path in
@@ -166,11 +170,11 @@ with a disposable working copy and choose a fresh output directory:
 
 ```bash
 mkdir -p output && mkdir output/run-001 && mkdir output/run-001/tmp && \
-MX_METAL_DEBUG_TIMING=1 build-mx-metal/wsclean \
+MX_METAL_DEBUG_TIMING=1 build-mx-metal/wsclean-mx \
   -mgpu -j 8 -size 3072 3072 -scale 2.7amin -weight briggs 0 -pol I \
-  -multiscale -multiscale-scale-bias 0.8 -niter 20000 -mgain 0.95 \
+  -multiscale -multiscale-scale-bias 0.8 -niter 150000 -mgain 0.95 \
   -auto-threshold 0.5 -auto-mask 3 -local-rms -horizon-mask 10deg -mem 40 \
-  -reorder -no-update-model-required \
+  -reorder -no-update-model-required -data-column CORRECTED_DATA \
   -temp-dir output/run-001/tmp -name output/run-001/img \
   "/path/to/working-copy.ms"
 ```
@@ -178,6 +182,9 @@ MX_METAL_DEBUG_TIMING=1 build-mx-metal/wsclean \
 The chained directory creation prevents accidentally reusing this example's
 output name. The MS flags are not a general read-only sandbox: protect valuable
 inputs independently and never predict into the original science MS.
+The explicit column assumes the MS has `CORRECTED_DATA`; choose the intended
+column deliberately for other data. The iteration budget is a cap, not a
+requirement to continue after the stopping threshold is reached.
 For 4096-square comparisons in this benchmark family, use `-scale 2amin`.
 
 Set environment controls **before the executable**, in addition to `-mgpu`:
@@ -252,7 +259,7 @@ part of this installation or the active validation path.
   preserve the old directory under a different name. Do not reset a developer
   tree to force a cache to match.
 - **`-mgpu requires a build with WSCLEAN_MX_METAL=ON`:** you invoked the CPU
-  executable. Check `command -v wsclean` and use `build-mx-metal/wsclean` explicitly.
+  executable. Check `command -v wsclean-mx` and use `build-mx-metal/wsclean-mx` explicitly.
 - **Missing dylib after moving the binary:** restore its build/dependency
   directories or rebuild. Copying one executable is not a source installation.
 - **GPU output differs from CPU:** retain all products, commands and logs;

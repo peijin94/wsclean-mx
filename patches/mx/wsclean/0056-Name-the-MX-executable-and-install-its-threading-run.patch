@@ -1,0 +1,110 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Peijin=20Zhang=20=28=E5=BC=A0=E6=B2=9B=E9=94=A6=29?=
+ <peijin@ustc.edu>
+Date: Fri, 23 Oct 2026 23:18:27 -0700
+Subject: [PATCH] Name the MX executable and install its threading runtime
+
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9df77c32..c3b0c7fb 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -6,6 +6,9 @@ include(ExternalProject)
+ include(FetchContent)
+ include(CMakeVersionInfo.txt)
+ 
++# MX release identity is independent of the upstream version used in FITS.
++set(WSCLEAN_MX_VERSION "0.1.1" CACHE STRING "wsclean-mx release version")
++
+ set(AOCOMMON_COMMIT e1b7980e02211ade95eef176a3ac7f9ba3dcc55c)
+ set(SCHAAPCOMMON_COMMIT b47f19dace28ad420c0a7c8ab1014b55b75205e9)
+ set(RADLER_COMMIT 940e9617a4b3210228a849513752f0732df8104a)
+@@ -461,6 +464,23 @@ target_link_libraries(wsclean-lib PUBLIC schaapcommon)
+ target_link_libraries(wsclean-shared PUBLIC schaapcommon)
+ 
+ add_executable(wsclean main/main.cpp)
++set_target_properties(wsclean PROPERTIES OUTPUT_NAME wsclean-mx)
++# Prefer the component's threading runtime after installation or relocation.
++# Keep CMake's normal build-tree rpath and explicit external dependencies.
++file(RELATIVE_PATH WSCLEAN_MX_INSTALL_LIBDIR "${CMAKE_INSTALL_PREFIX}/bin"
++     "${CMAKE_INSTALL_FULL_LIBDIR}")
++if(APPLE)
++  # CMake edits Mach-O rpaths in place. Keep the install entry before retained
++  # external paths, with the build-tree runtime taking precedence while built.
++  set_property(TARGET wsclean PROPERTY BUILD_RPATH
++               "$<TARGET_FILE_DIR:schaapthreading>"
++               "@loader_path/${WSCLEAN_MX_INSTALL_LIBDIR}")
++  set_property(TARGET wsclean PROPERTY INSTALL_RPATH
++               "@loader_path/${WSCLEAN_MX_INSTALL_LIBDIR}" "${CMAKE_INSTALL_RPATH}")
++elseif(UNIX)
++  set_property(TARGET wsclean PROPERTY INSTALL_RPATH
++               "$ORIGIN/${WSCLEAN_MX_INSTALL_LIBDIR}" "${CMAKE_INSTALL_RPATH}")
++endif()
+ target_link_libraries(wsclean wsclean-lib)
+ 
+ if(WSCLEAN_MX_METAL)
+@@ -496,7 +516,9 @@ add_executable(
+                                        gridding/wstackinggridder.cpp)
+ target_link_libraries(wspredictionexample ${EXTERNAL_LIBRARIES})
+ 
+-install(TARGETS wsclean DESTINATION bin)
++install(TARGETS wsclean schaapthreading
++        RUNTIME DESTINATION bin COMPONENT wsclean-mx
++        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT wsclean-mx)
+ install(
+   TARGETS wsclean-shared
+   LIBRARY DESTINATION lib
+diff --git a/main/commandline.cpp b/main/commandline.cpp
+index 4858ed93..863f7c65 100644
+--- a/main/commandline.cpp
++++ b/main/commandline.cpp
+@@ -53,6 +53,7 @@ void CheckDeprecated(bool is_slave, const std::string& param, const std::string&
+ 
+ void PrintHeader(bool print_commit_hash = false) {
+   Logger::Info << "\n"
++                  "wsclean-mx version " WSCLEAN_MX_VERSION_STR "\n"
+                   "WSClean version " WSCLEAN_VERSION_STR " (" WSCLEAN_VERSION_DATE ")\n";
+ 
+   if (print_commit_hash) {
+@@ -71,7 +72,7 @@ void PrintHeader(bool print_commit_hash = false) {
+ }
+ 
+ void PrintHelp() {
+-  std::cout << R"(Syntax: wsclean [options] <input-ms> [<2nd-ms> [..]]
++  std::cout << R"(Syntax: wsclean-mx [options] <input-ms> [<2nd-ms> [..]]
+ Will create cleaned images of the input ms(es).
+ If multiple mses are specified, they need to be phase-rotated to the same point on the sky.
+ 
+@@ -79,7 +80,7 @@ Options can be:
+ 
+   ** GENERAL OPTIONS **
+ -version
+-   Print WSClean's version and exit.
++   Print the wsclean-mx and upstream WSClean versions and exit.
+ -j <threads>
+    Specify number of computing threads to use, i.e., number of cpu cores that will be used.
+    Default: use all cpu cores.
+diff --git a/tests/python/config_vars.py.in b/tests/python/config_vars.py.in
+index 2b7836db..e56cd242 100644
+--- a/tests/python/config_vars.py.in
++++ b/tests/python/config_vars.py.in
+@@ -11,7 +11,7 @@ IDG_DATA_URL = "https://support.astron.nl/software/ci_data/IDG"
+ WSCLEAN_DATA_URL = "@WSCLEAN_DATA_URL@"
+ 
+ # WSClean executables
+-WSCLEAN = "@CMAKE_BINARY_DIR@/wsclean"
++WSCLEAN = "@CMAKE_BINARY_DIR@/wsclean-mx"
+ WSCLEAN_MP = "@CMAKE_BINARY_DIR@/wsclean-mp"
+ 
+ # Wrapper for 'mpirun'
+diff --git a/wscversion.h.in b/wscversion.h.in
+index 57fce55a..e612198e 100644
+--- a/wscversion.h.in
++++ b/wscversion.h.in
+@@ -6,5 +6,6 @@
+ #define WSCLEAN_VERSION_MINOR @WSCLEAN_VERSION_MINOR@
+ #define WSCLEAN_VERSION_DATE  "@WSCLEAN_VERSION_DATE@"
+ #define WSCLEAN_GIT_HASH  "@WSCLEAN_GIT_HASH@"
++#define WSCLEAN_MX_VERSION_STR "@WSCLEAN_MX_VERSION@"
+ 
+ #endif

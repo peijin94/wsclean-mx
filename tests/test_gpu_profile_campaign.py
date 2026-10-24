@@ -10,6 +10,34 @@ from bench import gpu_profile_campaign as campaign
 from bench.gpu_profile_campaign import matching_pids,make_plan
 
 class GpuCampaignTest(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        root=Path(self.temp.name)
+        for variant in ('gpu-profile-v1','gpu-followup-delivered'):
+            binary=root/'bench/bin'/variant/'wsclean'
+            binary.parent.mkdir(parents=True)
+            binary.write_text('#!/bin/sh\nexit 0\n');binary.chmod(0o755)
+        root_patch=patch.object(campaign,'ROOT',root)
+        root_patch.start();self.addCleanup(root_patch.stop)
+
+    def test_monitor_tracks_new_named_snapshot(self):
+        job=make_plan('pilot')[0]
+        process=Mock(returncode=0)
+        process.poll.return_value=0;process.wait.return_value=0
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            binary=root/'bench/bin'/job['variant']/'wsclean-mx'
+            binary.parent.mkdir(parents=True)
+            binary.write_text('#!/bin/sh\nexit 0\n');binary.chmod(0o755)
+            output=root/'receipts';output.mkdir()
+            with patch.object(campaign,'ROOT',root), \
+                 patch.object(campaign,'health',return_value={}), \
+                 patch.object(campaign.subprocess,'Popen',return_value=process), \
+                 patch.object(campaign,'find_target',return_value=42) as lookup:
+                campaign.run_job(job,output)
+            self.assertEqual(lookup.call_args.args[2],binary)
+
     def test_deep_default_is_150k_and_recorded(self):
         job=make_plan('timing')[0]
         process=Mock(returncode=0)

@@ -26,7 +26,7 @@ for v in "$a" "$b"; do
   esac
   bench_variant "$v"
   snapshot_dir="$ROOT/bench/bin/$v"
-  binary="$snapshot_dir/wsclean"
+  binary="$(bench_binary "$v")"
   [ ! -L "$snapshot_dir" ] || bench_die "aa: symlinked snapshot directory: $snapshot_dir"
   [ ! -L "$binary" ] || bench_die "aa: symlinked snapshot executable: $binary"
   resolved="$(cd "$snapshot_dir" && pwd -P)"
@@ -35,7 +35,7 @@ for v in "$a" "$b"; do
     *) bench_die "aa: snapshot resolves outside bench/bin: $v -> $resolved" ;;
   esac
 done
-for file in wsclean wsclean.native libschaapthreading.dylib; do
+for file in wsclean-mx wsclean-mx.native wsclean wsclean.native libschaapthreading.dylib; do
   present_a=0
   present_b=0
   if [ -L "$ROOT/bench/bin/$a/$file" ] || [ -L "$ROOT/bench/bin/$b/$file" ]; then

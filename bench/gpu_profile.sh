@@ -2,7 +2,9 @@
 # Detailed GPU-vs-CPU inversion benchmark on the LWA 4-slot MS.
 # Runs N GPU passes (stage timing) + 1 CPU pass, prints a per-element table.
 set -u
-cd /Users/peijinz/dev/wsclean-mx
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+BINARY="$(python3 "$ROOT/scripts/wsclean_binary.py" --build "$ROOT/build-mx-metal")" || exit 2
 N=${1:-3}
 MS=/tmp/lwa-4slot.ms
 ARGS="-j 8 -size 1024 1024 -scale 10amin -weight briggs 0 -niter 0 -pol I -horizon-mask 10deg"
@@ -10,13 +12,13 @@ OUT=/tmp/gpubench
 rm -rf $OUT; mkdir -p $OUT
 
 echo "=== CPU reference (1x) ==="
-/usr/bin/time -l ./build-mx-metal/wsclean $ARGS -name $OUT/cpu $MS > $OUT/cpu.log 2>&1
+/usr/bin/time -l "$BINARY" $ARGS -name $OUT/cpu $MS > $OUT/cpu.log 2>&1
 grep -E "Inversion" $OUT/cpu.log | head -1
 grep -E "maximum resident" $OUT/cpu.log | head -1
 
 echo "=== GPU passes (${N}x) ==="
 for i in $(seq 1 $N); do
-  MX_METAL_DEBUG_TIMING=1 /usr/bin/time -l ./build-mx-metal/wsclean -mgpu $ARGS -name $OUT/gpu$i $MS > $OUT/gpu$i.log 2>&1
+  MX_METAL_DEBUG_TIMING=1 /usr/bin/time -l "$BINARY" -mgpu $ARGS -name $OUT/gpu$i $MS > $OUT/gpu$i.log 2>&1
   echo "--- pass $i ---"
   grep -E "Inversion" $OUT/gpu$i.log | head -1
 done

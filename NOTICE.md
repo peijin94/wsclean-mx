@@ -72,9 +72,12 @@ its author and date in its header.
 | 2026-10-22 | `patches/mx/wsclean/0055-providers-...patch` | wsclean `gridding/msprovidercollection.cpp`, `io/readinmemory.{cpp,h}`, `msproviders/{contiguousms,operations}.{cpp,h}`, `msproviders/msreaders/reorderedmsreader.{cpp,h}`, `msproviders/rowproviders/{msrowprovider.cpp,msrowproviderbase.h}` | repair independent payload positions, vertical UV bounds, loader column/shape contracts and empty interval/epoch handling |
 | 2026-10-22 | `patches/mx/radler/0010-math-...patch` | radler `cpp/math/{dijkstra_splitter,rms_image}.{cc,h}` and native tests | repair empty/padded masks and clipped/aliased/nonfinite RMS windows; preserve unspecified equal-cost shortest-path ties |
 | 2026-10-22 | `patches/mx/schaapcommon/0009-ducc0-...patch` | bundled ducc0 `external/ducc0/wgridder/wgridder_impl.h`, `external/ducc0/infra/threading.cc` | canonical channel/tile grouping and bounded ordered partial merges; drain accepted workers on callback or submission failure |
+| 2026-10-23 | `patches/mx/radler/0011-verified-Remove-...patch` | radler transform/model adapters, peak finder and PSF/scratch setup | remove accidental image copies, share the vectorized masked peak scanner and preserve the measured current-baseline outputs |
+| 2026-10-23 | `patches/mx/wsclean/0056-Name-the-MX-...patch` | wsclean `CMakeLists.txt`, `main/commandline.cpp`, `wscversion.h.in`, `tests/python/config_vars.py.in` | name the primary executable `wsclean-mx`, report the MX release separately, install its threading runtime and update the generated test invocation |
 
-A wsclean-mx binary still reports upstream's version string ("WSClean
-version 3.7"); it is a modified version as described above.
+A wsclean-mx binary reports its own release version separately from upstream's
+version string ("WSClean version 3.7"); it is a modified version as described
+above. Upstream version metadata in FITS files remains unchanged.
 
 ## Distributing binaries
 

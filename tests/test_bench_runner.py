@@ -19,6 +19,8 @@ class BenchRunnerTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()
         (self.root / 'bench').mkdir()
+        (self.root / 'scripts').mkdir()
+        shutil.copy2(SOURCE / 'scripts/wsclean_binary.py', self.root / 'scripts/wsclean_binary.py')
         for name in ('run.sh', 'ab.sh', 'aa.sh', 'snapshot.sh', 'common.sh', 'profile.sh'):
             if (SOURCE / 'bench' / name).exists():
                 shutil.copy2(SOURCE / 'bench' / name, self.root / 'bench' / name)
@@ -88,6 +90,59 @@ print(os.environ.get('HARNESS_TIMING', 'Inversion: 00:00:01.250, prediction: 00:
         self.assertEqual(sentinel.read_text(), 'keep me')
         self.rejected(result, 'exist')
         self.assertFalse((self.root / 'calls').exists())
+
+    def test_leading_dash_frozen_snapshot_runs(self):
+        self.wall_time_fixture()
+        binary = self.root / 'bench/bin/-legacy/wsclean'
+        self.binary(binary)
+        result = self.run_script('run.sh', '-legacy', 'dash-snapshot')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([Path(call['binary']) for call in self.calls()], [binary])
+
+    def test_absent_help_named_snapshot_fails_preflight(self):
+        for function in ('bench_binary', 'bench_variant'):
+            with self.subTest(function=function):
+                result = subprocess.run(
+                    ['bash', '-c', 'ROOT="$1"\nsource "$ROOT/bench/common.sh"\n"$2" "$3"',
+                     'bench-test', str(self.root), function, '-h'],
+                    env=self.env, text=True, capture_output=True, timeout=15)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn('unavailable variant: -h', result.stderr)
+                self.assertNotIn('usage:', result.stdout.lower())
+        self.assertFalse((self.root / 'calls').exists())
+        self.assertFalse((self.root / 'bench/out').exists())
+
+    def test_mx_requires_new_executable_even_with_stale_legacy_binary(self):
+        self.wall_time_fixture()
+        self.binary(self.root / 'build-mx/wsclean')
+        for script, args in (
+            ('run.sh', ('mx', 'stale-run')),
+            ('ab.sh', ('stale-ab', 'one,mx')),
+            ('profile.sh', ('mx', 'stale-profile')),
+        ):
+            with self.subTest(script=script):
+                result = self.run_script(script, *args)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn('wsclean-mx', result.stderr)
+        self.assertFalse((self.root / 'calls').exists())
+        self.assertFalse((self.root / 'bench/out').exists())
+
+    def test_runners_use_mx_name_and_preserve_upstream_and_frozen_names(self):
+        self.wall_time_fixture()
+        self.binary(self.root / 'build-mx/wsclean')  # stale active-build artifact
+        self.binary(self.root / 'build-mx/wsclean-mx')
+        self.binary(self.root / 'build-upstream/wsclean')
+        sampler = self.sampler_env(self.fake_sampler())
+        for variant, relative in (
+            ('mx', 'build-mx/wsclean-mx'),
+            ('upstream', 'build-upstream/wsclean'),
+            ('one', 'bench/bin/one/wsclean'),
+        ):
+            for script in ('run.sh', 'profile.sh'):
+                with self.subTest(variant=variant, script=script):
+                    result = self.run_script(script, variant, variant + '-' + script, **sampler)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(Path(self.calls()[-1]['binary']), self.root / relative)
 
     def test_existing_snapshot_preserves_sentinel(self):
         build = self.root / 'fixture-build'
@@ -327,9 +382,33 @@ print(os.environ.get('HARNESS_TIMING', 'Inversion: 00:00:01.250, prediction: 00:
         self.assertEqual((out / 'libschaapthreading.dylib').read_text(), 'HARNESS fixture library')
         self.assertIn('snapshot Snap_1-a.b', result.stdout)
 
+    def test_new_mx_snapshot_keeps_name_and_runs_through_aa(self):
+        self.wall_time_fixture()
+        build = self.root / 'build-mx'
+        self.binary(build / 'wsclean-mx')
+        self.binary(build / 'wsclean')  # must never become the MX snapshot
+        (build / 'wsclean').write_text(self.fake + '\n# stale legacy binary\n')
+        (build / 'libschaapthreading.dylib').write_text('HARNESS fixture library')
+        tools = self.root / 'fixture-tools'
+        tools.mkdir()
+        for name in ('install_name_tool', 'codesign'):
+            tool = tools / name
+            tool.write_text('#!/bin/sh\nexit 0\n')
+            tool.chmod(0o755)
+        env = {'PATH': str(tools) + os.pathsep + self.env['PATH']}
+        for variant in ('mx-new-a', 'mx-new-b'):
+            result = self.run_script('snapshot.sh', str(build), variant, **env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            snapshot = self.root / 'bench/bin' / variant
+            self.assertEqual((snapshot / 'wsclean-mx').read_bytes(), (build / 'wsclean-mx').read_bytes())
+            self.assertFalse((snapshot / 'wsclean').exists())
+        result = self.run_script('aa.sh', 'mx-new-a', 'mx-new-b', 'new-aa')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([Path(call['binary']).name for call in self.calls()], ['wsclean-mx'] * 4)
+
     def test_variant_paths_must_be_executable_files(self):
         for v, binary, kind in (
-            ('mx', 'build-mx/wsclean', 'directory'),
+            ('mx', 'build-mx/wsclean-mx', 'directory'),
             ('upstream', 'build-upstream/wsclean', 'nonexecutable'),
             ('notbin', 'bench/bin/notbin/wsclean', 'directory'),
         ):

@@ -33,7 +33,11 @@ class DeepIterationDefaultsTest(unittest.TestCase):
         process=Mock(returncode=0)
         process.poll.return_value=0;process.wait.return_value=0
         with tempfile.TemporaryDirectory() as directory:
-            with patch.object(profile,'health',return_value={}), \
+            binary=Path(directory)/'bench/bin'/job['variant']/'wsclean'
+            binary.parent.mkdir(parents=True)
+            binary.write_text('#!/bin/sh\nexit 0\n');binary.chmod(0o755)
+            with patch.object(profile,'ROOT',Path(directory)), \
+                 patch.object(profile,'health',return_value={}), \
                  patch.object(profile,'find_target',return_value=987655), \
                  patch.object(profile.subprocess,'Popen',return_value=process) as popen, \
                  patch('builtins.print'):
