@@ -42,6 +42,8 @@ required by this backend: its shaders compile at runtime from source strings.
 
 ```bash
 brew tap peijin94/wsclean-mx
+brew tap ska-sa/tap
+brew install ska-sa/tap/casacore-data
 brew install peijin94/wsclean-mx/wsclean-mx
 command -v wsclean-mx
 wsclean-mx -version

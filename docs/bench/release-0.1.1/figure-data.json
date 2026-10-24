@@ -1,0 +1,48 @@
+{
+  "comparisons": [
+    {
+      "phase": "Native",
+      "size": 3072,
+      "products": 6
+    },
+    {
+      "phase": "Native",
+      "size": 4096,
+      "products": 6
+    },
+    {
+      "phase": "Homebrew source",
+      "size": 3072,
+      "products": 6
+    },
+    {
+      "phase": "Homebrew source",
+      "size": 4096,
+      "products": 6
+    },
+    {
+      "phase": "Bottle pour",
+      "size": 3072,
+      "products": 6
+    },
+    {
+      "phase": "Bottle pour",
+      "size": 4096,
+      "products": 6
+    }
+  ],
+  "panels": [
+    {
+      "size": 3072,
+      "restored_max_abs_difference": 0.0,
+      "image_p99": 4.180297374725342,
+      "difference_display_limit": 1e-07
+    },
+    {
+      "size": 4096,
+      "restored_max_abs_difference": 0.0,
+      "image_p99": 4.321275234222412,
+      "difference_display_limit": 1e-07
+    }
+  ]
+}

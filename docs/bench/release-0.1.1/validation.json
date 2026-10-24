@@ -1,5 +1,5 @@
 {
-  "status": "native_verified_package_pending",
+  "status": "release_artifacts_verified",
   "source_wsclean_commit": "e4bc27619f5e27ae74169f1454c497b7184c00b1",
   "patches": {
     "patches/mx/aocommon/0001-Median-MAD-radix-histogram-select-instead-of-full-nt.patch": "619ad7e963cdcd4c19d8be7d765abc165656f4f8f9b4d086fcf873d48dcadc51",
@@ -104,7 +104,7 @@
       "matches": true
     }
   },
-  "python_tests": 258,
+  "python_tests": 263,
   "native_wsclean": {
     "passed": 160,
     "skipped": 4,
@@ -843,11 +843,1180 @@
       ],
       "input_unchanged": true,
       "binary_unchanged": true
+    },
+    "installed": {
+      "passed": true,
+      "phase": "installed",
+      "runs": [
+        {
+          "run": {
+            "phase": "installed",
+            "size": 3072,
+            "binary": "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+            "binary_sha256": "0b4e7f103ad4802c5540c5f144a77ecda13cc4ac1b5603ccbd65dae4003b1ad0",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: v3.7-79-g2d5c1ed8\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed/3072/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed/3072/img",
+              "-j",
+              "8",
+              "-size",
+              "3072",
+              "3072",
+              "-scale",
+              "2.7amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 111.0309419631958
+          },
+          "gate": {
+            "label": "installed-3072",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-installed/3072",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        },
+        {
+          "run": {
+            "phase": "installed",
+            "size": 4096,
+            "binary": "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+            "binary_sha256": "0b4e7f103ad4802c5540c5f144a77ecda13cc4ac1b5603ccbd65dae4003b1ad0",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: v3.7-79-g2d5c1ed8\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed/4096/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed/4096/img",
+              "-j",
+              "8",
+              "-size",
+              "4096",
+              "4096",
+              "-scale",
+              "2amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 231.85956597328186
+          },
+          "gate": {
+            "label": "installed-4096",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-installed/4096",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        }
+      ],
+      "input_unchanged": true,
+      "binary_unchanged": true
+    },
+    "installed-v2": {
+      "passed": true,
+      "phase": "installed-v2",
+      "runs": [
+        {
+          "run": {
+            "phase": "installed-v2",
+            "size": 3072,
+            "binary": "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+            "binary_sha256": "de4a485a7e92a4f13609102c956554333877816f1648b7a7852a09927b0cfcc9",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: v3.7-79-g2d5c1ed8\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed-v2/3072/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed-v2/3072/img",
+              "-j",
+              "8",
+              "-size",
+              "3072",
+              "3072",
+              "-scale",
+              "2.7amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 129.03125977516174
+          },
+          "gate": {
+            "label": "installed-v2-3072",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-installed-v2/3072",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        },
+        {
+          "run": {
+            "phase": "installed-v2",
+            "size": 4096,
+            "binary": "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+            "binary_sha256": "de4a485a7e92a4f13609102c956554333877816f1648b7a7852a09927b0cfcc9",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: v3.7-79-g2d5c1ed8\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed-v2/4096/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-installed-v2/4096/img",
+              "-j",
+              "8",
+              "-size",
+              "4096",
+              "4096",
+              "-scale",
+              "2amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 167.22884392738342
+          },
+          "gate": {
+            "label": "installed-v2-4096",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-installed-v2/4096",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        }
+      ],
+      "input_unchanged": true,
+      "binary_unchanged": true
+    },
+    "poured": {
+      "passed": true,
+      "phase": "poured",
+      "runs": [
+        {
+          "run": {
+            "phase": "poured",
+            "size": 3072,
+            "binary": "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+            "binary_sha256": "de4a485a7e92a4f13609102c956554333877816f1648b7a7852a09927b0cfcc9",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: v3.7-79-g2d5c1ed8\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-poured/3072/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-poured/3072/img",
+              "-j",
+              "8",
+              "-size",
+              "3072",
+              "3072",
+              "-scale",
+              "2.7amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 87.00957489013672
+          },
+          "gate": {
+            "label": "poured-3072",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/3072",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-poured/3072",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  3072,
+                  3072
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        },
+        {
+          "run": {
+            "phase": "poured",
+            "size": 4096,
+            "binary": "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+            "binary_sha256": "de4a485a7e92a4f13609102c956554333877816f1648b7a7852a09927b0cfcc9",
+            "version": "\nwsclean-mx version 0.1.1\nWSClean version 3.7 (2026-02-16)\nGit commit hash: v3.7-79-g2d5c1ed8\nThis software package is released under the GPL version 3.\nAuthor: Andr\u00e9 Offringa (offringa@gmail.com).\n\nWGridder is available.\n",
+            "command": [
+              "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+              "-no-update-model-required",
+              "-temp-dir",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-poured/4096/tmp",
+              "-name",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/release-0.1.1-20261023-221629/imaging-poured/4096/img",
+              "-j",
+              "8",
+              "-size",
+              "4096",
+              "4096",
+              "-scale",
+              "2amin",
+              "-weight",
+              "briggs",
+              "0",
+              "-pol",
+              "I",
+              "-multiscale",
+              "-multiscale-scale-bias",
+              "0.8",
+              "-niter",
+              "150000",
+              "-mgain",
+              "0.95",
+              "-auto-threshold",
+              "0.5",
+              "-auto-mask",
+              "3",
+              "-local-rms",
+              "-horizon-mask",
+              "10deg",
+              "-mem",
+              "40",
+              "-reorder",
+              "-data-column",
+              "CORRECTED_DATA",
+              "/Users/peijinz/dev/wsclean-mx/bench/out/gpu-audit-20261022-0715/input-15.ms"
+            ],
+            "exit": 0,
+            "elapsed_s": 130.85344672203064
+          },
+          "gate": {
+            "label": "poured-4096",
+            "left": "bench/out/release-0.1.1-20261023-221629/imaging-baseline/4096",
+            "right": "bench/out/release-0.1.1-20261023-221629/imaging-poured/4096",
+            "expected": "T0",
+            "passed": true,
+            "products": [
+              {
+                "name": "img-dirty.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-horizon-mask.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-image.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-model.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-psf.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              },
+              {
+                "name": "img-residual.fits",
+                "shape": [
+                  1,
+                  1,
+                  4096,
+                  4096
+                ],
+                "bitwise": true,
+                "nan_mismatch": 0,
+                "max_abs": 0.0,
+                "rel_rms": 0.0,
+                "rel_peak": 0.0,
+                "peak_ratio": 1.0,
+                "n_diff": 0,
+                "max_ulp": 0,
+                "T0": true,
+                "T2": true
+              }
+            ]
+          }
+        }
+      ],
+      "input_unchanged": true,
+      "binary_unchanged": true
     }
   },
   "limits": [
     "CPU only; no new Metal hardware acceptance",
     "MPI runtime not exercised",
     "Earlier strict legacy-reference failures remain unchanged"
-  ]
+  ],
+  "packaging_review": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [],
+    "summary": "All three reported defects are fixed: expected=T0 schema, exact six-product inventory including horizon-mask, and phase/size/artifact-path binding. Plotted images load validated paths. Complete tests inspected; logs confirm five tests green and 23 earlier binding failures. Current native and installed-v2 receipts validate both sizes; poured is absent and remains unverified. Formula changes match approved scope; archive SHA-256 matches. No edits, builds, brew, imaging, or additional agents."
+  },
+  "package": {
+    "source_commit": "f56963c15feec6711d2d962a14f76a272e4b3571",
+    "source_sha256": "b340a78c5330408bcc52f3388ac8222d4848edbc8ee35e69d0e417252e597821",
+    "bottle_sha256": "06f99a01ad07020e7329c7d749692d8048e9db684f97c59b50fff0902f83f941",
+    "bottle_platform": "arm64_golden_gate",
+    "cellar": "any",
+    "final_product_comparisons": 36,
+    "strict_linkage_exit": 0,
+    "cpu_refusal": {
+      "argv": [
+        "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+        "-mgpu"
+      ],
+      "exit": 255,
+      "stdout": "+ + + + + + + + + + + + + + + + + + +\n+ An exception occured:\n+ >>> -mgpu requires a build with WSCLEAN_MX_METAL=ON\n+ + + + + + + + + + + + + + + + + + +\n",
+      "stderr": ""
+    },
+    "runtime_paths": {
+      "binary": "/opt/homebrew/Cellar/wsclean-mx/0.1.1/bin/wsclean-mx",
+      "rpaths": [
+        "/opt/homebrew/opt/python@3.15/Frameworks",
+        "@executable_path/../lib"
+      ],
+      "forbidden_build_rpaths": [],
+      "relative_runtime_path_present": true,
+      "passed": true
+    },
+    "private_and_external_code_files": 61,
+    "pour_transport": "loopback HTTP before publication; public download is verified separately",
+    "poured_from_bottle": true
+  },
+  "completed_work": {
+    "baseline": {
+      "3072": {
+        "components": 93854,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      },
+      "4096": {
+        "components": 97873,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      }
+    },
+    "native": {
+      "3072": {
+        "components": 93854,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      },
+      "4096": {
+        "components": 97873,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      }
+    },
+    "installed-v2": {
+      "3072": {
+        "components": 93854,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      },
+      "4096": {
+        "components": 97873,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      }
+    },
+    "poured": {
+      "3072": {
+        "components": 93854,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      },
+      "4096": {
+        "components": 97873,
+        "major_cycles": 3,
+        "stop_reason": "final_threshold",
+        "iteration_cap": 150000
+      }
+    }
+  },
+  "plot_tests": {
+    "normal": 5,
+    "optimized": 5,
+    "figure_inspected": true
+  }
 }

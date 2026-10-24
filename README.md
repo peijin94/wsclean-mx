@@ -122,7 +122,9 @@ Apple Silicon Mac, [Homebrew](https://brew.sh):
 
 ```bash
 brew tap peijin94/wsclean-mx
-brew install wsclean-mx        # prebuilt bottle, no compilation
+brew tap ska-sa/tap
+brew install ska-sa/tap/casacore-data
+brew install peijin94/wsclean-mx/wsclean-mx  # pours a compatible bottle when available
 wsclean-mx -version
 ```
 

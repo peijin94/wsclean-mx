@@ -5,7 +5,7 @@ All notable changes to wsclean-mx are documented here. The format follows
 [SemVer](https://semver.org/). Upstream WSClean remains at 3.7
 (`2d5c1ed8d7559e5178d243661b408baa288681e6`, LINC 5.2.1 pin).
 
-## [0.1.1] — 2026-10-23
+## [0.1.1] — 2026-10-24
 
 ### Executable and packaging
 
@@ -21,6 +21,9 @@ All notable changes to wsclean-mx are documented here. The format follows
   builds retain support for their historical names.
 - The Homebrew package explicitly disables Metal and replaces its temporary
   build-directory runtime search path with an executable-relative library path.
+- The native install component includes its private threading runtime. The
+  formula explicitly declares the vendored casacore runtime dependencies,
+  including GCC's Fortran runtime, libdeflate, readline and wcslib.
 
 ### CPU changes since 0.1.0
 

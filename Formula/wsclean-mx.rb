@@ -6,7 +6,7 @@
 # Stage this formula in a tap; the published tap carries stable release metadata.
 #   brew tap-new peijin94/wsclean-mx   (once)
 #   cp Formula/wsclean-mx.rb "$(brew --repo peijin94/wsclean-mx)/Formula/"
-#   brew install --HEAD --build-bottle peijin94/wsclean-mx/wsclean-mx
+#   brew install --build-bottle peijin94/wsclean-mx/wsclean-mx
 #   brew bottle wsclean-mx   # (after install, produces the bottle tarball)
 # This file is the source of truth; the tap copy is disposable.
 #
@@ -15,7 +15,16 @@
 class WscleanMx < Formula
   desc "WSClean optimized for Apple Silicon (multithreaded gridding/deconvolution)"
   homepage "https://github.com/peijin94/wsclean-mx"
+  # Immutable reviewed source; later release commits add packaging metadata only.
+  url "https://github.com/peijin94/wsclean-mx/archive/f56963c15feec6711d2d962a14f76a272e4b3571.tar.gz"
+  sha256 "b340a78c5330408bcc52f3388ac8222d4848edbc8ee35e69d0e417252e597821"
+  version "0.1.1"
   head "https://github.com/peijin94/wsclean-mx.git", branch: "gpu-dev"
+
+  bottle do
+    root_url "https://github.com/peijin94/wsclean-mx/releases/download/v0.1.1"
+    sha256 cellar: :any, arm64_golden_gate: "06f99a01ad07020e7329c7d749692d8048e9db684f97c59b50fff0902f83f941"
+  end
 
   depends_on arch: :arm64
   depends_on macos: :sequoia
@@ -23,14 +32,17 @@ class WscleanMx < Formula
   depends_on "ninja" => :build
   depends_on "pkgconf" => :build
   depends_on "bison" => :build # casacore requires bison >= 3; macOS ships 2.3
-  depends_on "gcc" => :build # Fortran for the casacore resource
+  depends_on "gcc" # compiler and runtime for the vendored casacore Fortran code
   depends_on "boost"
   depends_on "cfitsio"
   depends_on "fftw"
   depends_on "gsl"
   depends_on "hdf5"
+  depends_on "libdeflate"
   depends_on "open-mpi"
   depends_on "python@3.15"
+  depends_on "readline"
+  depends_on "wcslib"
   depends_on "ska-sa/tap/casacore-data"
 
   # casacore 3.8.2: Homebrew core ships 3.4.0, which is too old, so the
